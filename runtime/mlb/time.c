@@ -170,10 +170,37 @@ static void time_zone(IpcSession *s, const IpcRequest *rq, IpcResponse *rs) {
         IPC_OUT(rs, n);
         return;
     }
+    case 4: {     // LoadTimeZoneRule(LocationName) -> buffer 0x16: TimeZoneRule (0x4000 bytes)
+        // mlbts-native: the game loads its device location's rule when it goes online (the mlb_login.post_update
+        // request, main+0xaa201c). The rule stays opaque to the game: it only hands it back to ToCalendarTime /
+        // ToPosixTime (100 / 201), which use the host's rules like the *WithMyRule commands. The location name is kept
+        // at the start of the buffer for the log.
+        const IpcBuffer *b = rq->nb && rq->b[0].size ? &rq->b[0] : NULL;
+        const char *name = ipc_arg(rq, 0, 0x24);
+        if (b) {
+            uint8_t *out = ipc_guest(b->addr, b->size);
+            memset(out, 0, b->size);
+            memcpy(out, name, b->size < 0x24 ? b->size : 0x24);
+        }
+        rt_log("time: LoadTimeZoneRule(%.36s): the host's rules (MLB_TIMEZONE=%s)", name, tz_local() ? "local" : "utc");
+        return;
+    }
+    case 100:     // ToCalendarTime(s64 posix, buffer 0x15: TimeZoneRule) -> CalendarTime, CalendarAdditionalInfo
     case 101: {   // ToCalendarTimeWithMyRule(s64 posix) -> CalendarTime, CalendarAdditionalInfo
         struct { CalendarTime t; CalendarInfo i; } out;
         to_calendar(IPC_ARG(rq, int64_t, 0), &out.t, &out.i);
         IPC_OUT(rs, out);
+        return;
+    }
+    case 201: {   // ToPosixTime(CalendarTime, buffer 0x15: TimeZoneRule) -> u32 count, buffer 0xA: s64[]
+        CalendarTime ct;
+        memcpy(&ct, ipc_arg(rq, 0, sizeof ct), sizeof ct);
+        int64_t t = from_calendar(&ct);
+        if (!rq->nc || rq->c[0].size < sizeof t) rt_fatal("time: ToPosixTime without an output buffer");
+        memcpy(ipc_guest(rq->c[0].addr, sizeof t), &t, sizeof t);
+        rs->xout[rs->nxout++] = (IpcBuffer){rq->c[0].addr, sizeof t, 0};
+        uint32_t n = 1;
+        IPC_OUT(rs, n);
         return;
     }
     case 202: {   // ToPosixTimeWithMyRule(CalendarTime) -> u32 count, buffer 0xA: s64[]

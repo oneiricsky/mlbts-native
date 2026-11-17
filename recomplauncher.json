@@ -98,6 +98,28 @@
                 "os": [
                     "windows"
                 ]
+            },
+            {
+                "id": "rtts_equipment",
+                "label": "Road to the Show equipment",
+                "note": "Adds every equipment item to Road to the Show, offline and owned from the start. Takes a few minutes.",
+                "args": [
+                    "--equipment"
+                ],
+                "os": [
+                    "windows"
+                ]
+            },
+            {
+                "id": "rtts_packages",
+                "label": "Road to the Show packages",
+                "note": "Equipment comes from packs you earn in Road to the Show, as it does online, without a connection. Adds the equipment, not owned at the start.",
+                "args": [
+                    "--packages"
+                ],
+                "os": [
+                    "windows"
+                ]
             }
         ]
     },

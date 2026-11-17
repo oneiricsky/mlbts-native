@@ -43,7 +43,7 @@ GEN_FLAGS = ['-O2', '-fno-strict-aliasing', '-Wno-return-type', '-Wno-unused-lab
              '-march=x86-64-v3']
 RT_FLAGS = ['-O2', '-g', '-Wall', '-Wno-unused-function', '-fno-strict-aliasing', '-march=x86-64-v3', '-std=gnu11',
             '-D_CRT_SECURE_NO_WARNINGS']
-LIBS = ['bcrypt', 'user32', 'kernel32', 'advapi32', 'ntdll', 'synchronization', 'winmm', 'psapi', 'shell32', 'ole32',
+LIBS = ['bcrypt', 'ws2_32', 'user32', 'kernel32', 'advapi32', 'ntdll', 'synchronization', 'winmm', 'psapi', 'shell32', 'ole32',
         'dbghelp', 'gdi32', 'dwmapi', 'imm32', 'uuid']
 RUNTIME_SOURCES = ['runtime/core/*.c', 'runtime/core/platform/common.c', 'runtime/core/platform/win32.c',
                    'runtime/core/platform/audio_win32.c', 'runtime/core/platform/prof_win.c',

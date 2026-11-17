@@ -25,6 +25,7 @@ static const CfgMeta metas[] = {
     {"TIMEZONE", "local", "local|utc", RESTART},   // time.c: the host time zone, or UTC
     {"SPIN", "1", "0|1", RESTART},   // kernel.c spin-wait gates (TotK reads it without a row)
     {"NICKNAME", "Player", NULL, RESTART},   // account.c GetNickname (up to 32 bytes of UTF-8)
+    {"OFFLINE_PACKAGES", "0", "0|1", RESTART},   // packages.c: Road to the Show's Packages from a server on this PC
     {"PAD_MAP", "auto", "auto|label|position", LIVE},   // hid.c: face buttons by label in menus, by place in play
     {"RUMBLE", "1", "0|1", LIVE},   // hid.c: vibration on the controllers
     {"PAD_DRIVER", "sdl", "sdl|xinput", RESTART},   // hid.c: SDL3 (Xbox and PlayStation pads) or XInput (Xbox only)
