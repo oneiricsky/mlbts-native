@@ -98,6 +98,17 @@
                 "os": [
                     "windows"
                 ]
+            },
+            {
+                "id": "rtts_equipment",
+                "label": "Road to the Show equipment",
+                "note": "Adds every equipment item to Road to the Show, offline and owned from the start. Takes a few minutes.",
+                "args": [
+                    "--equipment"
+                ],
+                "os": [
+                    "windows"
+                ]
             }
         ]
     },

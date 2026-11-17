@@ -13,7 +13,8 @@ data or assets, and no file built from them**: no `mlb.exe`, no generated C or i
    game and update NSPs (1.0.20 preferred, else 1.0.15) from the emulators' game folders, Downloads, Desktop, Documents, `~/Games` or the folder
    around the setup (`installer/detect.py`), and an install folder on the disk with the most free space. They check
    it, change what is wrong and press **Install**. Options: shortcuts (on), NVIDIA DLSS (on with an RTX card),
-   copy the Ryujinx save (on when Ryujinx has one and the install has none).
+   copy the Ryujinx save (on when Ryujinx has one and the install has none), Road to the Show equipment offline
+   (off; the launcher screen can add or remove it later).
 3. Waits about 10 minutes (on the dev PC: 4 for the 37 GB of game data, 1 to lift, 3 to compile).
 4. Presses **Play**. Next time, the desktop shortcut starts the game; starting the setup again opens its launcher
    screen (Play, Update, Repair, Import Ryujinx save, Open install folder).
@@ -41,6 +42,7 @@ setup, start it, press **Update**. Setup 0.1.0 has no updater, so its players up
   profile/                       saves, account
   logs/                          mlb.log of the last run
   shader-cache/, pipeline-cache.bin   made while playing
+  equipment-pictures/            the item pictures of the equipment option, when it is on
   mlbts-install.json             what built the folder: release, finished steps
 ```
 
@@ -64,7 +66,11 @@ update only rebuilds.
    are there at their size.
 4. **Build**: `recomp/gen.py` into the setup's `temp/`, then `tools/build.py --toolchain llvm --runtime-lib
    runtime/libmlbrt.a --portable --exefs game/exefs` (the game version comes from main's hash); `mlb.exe`, `SDL3.dll` and the translator are copied into the install folder.
-5. **Finish**: `mlb.cfg` (when missing), DLSS, shortcuts (PowerShell's `WScript.Shell`), `mlb.exe --import-save`,
+5. **Equipment** (only with `--equipment`, or on an install that has it): `tools/equipment/equipment.py install`
+   adds every Road to the Show equipment item to the game data, with pictures rendered from the player's files
+   ([tools/equipment](../tools/equipment/README.md)). `--no-equipment` puts the game data back. An install that has
+   it keeps it through updates and repairs.
+6. **Finish**: `mlb.cfg` (when missing), DLSS, shortcuts (PowerShell's `WScript.Shell`), `mlb.exe --import-save`,
    and `temp/` deleted.
 
 Logs: `logs/setup-<time>.log` in the setup folder. The keys file's path is passed to the tools; its contents are never
@@ -88,7 +94,8 @@ llvm/               llvm-mingw 20261020, x86_64 subset
 runtime/            libmlbrt.a (the runtime, built with llvm/), every runtime header, deps/ (Vulkan headers, VMA, SDL3
                     headers, lib/vulkan-1.lib, bin/SDL3.dll)
 bin/                ninja.exe, totk_xlate.exe (+ .id)
-recomp/, tools/     the lifter; build.py, romfs_dump.py and its imports, data/expected-1.0.15.json and -1.0.20.json
+recomp/, tools/     the lifter; build.py, romfs_dump.py and its imports, data/expected-1.0.15.json and -1.0.20.json,
+                    equipment/ (the optional equipment step)
 installer/          the setup
 licenses/, LICENSE, THIRD_PARTY_NOTICES.md, README.txt, VERSION (VERSION plus the commit)
 ```

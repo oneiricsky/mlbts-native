@@ -204,9 +204,11 @@ class App:
             self.vars[key].trace_add('write', lambda *_a, k=key: self.validate(k))
         ttk.Label(b, text='Options', style='Section.TLabel').pack(anchor='w', pady=(14, 4))
         self.opt = {'shortcut': tk.BooleanVar(value=True), 'dlss': tk.BooleanVar(value=False),
-                    'import_save': tk.BooleanVar(value=False)}
+                    'import_save': tk.BooleanVar(value=False), 'equipment': tk.BooleanVar(value=False)}
         ttk.Checkbutton(b, text='Shortcuts on the desktop and in the Start menu', variable=self.opt['shortcut']).pack(
             anchor='w')
+        ttk.Checkbutton(b, text='Road to the Show equipment, offline: every bat, glove and the rest, owned from the '
+                                'start (adds a few minutes)', variable=self.opt['equipment']).pack(anchor='w')
         self.dlss_box = ttk.Checkbutton(b, text='Download NVIDIA DLSS (sharper picture on RTX graphics cards; from '
                                                 'NVIDIA, about 56 MB)', variable=self.opt['dlss'])
         self.save_box = ttk.Checkbutton(b, text='Copy my MLB The Show 26 save from Ryujinx',
@@ -511,6 +513,16 @@ class App:
             ttk.Button(more, text='Repair', command=lambda: self.run_setup(['--dest', str(dest)], dest)).pack(
                 side='left')
         ttk.Button(more, text='Install somewhere else', command=self.show_form).pack(side='left', padx=8)
+        extra = ttk.Frame(b)
+        extra.pack(anchor='w', pady=(8, 0))
+        if ((state.get('steps') or {}).get('equipment') or {}).get('installed'):
+            ttk.Button(extra, text='Remove Road to the Show equipment',
+                       command=lambda: self.run_setup(['--dest', str(dest), '--no-equipment'], dest)).pack(side='left')
+        else:
+            ttk.Button(extra, text='Add Road to the Show equipment',
+                       command=lambda: self.run_setup(['--dest', str(dest), '--equipment'], dest)).pack(side='left')
+            ttk.Label(extra, text='every item, offline, owned from the start (a few minutes)',
+                      style='Muted.TLabel').pack(side='left', padx=8)
         tips = ('In the game: F1 opens the settings menu, F11 switches full screen. Controllers: Xbox and '
                 'PlayStation pads work; the keyboard works too.\nThis window checks for new versions of the port '
                 'when it opens; an update keeps your game files, saves and settings.')

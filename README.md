@@ -40,6 +40,8 @@ release is made: [docs/release.md](docs/release.md).
 
 - Native Windows executable, Vulkan 1.3 renderer. Switch shaders are translated at run time.
 - Switch saves are used as they are: a Ryujinx save can be imported (the setup offers it, or `mlb.exe --import-save`).
+- Road to the Show equipment without a connection, as an option of the setup: every item, with its picture, owned
+  from the start ([`tools/equipment`](tools/equipment/README.md)).
 - Xbox and PlayStation controllers (through SDL3) with rumble. The game's button prompts follow the controller in use.
 - Keyboard and mouse.
 - Resolution options: output size, render scale, FSR 1, and NVIDIA DLSS / DLAA (the DLSS library is downloaded

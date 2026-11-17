@@ -90,6 +90,9 @@ def main(argv=None):
     ap.add_argument('--dlss', action='store_true', help="download NVIDIA's nvngx_dlss.dll next to the game")
     ap.add_argument('--shortcut', action='store_true', help='desktop and Start menu shortcuts')
     ap.add_argument('--import-save', action='store_true', help="copy the game's Ryujinx save (mlb.exe --import-save)")
+    ap.add_argument('--equipment', action='store_true',
+                    help='add every Road to the Show equipment item, offline (tools/equipment)')
+    ap.add_argument('--no-equipment', action='store_true', help='take that equipment out again')
     ap.add_argument('--launcher', action='store_true',
                     help='run by a launcher: progress lines instead of JSON events, install folder may be inside the setup')
     args = ap.parse_args(argv)
@@ -111,7 +114,7 @@ def main(argv=None):
     rep = Reporter(out=out, log_path=log)
     t0 = time.monotonic()
     ctx = Context(layout, dest, rep, args)
-    steps = all_steps()
+    steps = [s for s in all_steps() if s.applies(ctx)]
     rep.emit('start', release=layout.release, dev=layout.dev, dest=str(dest), log=str(log),
              steps=[{'id': s.id, 'title': s.title} for s in steps])
     result = run_steps(ctx, steps)

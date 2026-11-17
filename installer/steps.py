@@ -4,6 +4,7 @@
     exefs    the update's code (main, sdk, rtld, main.npdm) into <dest>/game/exefs, checked against its version's hashes
     romfs    the game's data (base + update, about 37 GB) into <dest>/game/romfs (tools/romfs_dump.py; resumable)
     build    lift the code to C (recomp/gen.py) and compile it with the prebuilt runtime (tools/build.py) into mlb.exe
+    equipment  optional: every Road to the Show equipment item, offline (tools/equipment); only shown when in play
     finish   always: mlb.cfg, the shader translator, DLSS (optional), shortcuts, a Ryujinx save (optional), clean up
 
 mlbts-install.json in the install folder records each finished step with a key: a fingerprint of what its output
@@ -167,6 +168,10 @@ class Step:
     id = ''
     title = ''
     always = False
+
+    def applies(self, ctx):
+        """Whether this setup run has the step at all (an optional one nobody asked for is not even listed)."""
+        return True
 
     def key(self, ctx):
         return ''
@@ -417,6 +422,57 @@ class Build(Step):
         return {}
 
 
+# ---- equipment ------------------------------------------------------------------------------------------------------
+
+class Equipment(Step):
+    """Optional: every Road to the Show equipment item, offline (tools/equipment/equipment.py). --equipment adds it and
+    --no-equipment takes it out again. Without either, an install keeps what it has: a later setup run (update,
+    repair, or the game data extracted again) puts the equipment back when it is gone or this release is another."""
+    id, title = 'equipment', 'Road to the Show equipment'
+    MARK = '<!-- rtts-equipment start -->'   # what the tool leaves in the game's item catalog
+
+    def wanted(self, ctx):
+        opt = ctx.options
+        if getattr(opt, 'no_equipment', False):
+            return False
+        return bool(getattr(opt, 'equipment', False) or (ctx.state['steps'].get(self.id) or {}).get('installed'))
+
+    def installed(self, ctx):
+        catalog = ctx.game / 'romfs' / 'FRONTEND' / 'RTTS' / 'INVENTORYDATA.XML'
+        try:
+            return self.MARK in catalog.read_text(encoding='utf-8')
+        except OSError:
+            return False
+
+    def applies(self, ctx):
+        return self.wanted(ctx) or self.installed(ctx)
+
+    def key(self, ctx):
+        return fingerprint('equipment-1', str(self.wanted(ctx)), ctx.layout.release, ctx.expected['update_version'])
+
+    def current(self, ctx, record):
+        return self.installed(ctx) == self.wanted(ctx)
+
+    def run(self, ctx):
+        lay, rep = ctx.layout, ctx.reporter
+        tool = [lay.python, '-I', '-X', 'utf8', lay.tools / 'equipment' / 'equipment.py']
+        if not self.wanted(ctx):
+            rep.progress(self.id, 'Putting the game files back', force=True)
+            ctx.run_tool(self.id, [*tool, 'uninstall', '--game', ctx.dest])
+            return {'installed': False}
+        rep.progress(self.id, 'Adding the equipment', force=True)
+
+        def line(text):
+            m = re.match(r'pictures: (\d+) of (\d+)', text)
+            if m:
+                rep.progress(self.id, f'Making the item pictures from your game files: {m.group(1)} of {m.group(2)}',
+                             int(m.group(1)), int(m.group(2)), 'items')
+            return bool(m)
+
+        ctx.run_tool(self.id, [*tool, 'install', '--game', ctx.dest], line)
+        return {'installed': True}
+
+
 # ---- finish ---------------------------------------------------------------------------------------------------------
 
 class Finish(Step):
@@ -483,7 +539,7 @@ def shortcuts(exe):
                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
 
 
-STEPS = (Check, ExeFS, RomFS, Build, Finish)
+STEPS = (Check, ExeFS, RomFS, Build, Equipment, Finish)
 
 
 def all_steps():

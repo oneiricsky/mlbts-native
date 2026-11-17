@@ -7,7 +7,7 @@ Release (docs/release.md, "Release layout"), root = the unpacked folder:
     runtime/              libmlbrt.a (the runtime, no game code), the headers the game code and modules.c include,
                           runtime/deps (Vulkan, VMA and SDL3 headers, lib/vulkan-1.lib, bin/SDL3.dll)
     bin/                  ninja.exe, totk_xlate.exe and totk_xlate.id (the shader translator)
-    recomp/, tools/       the lifter and the extraction and build scripts
+    recomp/, tools/       the lifter and the extraction and build scripts; tools/equipment (optional setup step)
     VERSION               the release version, one line
     temp/                 the default temp folder (created)
 
@@ -46,6 +46,7 @@ class Layout:
     def missing(self):
         """Paths the steps need that do not exist."""
         need = [self.python, self.tools / 'build.py', self.tools / 'romfs_dump.py', self.tools / 'nxextract.py',
+                self.tools / 'equipment' / 'equipment.py',
                 self.recomp / 'gen.py', self.llvm / 'bin' / 'clang.exe', self.deps / 'lib' / 'vulkan-1.lib',
                 self.deps / 'bin' / 'SDL3.dll', self.runtime_lib, self.ninja, self.xlate]
         need += [self.expected(v) for v in GAME_VERSIONS]
