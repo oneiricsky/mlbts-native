@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "host.h"
+#include "packages.h"
 #include "platform/platform.h"
 
 void res_apply(void);   // resolution.c
@@ -127,7 +128,9 @@ static void guest_main(Cpu *c) {
 
 void rt_boot(void) {
     check_npdm();
+    packages_start();    // packages.c, only with MLB_OFFLINE_PACKAGES: must come before the modules are linked
     ldr_load(rt_config()->exefs);
+    packages_loaded();
     rt_patches_init();
     res_apply();   // mlbts-native, resolution.c: MLB_RENDER_SCALE rewrites the scene size table before the game reads it
     cb_addr[0] = hostfn_register("<rtld loader_ready>", cb_loader_ready);
