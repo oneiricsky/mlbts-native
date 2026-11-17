@@ -5,6 +5,7 @@
     romfs    the game's data (base + update, about 37 GB) into <dest>/game/romfs (tools/romfs_dump.py; resumable)
     build    lift the code to C (recomp/gen.py) and compile it with the prebuilt runtime (tools/build.py) into mlb.exe
     equipment  optional: every Road to the Show equipment item, offline (tools/equipment); only shown when in play
+    packages   optional: Road to the Show's Packages, offline (tools/packages, runtime/mlb/packages.c); the same
     finish   always: mlb.cfg, the shader translator, DLSS (optional), shortcuts, a Ryujinx save (optional), clean up
 
 mlbts-install.json in the install folder records each finished step with a key: a fingerprint of what its output
@@ -435,7 +436,12 @@ class Equipment(Step):
         opt = ctx.options
         if getattr(opt, 'no_equipment', False):
             return False
-        return bool(getattr(opt, 'equipment', False) or (ctx.state['steps'].get(self.id) or {}).get('installed'))
+        return bool(getattr(opt, 'equipment', False) or (ctx.state['steps'].get(self.id) or {}).get('installed')
+                    or Packages.wanted(ctx))
+
+    def owned(self, ctx):
+        """With the packages option the player earns the equipment from packs, so none of it is owned at the start."""
+        return not Packages.wanted(ctx)
 
     def installed(self, ctx):
         catalog = ctx.game / 'romfs' / 'FRONTEND' / 'RTTS' / 'INVENTORYDATA.XML'
@@ -448,7 +454,8 @@ class Equipment(Step):
         return self.wanted(ctx) or self.installed(ctx)
 
     def key(self, ctx):
-        return fingerprint('equipment-1', str(self.wanted(ctx)), ctx.layout.release, ctx.expected['update_version'])
+        return fingerprint('equipment-1', str(self.wanted(ctx)), ctx.layout.release, ctx.expected['update_version'],
+                           *([] if self.owned(ctx) else ['not owned']))
 
     def current(self, ctx, record):
         return self.installed(ctx) == self.wanted(ctx)
@@ -469,7 +476,109 @@ class Equipment(Step):
                              int(m.group(1)), int(m.group(2)), 'items')
             return bool(m)
 
-        ctx.run_tool(self.id, [*tool, 'install', '--game', ctx.dest], line)
+        ctx.run_tool(self.id, [*tool, 'install', '--game', ctx.dest, *([] if self.owned(ctx) else ['--no-own'])], line)
+        return {'installed': True}
+
+
+# ---- packages -------------------------------------------------------------------------------------------------------
+
+def set_cfg(cfg, values):
+    """Sets KEY=value lines in mlb.cfg (a value of None takes the key's lines out) and leaves every other line alone.
+    A key may stand in the file as MLB_X, TOTK_X or X, as the game reads it (runtime/mlb/cfg.c)."""
+    def name(key):
+        key = key.strip().upper()
+        return key[5:] if key.startswith('TOTK_') else key[4:] if key.startswith('MLB_') else key
+
+    values = {name(k): (k, v) for k, v in values.items()}
+    lines = cfg.read_text(encoding='utf-8').splitlines() if cfg.is_file() else PLAYER_CFG.splitlines()
+    kept = [line for line in lines if not ('=' in line and not line.lstrip().startswith(('#', ';'))
+                                           and name(line.split('=', 1)[0]) in values) and line != Packages.NOTE]
+    add = [f'{k}={v}' for k, v in values.values() if v is not None]
+    if add:
+        while kept and not kept[-1].strip():
+            kept.pop()
+        kept += ['', Packages.NOTE, *add]
+    while kept and not kept[-1].strip():
+        kept.pop()
+    tmp = cfg.with_name(cfg.name + '.tmp')
+    tmp.write_text('\n'.join(kept) + '\n', encoding='utf-8')
+    os.replace(tmp, cfg)
+
+
+class Packages(Step):
+    """Optional: Road to the Show's Packages without a connection. The game gets a small server on this PC to talk to
+    (tools/packages; runtime/mlb/packages.c starts it with the game), which hands out the equipment packs the game
+    awards and opens them. --packages turns it on, --no-packages off. It needs the equipment (the step above), which
+    then starts not owned: the packs are how the player gets it. Like the equipment, an install that has it keeps it
+    through updates and repairs.
+
+    In the install folder: packages/ (the server and, from a release, the few files of the setup's Python it needs, so
+    the game does not depend on where the setup folder is) and MLB_OFFLINE_PACKAGES=1 in mlb.cfg. What the player
+    earned (profile/offline-packages) stays when the option is taken out."""
+    id, title = 'packages', 'Road to the Show packages'
+    NOTE = "# Road to the Show's Packages without a connection (the setup's option; see packages/README.md)"
+    # what the server needs of the setup's Python: the interpreter, the standard library, TLS and the XML reader
+    PYTHON = ('python.exe', 'python3??.dll', 'python3??.zip', 'vcruntime140*.dll', '_socket.pyd', '_ssl.pyd',
+              'select.pyd', 'pyexpat.pyd', '_hashlib.pyd', 'unicodedata.pyd', 'libssl-*.dll', 'libcrypto-*.dll',
+              'LICENSE.txt')
+
+    @staticmethod
+    def wanted(ctx):
+        opt = ctx.options
+        if getattr(opt, 'no_packages', False) or getattr(opt, 'no_equipment', False):
+            return False
+        return bool(getattr(opt, 'packages', False) or (ctx.state['steps'].get(Packages.id) or {}).get('installed'))
+
+    def installed(self, ctx):
+        try:
+            cfg = (ctx.dest / 'mlb.cfg').read_text(encoding='utf-8')
+        except OSError:
+            return False
+        return (ctx.dest / 'packages' / 'server.py').is_file() and bool(
+            re.search(r'^\s*(MLB_|TOTK_)?OFFLINE_PACKAGES\s*=\s*1\s*$', cfg, re.M | re.I))
+
+    def applies(self, ctx):
+        return self.wanted(ctx) or self.installed(ctx)
+
+    def key(self, ctx):
+        return fingerprint('packages-1', str(self.wanted(ctx)), ctx.layout.release)
+
+    def current(self, ctx, record):
+        return self.installed(ctx) == self.wanted(ctx)
+
+    def run(self, ctx):
+        lay, rep, folder = ctx.layout, ctx.reporter, ctx.dest / 'packages'
+        try:
+            if folder.exists():
+                shutil.rmtree(folder)
+        except OSError as e:
+            raise InstallError(f'{folder} is in use ({e}). Close the game and run the setup again.')
+        if not self.wanted(ctx):
+            rep.progress(self.id, 'Taking the packages option out', force=True)
+            set_cfg(ctx.dest / 'mlb.cfg', {'MLB_OFFLINE_PACKAGES': None, 'MLB_PACKAGES_PYTHON': None})
+            return {'installed': False}
+        rep.progress(self.id, 'Adding the local packages server', force=True)
+        source = lay.tools / 'packages'
+        folder.mkdir(parents=True)
+        for f in sorted(source.glob('*.py')) + [source / 'README.md']:
+            shutil.copy2(f, folder / f.name)
+        python = lay.python   # a checkout has no Python that can be copied: the game is told where the checkout's is
+        if not lay.dev:
+            python = folder / 'python' / 'python.exe'
+            python.parent.mkdir()
+            for pattern in self.PYTHON:
+                found = sorted(lay.python.parent.glob(pattern))
+                if not found:
+                    raise InstallError(f'The setup folder is incomplete (python/{pattern} is missing). Unpack the '
+                                       'whole download again, into an empty folder.')
+                for f in found:
+                    shutil.copy2(f, python.parent / f.name)
+            library = next(python.parent.glob('python3??.zip'))
+            (python.parent / (library.stem + '._pth')).write_text(library.name + '\n.\n', encoding='ascii')
+        # the server once, as the game will run it: reads the item catalog and makes this PC's certificate
+        rep.progress(self.id, 'Checking the server and making its certificate', force=True)
+        ctx.run_tool(self.id, [python, '-I', '-X', 'utf8', folder / 'server.py', '--check', '--game', ctx.dest])
+        set_cfg(ctx.dest / 'mlb.cfg', {'MLB_OFFLINE_PACKAGES': '1', 'MLB_PACKAGES_PYTHON': python if lay.dev else None})
         return {'installed': True}
 
 
@@ -539,7 +648,7 @@ def shortcuts(exe):
                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
 
 
-STEPS = (Check, ExeFS, RomFS, Build, Equipment, Finish)
+STEPS = (Check, ExeFS, RomFS, Build, Equipment, Packages, Finish)
 
 
 def all_steps():

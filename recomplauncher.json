@@ -109,6 +109,17 @@
                 "os": [
                     "windows"
                 ]
+            },
+            {
+                "id": "rtts_packages",
+                "label": "Road to the Show packages",
+                "note": "Equipment comes from packs you earn in Road to the Show, as it does online, without a connection. Adds the equipment, not owned at the start.",
+                "args": [
+                    "--packages"
+                ],
+                "os": [
+                    "windows"
+                ]
             }
         ]
     },

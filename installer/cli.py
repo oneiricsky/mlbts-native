@@ -93,6 +93,11 @@ def main(argv=None):
     ap.add_argument('--equipment', action='store_true',
                     help='add every Road to the Show equipment item, offline (tools/equipment)')
     ap.add_argument('--no-equipment', action='store_true', help='take that equipment out again')
+    ap.add_argument('--packages', action='store_true',
+                    help="Road to the Show's Packages, offline: a server on this PC hands out the equipment packs "
+                         '(tools/packages); adds the equipment, not owned at the start')
+    ap.add_argument('--no-packages', action='store_true',
+                    help='take the packages out again (the equipment stays, owned)')
     ap.add_argument('--launcher', action='store_true',
                     help='run by a launcher: progress lines instead of JSON events, install folder may be inside the setup')
     args = ap.parse_args(argv)

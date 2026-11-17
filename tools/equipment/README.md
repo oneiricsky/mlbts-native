@@ -23,6 +23,10 @@ Close the game first. `install` can be run again at any time; `uninstall` puts e
 
 Nothing is downloaded, and no game file leaves the PC.
 
+Owning everything from the start is one of two ways to play. The other is the setup's packages option
+([`tools/packages`](../packages/README.md)), where the player earns the equipment from packs as in the online game:
+the setup then adds the items with `install --no-own`, so they are in the game but none is owned yet.
+
 ## What it changes
 
 Four files under `game/romfs`, each kept beside itself as `<name>.orig` first:

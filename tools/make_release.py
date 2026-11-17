@@ -295,6 +295,8 @@ def build_sources(out, version):
         shutil.copy2(SRC / 'tools' / f, out / 'tools' / f)
     copy_tree(SRC / 'tools' / 'equipment', out / 'tools' / 'equipment',   # the setup's optional equipment step
               lambda r: '__pycache__' in r or r.startswith('tests/'))
+    copy_tree(SRC / 'tools' / 'packages', out / 'tools' / 'packages',     # the setup's optional packages step
+              lambda r: '__pycache__' in r or r.startswith('tests/'))
     copy_tree(SRC / 'installer', out / 'installer', lambda r: '__pycache__' in r or r.startswith('launcher/'))
     shutil.copy2(SRC / 'runtime' / 'mlb' / 'mlb.png', out / 'installer' / 'icon.png')
     lic = out / 'licenses'

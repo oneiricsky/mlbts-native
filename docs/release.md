@@ -14,7 +14,7 @@ data or assets, and no file built from them**: no `mlb.exe`, no generated C or i
    around the setup (`installer/detect.py`), and an install folder on the disk with the most free space. They check
    it, change what is wrong and press **Install**. Options: shortcuts (on), NVIDIA DLSS (on with an RTX card),
    copy the Ryujinx save (on when Ryujinx has one and the install has none), Road to the Show equipment offline
-   (off; the launcher screen can add or remove it later).
+   and Road to the Show packages offline (both off; the launcher screen can add or remove them later).
 3. Waits about 10 minutes (on the dev PC: 4 for the 37 GB of game data, 1 to lift, 3 to compile).
 4. Presses **Play**. Next time, the desktop shortcut starts the game; starting the setup again opens its launcher
    screen (Play, Update, Repair, Import Ryujinx save, Open install folder).
@@ -43,6 +43,7 @@ setup, start it, press **Update**. Setup 0.1.0 has no updater, so its players up
   logs/                          mlb.log of the last run
   shader-cache/, pipeline-cache.bin   made while playing
   equipment-pictures/            the item pictures of the equipment option, when it is on
+  packages/                      the local server of the packages option and the Python files it runs on, when it is on
   mlbts-install.json             what built the folder: release, finished steps
 ```
 
@@ -70,7 +71,12 @@ update only rebuilds.
    adds every Road to the Show equipment item to the game data, with pictures rendered from the player's files
    ([tools/equipment](../tools/equipment/README.md)). `--no-equipment` puts the game data back. An install that has
    it keeps it through updates and repairs.
-6. **Finish**: `mlb.cfg` (when missing), DLSS, shortcuts (PowerShell's `WScript.Shell`), `mlb.exe --import-save`,
+6. **Packages** (only with `--packages`, or on an install that has it): copies `tools/packages` and the files of
+   the setup's Python that it needs to `packages/`, runs `server.py --check` there (which also makes this PC's
+   certificate) and writes `MLB_OFFLINE_PACKAGES=1` into `mlb.cfg`
+   ([tools/packages](../tools/packages/README.md)). It brings the equipment step with it, with the equipment not
+   owned at the start. `--no-packages` removes the folder and the setting; the equipment then goes back to owned.
+7. **Finish**: `mlb.cfg` (when missing), DLSS, shortcuts (PowerShell's `WScript.Shell`), `mlb.exe --import-save`,
    and `temp/` deleted.
 
 Logs: `logs/setup-<time>.log` in the setup folder. The keys file's path is passed to the tools; its contents are never
@@ -95,7 +101,7 @@ runtime/            libmlbrt.a (the runtime, built with llvm/), every runtime he
                     headers, lib/vulkan-1.lib, bin/SDL3.dll)
 bin/                ninja.exe, totk_xlate.exe (+ .id)
 recomp/, tools/     the lifter; build.py, romfs_dump.py and its imports, data/expected-1.0.15.json and -1.0.20.json,
-                    equipment/ (the optional equipment step)
+                    equipment/ and packages/ (the optional equipment and packages steps)
 installer/          the setup
 licenses/, LICENSE, THIRD_PARTY_NOTICES.md, README.txt, VERSION (VERSION plus the commit)
 ```
