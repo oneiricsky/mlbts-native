@@ -57,6 +57,7 @@ class Certificate(unittest.TestCase):
             self.assertFalse(cert.make(c, k))                    # there already: kept
             self.assertEqual(c.read_bytes(), first)
             srv = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+            srv.minimum_version = ssl.TLSVersion.TLSv1_2
             srv.load_cert_chain(c, k)
             listener = socket.socket()
             listener.bind(('127.0.0.1', 0))
@@ -69,6 +70,7 @@ class Certificate(unittest.TestCase):
 
             threading.Thread(target=serve, daemon=True).start()
             client = ssl.create_default_context(cafile=str(c))   # checks the chain and the server name
+            client.minimum_version = ssl.TLSVersion.TLSv1_2
             with socket.create_connection(('127.0.0.1', listener.getsockname()[1]), timeout=10) as raw:
                 with client.wrap_socket(raw, server_hostname='production.mlb26.mlbtheshow.net') as t:
                     self.assertEqual(t.recv(2), b'ok')
@@ -128,6 +130,7 @@ class Game:
     def __init__(self, port, cert_file):
         self.port = port
         self.tls = ssl.create_default_context(cafile=str(cert_file))
+        self.tls.minimum_version = ssl.TLSVersion.TLSv1_2
         self.dec, self.open = {}, []
 
     def connect(self):

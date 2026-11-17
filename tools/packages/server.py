@@ -151,6 +151,7 @@ class Server:
     def __init__(self, state, cert_file, key_file, port=0):
         self.state = state
         self.tls = ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER)
+        self.tls.minimum_version = ssl.TLSVersion.TLSv1_2     # said outright; the game itself comes with TLS 1.3
         self.tls.load_cert_chain(cert_file, key_file)
         self.sock = socket.socket()
         if hasattr(socket, 'SO_EXCLUSIVEADDRUSE'):
