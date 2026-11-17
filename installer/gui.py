@@ -208,10 +208,10 @@ class App:
                     'packages': tk.BooleanVar(value=False)}
         ttk.Checkbutton(b, text='Shortcuts on the desktop and in the Start menu', variable=self.opt['shortcut']).pack(
             anchor='w')
-        ttk.Checkbutton(b, text='Road to the Show equipment, offline: every bat, glove and the rest, owned from the '
-                                'start (adds a few minutes)', variable=self.opt['equipment']).pack(anchor='w')
-        ttk.Checkbutton(b, text='Road to the Show packages, offline: earn that equipment from packs, as online (it '
-                                'then starts not owned)', variable=self.opt['packages']).pack(anchor='w')
+        ttk.Checkbutton(b, text='Unlock all Road to the Show equipment for offline play (adds a few minutes)',
+                        variable=self.opt['equipment']).pack(anchor='w')
+        ttk.Checkbutton(b, text='Add Road to the Show packages: earn equipment from packs like the online game (items '
+                                'start locked)', variable=self.opt['packages']).pack(anchor='w')
         self.dlss_box = ttk.Checkbutton(b, text='Download NVIDIA DLSS (sharper picture on RTX graphics cards; from '
                                                 'NVIDIA, about 56 MB)', variable=self.opt['dlss'])
         self.save_box = ttk.Checkbutton(b, text='Copy my MLB The Show 26 save from Ryujinx',
@@ -524,7 +524,7 @@ class App:
         else:
             ttk.Button(extra, text='Add Road to the Show equipment',
                        command=lambda: self.run_setup(['--dest', str(dest), '--equipment'], dest)).pack(side='left')
-            ttk.Label(extra, text='every item, offline, owned from the start (a few minutes)',
+            ttk.Label(extra, text='adding equipment will unlock all equipment items in every Road to the Show save',
                       style='Muted.TLabel').pack(side='left', padx=8)
         extra = ttk.Frame(b)
         extra.pack(anchor='w', pady=(8, 0))
@@ -536,7 +536,7 @@ class App:
         else:
             ttk.Button(extra, text='Add Road to the Show packages',
                        command=lambda: self.run_setup(['--dest', str(dest), '--packages'], dest)).pack(side='left')
-            ttk.Label(extra, text='earn the equipment from packs, offline (it then starts not owned)',
+            ttk.Label(extra, text='adding packages will lock all equipment items until you earn them from packs',
                       style='Muted.TLabel').pack(side='left', padx=8)
         tips = ('In the game: F1 opens the settings menu, F11 switches full screen. Controllers: Xbox and '
                 'PlayStation pads work; the keyboard works too.\nThis window checks for new versions of the port '

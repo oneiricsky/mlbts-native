@@ -2,8 +2,8 @@
 
 Offline, the Equipment screen of Road to the Show is empty ("You do not own any of this item"): the game gets its
 equipment items from the online Packages. This tool adds them from the player's own game files, so the screen works
-without a connection. It is an option of the setup ("Road to the Show equipment, offline") and a button on its launcher
-screen; it can also be run by hand:
+without a connection. It is an option of the setup ("Unlock all Road to the Show equipment for offline play") and a
+button on its launcher screen; it can also be run by hand:
 
 ```
 python -I tools/equipment/equipment.py install   --game <install folder>

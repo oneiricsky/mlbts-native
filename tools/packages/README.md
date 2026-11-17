@@ -5,7 +5,7 @@ game does all of that through its online service, so offline the Packages screen
 awarded. This folder is a small stand-in for that service which runs on the player's own PC. With it the game's own
 Packages screen, pack opening and rewards work without a connection.
 
-It is an option of the setup ("Road to the Show packages, offline") and a button on its launcher screen, or
+It is an option of the setup ("Add Road to the Show packages") and a button on its launcher screen, or
 `--packages` / `--no-packages` on the setup's command line. It is off unless the player turns it on.
 
 ## What the player gets
