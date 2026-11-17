@@ -531,7 +531,7 @@ class App:
         if ((state.get('steps') or {}).get('packages') or {}).get('installed'):
             ttk.Button(extra, text='Remove Road to the Show packages',
                        command=lambda: self.run_setup(['--dest', str(dest), '--no-packages'], dest)).pack(side='left')
-            ttk.Label(extra, text='the equipment stays, owned from the start again',
+            ttk.Label(extra, text='removing packages will unlock all equipment items in every Road to the Show save',
                       style='Muted.TLabel').pack(side='left', padx=8)
         else:
             ttk.Button(extra, text='Add Road to the Show packages',
