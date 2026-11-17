@@ -26,7 +26,7 @@ jobs:
 
       - name: Python syntax
         run: |
-          python -I -c "import glob, py_compile; files = sorted(glob.glob('recomp/*.py') + glob.glob('tools/*.py') + glob.glob('tools/equipment/**/*.py', recursive=True) + glob.glob('installer/*.py')); [py_compile.compile(f, doraise=True) for f in files]; print(f'py_compile OK: {len(files)} files')"
+          python -I -c "import glob, py_compile; files = sorted(glob.glob('recomp/*.py') + glob.glob('tools/*.py') + glob.glob('tools/equipment/**/*.py', recursive=True) + glob.glob('tools/packages/**/*.py', recursive=True) + glob.glob('installer/*.py')); [py_compile.compile(f, doraise=True) for f in files]; print(f'py_compile OK: {len(files)} files')"
 
       - name: Shader translator patch check
         run: |
