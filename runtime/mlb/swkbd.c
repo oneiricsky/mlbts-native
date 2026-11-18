@@ -3,7 +3,7 @@
 // swkbd_host.c @ b75be8cf (MIT): the ShowKeyboardArg offsets, the UTF-8/UTF-16 conversions, the disabled-key filter and
 // the result codes. The inline keyboard part is our own.
 //
-// mlbts-native: on the console both keyboards are a library applet. The SDK waits for ISelfController's "library applet
+// fastball: on the console both keyboards are a library applet. The SDK waits for ISelfController's "library applet
 // launchable" event before it starts one, which am.c never signalled: the game froze for good on its "Keyboard" screen
 // (entered from the RTTS player search; the last presented frame came right after "Entering screen:
 // [Keyboard->Keyboard (0)]", with no IPC sent). This port has no applets, so every swkbd function main imports is

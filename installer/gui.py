@@ -1,4 +1,4 @@
-"""The setup window and launcher: python -m installer.gui (MLBTS-Setup.exe starts it with the bundled Python).
+"""Fastball's window, setup and launcher: python -m installer.gui (Fastball.exe starts it with the bundled Python).
 
 One window, three screens:
 - the install form: the base game and update NSPs, prod.keys and the install folder, filled in from what the setup
@@ -10,7 +10,7 @@ One window, three screens:
   swapped in over this one in its own folder, then started with --update <install folder>, which goes straight to the
   rebuild.
 
-One executable: once the game is built, MLBTS-Setup.exe starts it at once, without the window (straight_to_game). The
+One executable: once the game is built, Fastball.exe starts it at once, without the window (straight_to_game). The
 window opens instead when there is something to do (no install yet, an install to finish or rebuild, a newer release
 on GitHub: asked at most once a day, in 3 s), with --menu, or with Shift held while it starts.
 
@@ -18,12 +18,12 @@ Portable: the game goes into MLBTS\\ inside the setup folder by default (the fol
 last install folder and the file paths are remembered in launcher.json in the setup folder (paths only, never the keys'
 contents). Setups up to 0.1.5 kept that in %LOCALAPPDATA%\\MLBTS-Native\\setup.json: it is read once and removed.
 
-Command line (MLBTS-Setup.exe passes its arguments on):
+Command line (Fastball.exe passes its arguments on):
   --menu            open the window even when the game is ready
   --dest DIR        the install to play or manage (default: the last one)
   --update DIR      rebuild that install with this setup (the updater starts the new setup with it)
   --selftest        build every screen and close (tests; no network)
-Every other argument goes to mlb.exe when the game starts: MLBTS-Setup.exe --fullscreen --fps-limit 120 (mlb.exe
+Every other argument goes to mlb.exe when the game starts: Fastball.exe --fullscreen --fps-limit 120 (mlb.exe
 --help lists them). The setup without a window is python\\python.exe -m installer (installer/cli.py).
 """
 import ctypes
@@ -42,7 +42,7 @@ from tkinter import filedialog, messagebox, ttk
 from . import detect
 from . import layout as layouts
 from . import update
-from .steps import STATE
+from .steps import STATE, state_file
 
 ROOT = Path(__file__).resolve().parent.parent
 LAYOUT = layouts.find(ROOT)
@@ -108,12 +108,12 @@ def save_settings(data):
 
 
 def install_state(dest):
-    """The install's mlbts-install.json, or None when dest holds no finished install."""
+    """The install's fastball-install.json, or None when dest holds no finished install."""
     try:
         p = Path(dest)
         if not (p / 'mlb.exe').is_file():
             return None
-        return json.loads((p / STATE).read_text(encoding='utf-8'))
+        return json.loads(state_file(p).read_text(encoding='utf-8'))
     except (OSError, ValueError, TypeError):
         return None
 
@@ -207,7 +207,7 @@ class App:
             except (AttributeError, OSError):
                 pass
         self.root = tk.Tk()
-        self.root.title('MLB The Show 26 - PC port setup')
+        self.root.title('Fastball - MLB The Show 26 for PC')
         self.root.minsize(720, 560)
         self.root.geometry('760x600')
         for icon in (ROOT / 'installer' / 'icon.png', ROOT / 'runtime' / 'mlb' / 'mlb.png'):
@@ -242,6 +242,13 @@ class App:
             cleanup = threading.Timer(5, shutil.rmtree, (ROOT / layouts.UPDATE_DIR,), {'ignore_errors': True})
             cleanup.daemon = True   # never keeps the process after the window
             cleanup.start()
+        if not selftest and not LAYOUT.dev and (ROOT / 'Fastball.exe').is_file():
+            # an older setup's updater (0.1.5 and before) unpacked this release and started its Fastball.exe copy
+            # (update.py): that launcher has ended by now, and Fastball.exe is the one to run from here on
+            for name in layouts.LEGACY_ENTRIES:
+                gone = threading.Timer(3, lambda p=ROOT / name: p.unlink(missing_ok=True) if p.is_file() else None)
+                gone.daemon = True
+                gone.start()
         self.root.after(100, self.poll)
 
     # ---- look -------------------------------------------------------------------------------------------------------
@@ -262,10 +269,11 @@ class App:
     def header(self):
         h = tk.Frame(self.root, bg=HEADER_BG, height=64)
         h.pack(fill='x')
-        tk.Label(h, text='MLB The Show 26', bg=HEADER_BG, fg=HEADER_FG, font=('Segoe UI Semibold', 17)).pack(
+        tk.Label(h, text='Fastball', bg=HEADER_BG, fg=HEADER_FG, font=('Segoe UI Semibold', 17)).pack(
             side='left', padx=(18, 8), pady=12)
-        tk.Label(h, text='PC port', bg=HEADER_BG, fg='#9fb7d6', font=('Segoe UI', 13)).pack(side='left', pady=12)
-        tk.Label(h, text=f'setup {LAYOUT.release}', bg=HEADER_BG, fg='#9fb7d6', font=('Segoe UI', 9)).pack(
+        tk.Label(h, text='MLB The Show 26 for PC', bg=HEADER_BG, fg='#9fb7d6', font=('Segoe UI', 13)).pack(
+            side='left', pady=12)
+        tk.Label(h, text=f'version {LAYOUT.release}', bg=HEADER_BG, fg='#9fb7d6', font=('Segoe UI', 9)).pack(
             side='right', padx=18)
 
     def screen(self):
@@ -422,7 +430,7 @@ class App:
             p = filedialog.askdirectory(initialdir=start, title='Install folder')
             if p:
                 p = Path(p)
-                if p.name != 'MLB The Show 26' and any(p.iterdir()) and not (p / STATE).is_file():
+                if p.name != 'MLB The Show 26' and any(p.iterdir()) and not state_file(p).is_file():
                     p = p / 'MLB The Show 26'   # never spread the game over a folder that holds other things
         else:
             p = filedialog.askopenfilename(initialdir=start, filetypes=types)
@@ -434,7 +442,7 @@ class App:
         if not v['dest'] or LAYOUT.reserved(v['dest']):
             self.form_error.configure(text=f'Pick an install folder of its own, such as {LAYOUT.default_dest()}.')
             return
-        resume = (Path(v['dest']) / STATE).is_file()
+        resume = state_file(v['dest']).is_file()
         if not resume:
             for k, what in (('base', 'base game'), ('update', 'update'), ('keys', 'prod.keys')):
                 if not v[k] or not Path(v[k]).is_file():
@@ -640,7 +648,7 @@ class App:
             ttk.Label(extra, text='adding packages will lock all equipment items until you earn them from packs',
                       style='Muted.TLabel').pack(side='left', padx=8)
         tips = ('In the game: F1 opens the settings menu, F11 switches full screen. Controllers: Xbox and '
-                'PlayStation pads work; the keyboard works too.\nFrom now on MLBTS-Setup.exe starts the game '
+                'PlayStation pads work; the keyboard works too.\nFrom now on Fastball.exe starts the game '
                 'straight away; hold Shift while starting it (or pass --menu) to open this window. It checks for new '
                 'versions of the port once a day; an update keeps your game files, saves and settings.')
         ttk.Label(b, text=tips, wraplength=700, style='Muted.TLabel', justify='left').pack(side='bottom', anchor='w')
@@ -718,7 +726,8 @@ class App:
         if kind == 'done':
             try:
                 if LAYOUT.dev:   # never over a repository: the new setup runs from where it was unpacked
-                    subprocess.Popen([str(Path(a) / 'MLBTS-Setup.exe'), '--update', str(b)], cwd=a, close_fds=True)
+                    exe = next(Path(a) / x for x in update.LAUNCHERS if (Path(a) / x).is_file())
+                    subprocess.Popen([str(exe), '--update', str(b)], cwd=a, close_fds=True)
                 else:   # in place: its own Python swaps it in once this window is gone, then starts it (update.py)
                     update.start_apply(a, ROOT, b)
             except OSError as e:

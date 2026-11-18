@@ -1,4 +1,4 @@
-"""Function-local FP/SIMD registers for recomp/gen.py (mlbts-native).
+"""Function-local FP/SIMD registers for recomp/gen.py (fastball).
 
 The SIMD lowering (recomp/simd_c.py, runtime/core/simd.h) works on the guest's V0-V31 in the Cpu (c->v[n]). Guest
 stores go through pointers that may alias the Cpu, so clang reloads every V register after each guest store and

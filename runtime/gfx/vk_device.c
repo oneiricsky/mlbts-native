@@ -8,7 +8,7 @@
 #include <string.h>
 #ifdef _WIN32
 #include <windows.h>   // GetModuleHandleA (vk_debug_names_on)
-#define strncasecmp _strnicmp   // mlbts-native: the MSVC C library names it so
+#define strncasecmp _strnicmp   // fastball: the MSVC C library names it so
 #endif
 
 #include "cfg.h"

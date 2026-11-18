@@ -1,4 +1,4 @@
-// mlbts-native: mlb.exe --import-save [ryujinx | <folder>]: the game's save from another Switch host into this
+// fastball: mlb.exe --import-save [ryujinx | <folder>]: the game's save from another Switch host into this
 // profile, then exit. fs_save_import (fs_host.c) swaps it in and keeps the replaced save; this file finds the source.
 //
 // A Switch save is the same files on every host, so nothing is converted. What the argument names:

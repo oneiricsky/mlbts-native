@@ -1,4 +1,4 @@
-"""Draw runtime/mlb/mlb.ico, the icon of mlb.exe, MLBTS-Setup.exe and the setup window: a baseball (our own drawing).
+"""Draw runtime/mlb/mlb.ico, the icon of mlb.exe, Fastball.exe and the setup window: a baseball (our own drawing).
 
     python -I tools/make_icon.py [--out runtime/mlb/mlb.ico]
 

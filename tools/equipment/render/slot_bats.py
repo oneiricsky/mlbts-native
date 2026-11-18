@@ -1,6 +1,6 @@
 """Bats (MLBEQUIPMENT.JSON type 0) and bat grips (type 8), rendered from NSW/OBJECTS/G4GAMEBAT + G4BATTEXTURES.TEX.
 
-Which bat the game actually draws (bat loader main+0x16cc5f0, lifted in mlbts-native-src work/gen/main/main_0161.c):
+Which bat the game actually draws (bat loader main+0x16cc5f0, lifted in work/gen/main/main_0161.c):
   This Switch build runs in the game's "mobile" mode (flag byte main+0x463cb48): an equipped bat whose MLBEQUIPMENT.JSON
   'enb_mobile' is not 1 is swapped for the FIRST entry in the file of the same type and maker with enb_mobile == 1
   (main+0x1757b80). Each maker has one such bat (Axe two); BWP has none, so its bats fall back to style 0 (zGeneric

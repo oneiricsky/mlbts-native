@@ -171,7 +171,7 @@ static void time_zone(IpcSession *s, const IpcRequest *rq, IpcResponse *rs) {
         return;
     }
     case 4: {     // LoadTimeZoneRule(LocationName) -> buffer 0x16: TimeZoneRule (0x4000 bytes)
-        // mlbts-native: the game loads its device location's rule when it goes online (the mlb_login.post_update
+        // fastball: the game loads its device location's rule when it goes online (the mlb_login.post_update
         // request, main+0xaa201c). The rule stays opaque to the game: it only hands it back to ToCalendarTime /
         // ToPosixTime (100 / 201), which use the host's rules like the *WithMyRule commands. The location name is kept
         // at the start of the buffer for the log.

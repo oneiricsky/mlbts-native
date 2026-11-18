@@ -35,7 +35,7 @@ void nvn_called(uint8_t *seen, const char *name) {
     }
     if (__atomic_load_n(seen, __ATOMIC_RELAXED) || __atomic_exchange_n(seen, 1, __ATOMIC_RELAXED)) return;
     uint64_t n = __atomic_add_fetch(&gfx_counters.nvn_distinct, 1, __ATOMIC_RELAXED);
-    rt_log("nvn: first call %llu: %s", (unsigned long long)n, name);   // mlbts-native: always (once per proc)
+    rt_log("nvn: first call %llu: %s", (unsigned long long)n, name);   // fastball: always (once per proc)
 }
 
 uint64_t nvn_new_serial(void) {
@@ -473,7 +473,7 @@ NVN_API(nvnQueueFenceSync) {
 }
 // NVNsyncWaitResult nvnSyncWait(const NVNsync *s, uint64_t timeout_ns): a sync never fenced reports a timeout at once;
 // a fenced one is released only after the back end completed that fence value
-// mlbts-native diagnosis (hitches): a thread's wait for one sync and fence, polled or blocking, from its first call to
+// fastball diagnosis (hitches): a thread's wait for one sync and fence, polled or blocking, from its first call to
 // the call that finds it signalled; one over 30 ms gets a line with the fence's story (vk_backend.c gfx_fence_story).
 __attribute__((weak)) void gfx_fence_story(uint64_t v, uint64_t t0, char *b, size_t n) { (void)v, (void)t0, snprintf(b, n, "-"); }
 static _Thread_local const sync_t *sw_s;
@@ -615,9 +615,9 @@ NVN_API(nvnEventInitialize) {
 // void nvnEventFinalize(NVNevent *e)
 NVN_API(nvnEventFinalize) { ((ev_t *)arg_p(c, 0))->magic = 0; }
 // uint32_t nvnEventGetValue(const NVNevent *e)
-// mlbts-native: the back end first applies the event signals the GPU has reached (vk_exec_xfer.c gfx_event_poll)
+// fastball: the back end first applies the event signals the GPU has reached (vk_exec_xfer.c gfx_event_poll)
 __attribute__((weak)) void gfx_event_poll(void) {}
-// mlbts-native diagnosis (MLB_TRACE=perf): a thread polling one event word that stays at one value. At each batter
+// fastball diagnosis (MLB_TRACE=perf): a thread polling one event word that stays at one value. At each batter
 // walk-up of 1.0.20 the main thread spins about half a second in its GPU wait (f_70005a1a90: nvnEventGetValue until
 // the count it signalled is reached, nvnSyncWait between polls), while the replay thread and the GPU look idle for
 // about half of it. Once a wait has 1000 polls and lasts 30 ms, a line with the event's story (vk_exec_xfer.c

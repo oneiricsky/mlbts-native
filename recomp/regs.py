@@ -19,7 +19,7 @@ path: plan() runs that forward over the function's control flow, so a call spill
 previous call or the entry. Spilling a register that is not dirty is harmless (the local equals the Cpu), so where a
 case is unclear the plan errs on spilling more.
 
-mlbts-native: X19-X28 stay in locals across calls (LAZY). A callee only saves them to its stack and puts them back,
+fastball: X19-X28 stay in locals across calls (LAZY). A callee only saves them to its stack and puts them back,
 so the Cpu copy a call sees may be stale: the callee saves and restores the stale value, and the caller's local still
 holds the real one. A function therefore keeps every X19-X28 it uses in a local and spills them only where it leaves
 (return, tail exit, SVC, trap), not before a call (SPILL_CALL). In MLB these registers hold the game's working values
@@ -42,7 +42,7 @@ SP = 31   # index of SP in the register sets
 # what a call may change, after. SPILL_CALL is the spill before a call, which leaves LAZY registers out.
 SPILL, RELOAD, RELOAD_CALL, SPILL_CALL = '\x00S', '\x00R', '\x00C', '\x00s'
 CALLEE_SAVED = frozenset(range(19, 30)) | {SP}
-LAZY = frozenset(range(19, 29))   # mlbts-native: in locals whenever used, not spilled at calls (module docstring)
+LAZY = frozenset(range(19, 29))   # fastball: in locals whenever used, not spilled at calls (module docstring)
 # Locals per function besides LAZY: the most used registers. More cost more than they save, as clang then spills them to the stack
 # and the syncs stay (300 hot TotK functions: fewest instructions and memory operands at 4-6).
 LOCALS = 6

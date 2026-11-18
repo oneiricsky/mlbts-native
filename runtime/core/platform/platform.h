@@ -253,10 +253,10 @@ void plat_aligned_free(void *p);
 
 // ---- process
 _Noreturn void plat_exit(int code);       // ends the process at once: other threads stop, no atexit handlers run
-// mlbts-native: tells the player why the process is about to end, in a message box, when it has no console (an
+// fastball: tells the player why the process is about to end, in a message box, when it has no console (an
 // installed build is a windowed program: tools/build.py --portable). With a console (dev builds) it does nothing.
 void plat_fatal_notice(const char *what);
-// mlbts-native: stdout and stderr for a command-line answer (mlb.exe --help, --import-save). A windowed program started
+// fastball: stdout and stderr for a command-line answer (mlb.exe --help, --import-save). A windowed program started
 // from a console window has neither: they are reopened on that console. Kept when they already go somewhere (a pipe,
 // a file, a console build). 1 when the text can be seen; 0 when there is nowhere to write (started from Explorer).
 int plat_console_attach(void);
@@ -355,7 +355,7 @@ int plat_fs_list(const char *dir, int (*cb)(const char *name, int kind, uint64_t
 // An existing file for reading and, with write, writing; *err (may be NULL) gets the reason on failure.
 PlatFile *plat_fs_open(const char *path, int write, int *err);
 PlatFile *plat_fs_create(const char *path, int *err);     // a new file for writing; PLAT_FS_EXISTS when there
-// mlbts-native: a lock file, made when missing and held open with no sharing until plat_file_close or the process
+// fastball: a lock file, made when missing and held open with no sharing until plat_file_close or the process
 // ends however it ends; PLAT_FS_BUSY in *err while another process holds it.
 PlatFile *plat_fs_lock(const char *path, int *err);
 int64_t plat_file_pwrite(PlatFile *f, const void *buf, uint32_t n, uint64_t off);   // bytes written, -1 on error

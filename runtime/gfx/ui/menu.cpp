@@ -10,7 +10,7 @@
 // Copyright (c) 2026 Peiikai): dark green panels, gold accents, the tab bar with L / R or Q / E, the window over a
 // dimmed game, two-pane option rows (option_rows.cpp).
 //
-// mlbts-native: MLB's pages (Graphics, Display, Game, Sound, Controls, Advanced) over the settings this port reads,
+// fastball: MLB's pages (Graphics, Display, Game, Sound, Controls, Advanced) over the settings this port reads,
 // with TotK's performance overlay (F10) and its Advanced helpers; English text only. TotK's translated catalog, its
 // mods, cheats, amiibo and key binding pages and its TotK-only rows (resolution patches, shadows, DLSS, HDR, frame
 // limit, motion, mouse) are not ported. F1, or
@@ -538,7 +538,7 @@ static void tab_display(float scale) {
                "tearing or waiting. VSync waits for the display's refresh (more input delay). Off shows frames as soon "
                "as they are done and can tear.",
                present_note());
-    // mlbts-native: MLB_FPS_LIMIT (runtime/mlb/framerate.c)
+    // fastball: MLB_FPS_LIMIT (runtime/mlb/framerate.c)
     static const char *const fps[] = {"30", "40", "45", "60", "90", "120", "144", "165", "240", "display"};
     static const char *const fps_names[] = {"30", "40", "45", "60 (the game's own)", "90", "120", "144", "165", "240",
                                             "Monitor refresh rate"};
@@ -838,7 +838,7 @@ static void layout_menu(uint32_t w, uint32_t h, float scale) {
                                         ImGuiWindowFlags_NoSavedSettings);
     ImGui::TextColored(ImVec4(0.93f, 0.76f, 0.33f, 1), "Settings");
     char version[96];   // right-aligned on the title line
-    snprintf(version, sizeof version, "MLB The Show 26 native %s, game %s", rt_port_version, rt_game_build);
+    snprintf(version, sizeof version, "Fastball %s, MLB The Show 26 %s", rt_port_version, rt_game_build);
     ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetStyle().WindowPadding.x - ImGui::CalcTextSize(version).x);
     ImGui::TextDisabled("%s", version);
 
@@ -1065,7 +1065,7 @@ static void perf_full_draw(const MenuTarget *t, float scale) {
     ImGui::SetWindowFontScale(0.72f);
     const ImVec4 gpu_c(0.55f, 0.83f, 0.31f, 1), cpu_c(0.18f, 0.59f, 0.80f, 1), ram_c(0.80f, 0.45f, 0.70f, 1),
         fps_c(0.95f, 0.95f, 0.95f, 1), wait_c(0.93f, 0.76f, 0.33f, 1), pic_c(0.62f, 0.70f, 0.95f, 1);
-    ImGui::TextDisabled("MLB The Show 26 native %s, game %s", rt_port_version, rt_game_build);
+    ImGui::TextDisabled("Fastball %s, MLB The Show 26 %s", rt_port_version, rt_game_build);
     if (ImGui::BeginTable("##perft", 4, ImGuiTableFlags_SizingFixedFit)) {
         static const char *const labels[] = {"GPU", "VRAM", "CPU", "RAM", "FPS", "Frame"};
         static const PerfCol c1[] = {{"%.0f%%", 100}, {"%.1f GB", 888.8f}, {"%.0f", 888}, {"%.1f ms", 888.8f}};
@@ -1147,7 +1147,7 @@ static void perf_draw(const MenuTarget *t, float scale) {
     dl->AddText(ImVec2(p.x + pad, p.y + pad), IM_COL32(255, 255, 255, 235), g_perf_text);
 }
 
-// mlbts-native: MLB presents sRGB images, so the swapchain is sRGB (gfx_present.c create_swapchain) and the hardware
+// fastball: MLB presents sRGB images, so the swapchain is sRGB (gfx_present.c create_swapchain) and the hardware
 // encodes what the menu writes. ImGui's colours are already sRGB values: written as they are, they came out encoded
 // twice, the dark green panels a washed-out grey green (first test shot, 2026-11-13). On an sRGB target the vertex
 // colours are turned into linear values first; alpha stays.

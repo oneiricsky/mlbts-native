@@ -8,7 +8,7 @@
     packages   optional: Road to the Show's Packages, offline (tools/packages, runtime/mlb/packages.c); the same
     finish   always: mlb.cfg, the shader translator, DLSS (optional), shortcuts, a Ryujinx save (optional), clean up
 
-mlbts-install.json in the install folder records each finished step with a key: a fingerprint of what its output
+fastball-install.json in the install folder records each finished step with a key: a fingerprint of what its output
 depends on. A step whose recorded key matches and whose output is still there is skipped. So a cancelled setup resumes
 where it stopped, and a newer release on an existing folder only rebuilds mlb.exe (its key holds the release version):
 the game files are not needed again.
@@ -37,7 +37,15 @@ from pathlib import Path
 from . import detect
 from .layout import GAME_VERSIONS
 
-STATE = 'mlbts-install.json'
+STATE = 'fastball-install.json'
+LEGACY_STATE = 'mlbts-install.json'   # its name up to 0.1.5: read when there is no STATE, and replaced by it
+
+
+def state_file(dest):
+    """The install record of dest: STATE, or the older name when only that one is there."""
+    p = Path(dest) / STATE
+    old = Path(dest) / LEGACY_STATE
+    return old if not p.is_file() and old.is_file() else p
 GIB = 1 << 30
 SPACE_SLACK = 2 * GIB          # mlb.exe, the shader and pipeline caches, saves
 TEMP_BYTES = 2 * GIB           # the generated C (about 600 MB) and its objects (about 200 MB), with room
@@ -121,7 +129,7 @@ class Context:
         return 983040 if (self.game / 'romfs').is_dir() else None
 
     def load_state(self):
-        p = self.dest / STATE
+        p = state_file(self.dest)
         if p.is_file():
             try:
                 data = json.loads(p.read_text(encoding='utf-8'))
@@ -137,6 +145,7 @@ class Context:
         tmp = p.with_name(STATE + '.tmp')
         tmp.write_text(json.dumps(self.state, indent=1) + '\n', encoding='utf-8')
         os.replace(tmp, p)
+        (self.dest / LEGACY_STATE).unlink(missing_ok=True)   # now under the new name
 
     def run_tool(self, step, cmd, on_line=None):
         """Run a tool of the setup folder, its output to the log (and on_line), from the setup folder. A tool that fails
@@ -597,7 +606,7 @@ class Finish(Step):
         if opt.shortcut:
             rep.progress(self.id, 'Making shortcuts', force=True)
             # the launcher when there is one: it starts the game at once and checks for updates once a day
-            launcher = ctx.layout.root / 'MLBTS-Setup.exe'
+            launcher = ctx.layout.root / 'Fastball.exe'
             shortcuts(launcher if launcher.is_file() and not ctx.layout.dev else dest / 'mlb.exe', dest / 'mlb.exe')
         if opt.import_save:
             rep.progress(self.id, 'Copying your Ryujinx save', force=True)
@@ -643,11 +652,11 @@ def shortcuts(exe, icon):
     player ticks the option (off by default: the port is portable and keeps to its folder)."""
     script = ("$w = New-Object -ComObject WScript.Shell; "
               "foreach ($d in @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs'))) { "
-              "$s = $w.CreateShortcut((Join-Path $d 'MLB The Show 26.lnk')); $s.TargetPath = $env:MLBTS_EXE; "
-              "$s.WorkingDirectory = (Split-Path $env:MLBTS_EXE); $s.IconLocation = $env:MLBTS_ICON + ',0'; "
-              "$s.Description = 'MLB The Show 26 (PC port)'; $s.Save() }")
+              "$s = $w.CreateShortcut((Join-Path $d 'MLB The Show 26.lnk')); $s.TargetPath = $env:FASTBALL_EXE; "
+              "$s.WorkingDirectory = (Split-Path $env:FASTBALL_EXE); $s.IconLocation = $env:FASTBALL_ICON + ',0'; "
+              "$s.Description = 'MLB The Show 26 (Fastball)'; $s.Save() }")
     subprocess.run(['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
-                   env=dict(os.environ, MLBTS_EXE=str(exe), MLBTS_ICON=str(icon)), capture_output=True,
+                   env=dict(os.environ, FASTBALL_EXE=str(exe), FASTBALL_ICON=str(icon)), capture_output=True,
                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
 
 

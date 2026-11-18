@@ -7,9 +7,9 @@ How `mlb.exe` is built from the game's code and TotK Recomp's runtime, and how f
 | Path | What | Origin |
 |---|---|---|
 | `recomp/` | ARM64 → C generator (lifter, NEON/FP lowering, jump tables, flags/register caching, module layout) | TotK Recomp `ae30a61`, unmodified |
-| `runtime/core/` | Generic host: CPU/SIMD headers, dispatch, host-function table, NSO loader, guest memory, kernel/threads (3 virtual cores), SVCs, IPC, platform (Win32), audio-renderer ABI header | TotK Recomp `ae30a61`; mlbts-native changes listed below |
+| `runtime/core/` | Generic host: CPU/SIMD headers, dispatch, host-function table, NSO loader, guest memory, kernel/threads (3 virtual cores), SVCs, IPC, platform (Win32), audio-renderer ABI header | TotK Recomp `ae30a61`; Fastball changes listed below |
 | `runtime/mlb/` | MLB layer: `main.c` (log, crash reporter, runtime services of the generated code), `boot.c` (rtld replacement, `nn::init::Start`, NPDM service list), `cfg.c` (environment settings), `services.c` (service table; lm, apm, ectx:aw, pctl), `am.c` (appletOE), `aoc.c` (aoc:u), `time.c` (time:u), `game.c` (NACP figures for fs), `account.c` (local user id), `packages.c` (optional: Road to the Show's Packages from a server on this PC), `stubs.c` (named stubs) | ours (main/boot/cfg adapted from TotK, attributed in headers) |
-| `runtime/gfx/` | TotK's graphics stack: NVN front end, Vulkan back end, present and Win32 window, shader client (docs/graphics-plan.md); `gfx_stubs.c` switches off the TotK-only features; `nvn_api_more.c` has NVN procs TotK never implemented | TotK Recomp `ae30a61`; changes marked `mlbts-native` |
+| `runtime/gfx/` | TotK's graphics stack: NVN front end, Vulkan back end, present and Win32 window, shader client (docs/graphics-plan.md); `gfx_stubs.c` switches off the TotK-only features; `nvn_api_more.c` has NVN procs TotK never implemented | TotK Recomp `ae30a61`; changes marked `fastball` |
 | `tools/build.py` | Writes `work/build/modules.c` and `build.ninja`, compiles with LLVM clang, links `work/build/mlb.exe` with lld | ours |
 | `tools/data/expected-<version>.json` | per game version (1.0.15, 1.0.20): ExeFS hashes the loader checks, main's image size, RomFS size | ours |
 | `tools/addrmap.py` | finds a 1.0.15 address of `main` in 1.0.20 (masked instruction or data match) | ours |
@@ -17,7 +17,7 @@ How `mlb.exe` is built from the game's code and TotK Recomp's runtime, and how f
 The generic/game split follows AGENTS.md: `runtime/core` holds nothing MLB-specific, and `runtime/mlb` holds nothing
 that another title couldn't replace.
 
-### Changes to vendored files (all marked `mlbts-native` in the source)
+### Changes to vendored files (all marked `fastball` in the source)
 
 - `runtime/core/ipc.c`, `ipc.h`: **CMIF domains** (ConvertToDomain, CopyFromCurrentDomain, domain requests and
   close, interfaces returned as object ids). TotK never needed them, because its symbol overrides catch service use

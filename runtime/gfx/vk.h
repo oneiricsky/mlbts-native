@@ -122,7 +122,7 @@ typedef struct {
     const GfxShader *first[2], *last[2];// vertex and fragment shader of the first and last draw; a dispatch: first[0]
     const char *label;                  // VK_MARK_OTHER: what it times (a string literal)
 } VkPassMark;
-// mlbts-native: times the port's own work between the two calls under a name (MLB_TRACE=perf; vk_passtime.c)
+// fastball: times the port's own work between the two calls under a name (MLB_TRACE=perf; vk_passtime.c)
 VkPassMark *vk_pass_mark_other(VkCommandBuffer cb, uint64_t fence, const char *label);
 // Pass marks wanted and possible (TOTK_PASS_CRUMBS and the extensions): set by vk_crumbs_init.
 extern int vk_pass_marks_on;
@@ -159,7 +159,7 @@ void vk_present_blit(VkImage src, VkImageLayout layout, VkFormat fmt, int w, int
 int vk_fsr_record(VkCommandBuffer cb, unsigned slot, VkImage src, VkFormat fmt, int sw, int sh, const int crop[4],
                   VkImage dst, const int out[4]);
 void vk_fsr_release(void);   // before the device goes away
-// mlbts-native: FSR 1 on MLB's 3D scene (vk_fsr.c): EASU (+ RCAS) of the sw x sh scene to dw x dh, recorded into cb
+// fastball: FSR 1 on MLB's 3D scene (vk_fsr.c): EASU (+ RCAS) of the sw x sh scene to dw x dh, recorded into cb
 // (outside a pass); 1 with the result's view in *out, 0 when off (MLB_UPSCALER) or nothing to scale up.
 int vk_fsr_scene_on(void);
 int vk_fsr_scene(VkCommandBuffer cb, uint64_t fence, VkImage scene, VkFormat fmt, uint32_t sw, uint32_t sh, uint32_t dw,
@@ -169,7 +169,7 @@ int vk_fsr_scene(VkCommandBuffer cb, uint64_t fence, VkImage scene, VkFormat fmt
 // scales that one instead, crop {0, 0, w, h}); VK_NULL_HANDLE = nothing recorded. src is in GENERAL, fmt its format.
 VkImage vk_color_record(VkCommandBuffer cb, unsigned slot, VkImage src, VkFormat fmt, const int crop[4]);
 void vk_color_release(void);   // before the device goes away
-// mlbts-native, vk_aa.c: antialiasing of the 3D scene in place, before the game's composite draw reads it (MLB_AA).
+// fastball, vk_aa.c: antialiasing of the 3D scene in place, before the game's composite draw reads it (MLB_AA).
 // vk_aa_on: the setting (re-read when the settings change). vk_aa_record: outside a render pass, after a full barrier;
 // records the pass on the scene (level 0, layer 0, GENERAL) and a barrier after it; 1 when recorded. Once per scene
 // image and submission. vk_aa_status: 0 off, 1 smoothing, 2 no 3D scene lately, 3 not supported (the menu's note).
@@ -511,8 +511,8 @@ uint64_t vk_sync_reserve(void);            // asynchronous replay: the value the
 int vk_sync_fence_wait(uint64_t value, uint64_t timeout_ns);   // 1 when done; 0 on timeout or a value never submitted
 uint64_t vk_sync_fence_done(void);         // highest done value
 uint64_t vk_sync_issued(void);             // newest submitted value (the one being recorded is this + 1)
-void vk_completion_story(char *b, size_t n);   // mlbts-native diagnosis: timeline values and the side-effect queue
-// mlbts-native diagnosis (MLB_TRACE=perf): when value v was submitted and the completion thread saw it reached (0: not
+void vk_completion_story(char *b, size_t n);   // fastball diagnosis: timeline values and the side-effect queue
+// fastball diagnosis (MLB_TRACE=perf): when value v was submitted and the completion thread saw it reached (0: not
 // yet); 0 when v is no longer in the table
 int vk_sync_value_times(uint64_t v, uint64_t *sub, uint64_t *seen);
 void vk_sync_finish(void);                 // every submitted value done

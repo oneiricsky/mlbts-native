@@ -6,7 +6,7 @@
 //
 // The NGX half (core loading, extensions, the parameter object's vtable, init, the DLSS feature and its evaluation, the
 // work images, jitter sequence and presets) is TotK Recomp's runtime/vk_dlaa.c @ ae30a61 (MIT, LICENSE.totk-recomp),
-// kept close to the original. Where it runs in the frame, the camera and the motion vectors are MLB's own (mlbts-native),
+// kept close to the original. Where it runs in the frame, the camera and the motion vectors are MLB's own (fastball),
 // described in the section "where DLSS runs in MLB's frame".
 //
 // The core's parameter object is a C++ class whose virtual functions are called through its vtable: the Set overloads
@@ -212,7 +212,7 @@ void vk_dlaa_init(void) {
 
 int vk_dlaa_available(void) { return vk_dlaa_wanted() && N.available; }
 
-// ---------------------------------------------------------------- where DLSS runs in MLB's frame (mlbts-native)
+// ---------------------------------------------------------------- where DLSS runs in MLB's frame (fastball)
 // Measured in the drawlogs and RenderDoc captures of 2026-11-10/11 (play, menus, RTTS, celebrations): MLB is a forward
 // renderer. Its 3D scene is drawn in one pass into a B10G11R11 float colour target (0x154ea0000, linear HDR before the
 // game's exposure) with a D24S8 depth target (0x155878000, D32_SFLOAT_S8_UINT here), both at the scene size (1440x810
@@ -430,7 +430,7 @@ static void times_mark(VkCommandBuffer cb, int which) {
     if (which == T_DL1) T.used[T.slot] = 1;
 }
 
-// ---------------------------------------------------------------- motion vectors (mlbts-native)
+// ---------------------------------------------------------------- motion vectors (fastball)
 static int mv_init(void) {
     if (D.mv_ok >= 0) return D.mv_ok;
     D.mv_ok = 0;
@@ -596,7 +596,7 @@ static void next_jitter(uint32_t w, uint32_t ow) {
     D.jit_ok = !D.hold && !nj;
 }
 
-// ---------------------------------------------------------------- the frame (mlbts-native)
+// ---------------------------------------------------------------- the frame (fastball)
 // The end of a frame, at the begin of the next frame's scene: a frame that armed but never reached the composite
 // (a screen whose composite shader aa_composite does not know) counts as missed, and if its scene was jittered the
 // jitter stops for a second.

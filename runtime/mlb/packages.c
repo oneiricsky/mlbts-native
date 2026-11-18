@@ -1,4 +1,4 @@
-// mlbts-native offline packages: Road to the Show's Packages without a connection.
+// fastball offline packages: Road to the Show's Packages without a connection.
 //
 // The game hands out and opens its equipment packs through its online service, which this port never reaches. With
 // MLB_OFFLINE_PACKAGES=1 the runtime starts a small server on this PC (tools/packages, which the setup copies to

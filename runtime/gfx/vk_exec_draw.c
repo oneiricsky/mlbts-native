@@ -28,8 +28,8 @@
 #include "nvn_hmap.h"
 #include "vk.h"
 #include "vk_exec.h"
-#include "tex.h"      // mlbts-native: TexVkFormat, tex_vk_format (texel_view)
-#include "nvn_tex.h"  // mlbts-native: nvn_fmt_bpb (texel_view)
+#include "tex.h"      // fastball: TexVkFormat, tex_vk_format (texel_view)
+#include "nvn_tex.h"  // fastball: nvn_fmt_bpb (texel_view)
 #include "platform/platform.h"
 #include "vk_dlaa.h"
 
@@ -188,7 +188,7 @@ static struct {
         c_order, c_big, b_merged, c_exact;
     uint32_t c_maxbatch;       // the most copies one flush recorded
 } OV = {.mode = -1};
-// mlbts-native: a merged copy larger than this brings the overlays' copies forward instead (ub_bind).
+// fastball: a merged copy larger than this brings the overlays' copies forward instead (ub_bind).
 #define OV_MERGE_MAX (64u << 10)
 
 // A binding without a size reaches to the end of its backing: as far as the overlays go, for ov_at.
@@ -257,7 +257,7 @@ static VkPassMark *dispatch_mark(VkExec *ex, const GfxShader *cs, uint32_t x, ui
     return m;
 }
 
-// mlbts-native: one mark per run of chained dispatches (dispatch_chain_on), not one per dispatch. A GPU timestamp
+// fastball: one mark per run of chained dispatches (dispatch_chain_on), not one per dispatch. A GPU timestamp
 // waits for the work before it, so a pair around each of the 700-1,800 dispatches a frame of the draft cutscene
 // drained the GPU between them all (17-19 ms of GPU time a frame became 21-27). A run starts after a barrier, which
 // drains anyway, and ends at the next one (vk_exec.c barrier_to calls vk_exec_dispatch_run_close). The mark counts
@@ -321,7 +321,7 @@ static uint8_t *scratch(VkExec *ex, uint64_t size, VkBuffer *buf, VkDeviceSize *
                                  .usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT |
                                           VK_BUFFER_USAGE_VERTEX_BUFFER_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT |
                                           VK_BUFFER_USAGE_TRANSFER_SRC_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT |
-                                          VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT};   // mlbts-native: texel_view copies
+                                          VK_BUFFER_USAGE_UNIFORM_TEXEL_BUFFER_BIT};   // fastball: texel_view copies
         // HOST_COHERENT: the CPU fills these chunks and never flushes them. Intel's integrated GPUs (ANV, Meteor Lake)
         // offer host-cached memory only without coherence, which VMA picks for random host access: the GPU then read
         // what an earlier submission left in the chunk (an UpdateUniformBuffer payload of another draw: a lighting
@@ -345,8 +345,8 @@ static uint8_t *scratch(VkExec *ex, uint64_t size, VkBuffer *buf, VkDeviceSize *
 static int ub_bind(VkExec *ex, uint64_t addr, uint64_t n, uint64_t align, VkDescriptorBufferInfo *out);
 static void ub_written(VkExec *ex, uint64_t addr, uint64_t n);
 
-int vk_watch_hit(uint64_t a, uint64_t n);   // vk_texture.c (mlbts-native diagnosis)
-// mlbts-native: the ranges of the submission's written list (CbRes.written), to find one already there. note_written
+int vk_watch_hit(uint64_t a, uint64_t n);   // vk_texture.c (fastball diagnosis)
+// fastball: the ranges of the submission's written list (CbRes.written), to find one already there. note_written
 // compared each new range with every earlier one: 1.0.20 notes about 1,000 uniform updates a submission besides the
 // storage writes, so that grew with the square of the list (about 1 % of the replay in the match profile). Entries of
 // another submission carry an older generation; the table doubles when half full.
@@ -600,7 +600,7 @@ static nvn_hmap views_by_image;          // VkImage -> its first ViewNode
 
 // An image view of a registered texture for a shader resource of type `rtype` (GfxShaderRes.type); VK_NULL_HANDLE when
 // the image cannot serve it (the caller binds a stand-in). Texture lock held.
-// mlbts-native: the format of a sampled view. A view format (nvnTextureViewSetFormat) that is the image format's sRGB
+// fastball: the format of a sampled view. A view format (nvnTextureViewSetFormat) that is the image format's sRGB
 // or linear twin (the same bytes, only the decode differs) is the view's; images of colour formats are MUTABLE_FORMAT
 // (vk_texture.c create_tex). Before, sampled views always took the image's format: MLB samples its created-player face
 // atlas, an RGBA8 sRGB texture, through an RGBA8 view, and the sRGB decode darkened the faces to near black. Other
@@ -838,7 +838,7 @@ static void slot_mask_learn(uint64_t serial, int st, const GfxShader *s) {
 
 int vk_texture_slot_is_buffer_locked(int id);   // vk_texture.c
 
-// mlbts-native: a buffer texture has no image, so its type was left unanswered and the translator took the texture for
+// fastball: a buffer texture has no image, so its type was left unanswered and the translator took the texture for
 // 2D: a texel fetch from it (MLB's face skinning reads the base positions that way, compute 28aa4521) bound no data and
 // read zeros, which put every face vertex on its head bone. It is answered "buffer", so the shader declares a
 // samplerBuffer / imageBuffer and the binding gets texel_view.
@@ -856,7 +856,7 @@ static void answers_for(VkExec *ex, int st, const uint8_t *ctl, uint32_t mask, G
     if (st == NVN_STAGE_VS) vk_pipeline_answers(&ex->pipe, a, NULL);
     else if (st == NVN_STAGE_FS) {
         vk_pipeline_answers(&ex->pipe, NULL, a);
-        // mlbts-native: NVN's alpha test (nvnColorStateSetAlphaTest, nvnCommandBufferSetAlphaRef) has no Vulkan state;
+        // fastball: NVN's alpha test (nvnColorStateSetAlphaTest, nvnCommandBufferSetAlphaRef) has no Vulkan state;
         // the translator compiles it into the fragment shader (Ryujinx GpuGraphicsState.AlphaTestCompare / Reference).
         unsigned f = ex->pipe.color.alpha_func;
         if (f && f != NVN_ALPHA_FUNC_ALWAYS) {
@@ -870,7 +870,7 @@ static void answers_for(VkExec *ex, int st, const uint8_t *ctl, uint32_t mask, G
             memcpy(&l, ctl + 0x748 + 4 * k, 4);
             a->local[k] = (uint16_t)(l ? l : 1);
         }
-        // mlbts-native: the program's shared memory size (NVN compute control +0x754, beside the local size). Ryujinx
+        // fastball: the program's shared memory size (NVN compute control +0x754, beside the local size). Ryujinx
         // otherwise declares 4 KiB, and stores past it are lost: MLB's reflection-probe atlas shader 0e0c2eb9 keeps 28
         // bytes per thread for 8x8x6 threads (10752), so cube faces 3-5 of every probe stayed black (the player's
         // dark patches in the RTTS room). Part of the answers, so the cache key changes only for shaders using it.
@@ -969,7 +969,7 @@ static void count_use(int cls, int use, uint64_t n) {
     else RS.cnt_over = 1;
 }
 
-// ---- compute between draws (mlbts-native, the celebration frame rate)
+// ---- compute between draws (fastball, the celebration frame rate)
 // MLB's celebrations on the field run, for each player, a few dispatches of one compute shader (44eefd63: strands or
 // cloth from the bones) and then one draw of its output, inside a 1440x810 pass: about 45 such switches a frame. A
 // dispatch cannot run inside a Vulkan pass, so each switch ended the pass, drained the GPU with a full barrier, ran the
@@ -1341,7 +1341,7 @@ static void upd_apply(const VkExec *ex, uint64_t a, uint8_t *out, size_t n) {
     }
 }
 
-// mlbts-native (the batting frame rate): consecutive dispatches without a barrier between them. NVN orders compute
+// fastball (the batting frame rate): consecutive dispatches without a barrier between them. NVN orders compute
 // work only at the game's barriers (OP_BARRIER, replayed as a full barrier), and MLB's batting scenes run one compute
 // shader (99604eee) about 1,800-2,300 times a frame with about 140 barriers; a full ALL_COMMANDS barrier before each
 // dispatch drained the GPU every time, and the frame took 25 ms of GPU time (33 fps). A dispatch now skips that barrier
@@ -1663,7 +1663,7 @@ static uint32_t feedback_scan(VkExec *ex, const GfxShader *fs) {
     int n = gfx_shader_resources(fs, GFX_RES_TEX, &res);
     uint32_t m = 0, gen = vk_texture_slots_gen();   // before any lookup
     int memo = td_mode(), locked = 0;
-    for (int r = 0; r < n; r++)   // mlbts-native: the memo lines asked for together first (as in bind_resources)
+    for (int r = 0; r < n; r++)   // fastball: the memo lines asked for together first (as in bind_resources)
         for (int k = 0; k < (res[r].count ? res[r].count : 1) && k < 8; k++) {
             int slot = res[r].slot + k;
             uint64_t h = slot >= 0 && slot < 128 ? ex->tex[NVN_STAGE_FS][slot] : 0;
@@ -1743,7 +1743,7 @@ static void feedback_written(VkExec *ex, const VkPipeState *s) {
         if (ex->color[i].image && !(ex->fb_dirty >> i & 1) && vk_pipeline_target_wmask(s, (int)i)) ex->fb_dirty |= 1u << i;
 }
 
-// mlbts-native: buffer textures and buffer images (samplerBuffer / imageBuffer). The descriptor registered at the pool
+// fastball: buffer textures and buffer images (samplerBuffer / imageBuffer). The descriptor registered at the pool
 // slot of the handle names the storage (tex_t.mem, which is its GPU address here), the element count (d.width) and the
 // format; the view covers that range of the backing buffer, resolved like a storage buffer, and an image's writes count
 // as GPU writes to it (write-back of mirrors, texture freshness). Views go to the deferred-destroy queue at once and
@@ -1814,7 +1814,7 @@ static VkBufferView texel_view(VkExec *ex, uint64_t h, int written) {
     return v;
 }
 
-// mlbts-native: the texture handle a TEX resource reads, as the shader would form it: the texture word, ORed with the
+// fastball: the texture handle a TEX resource reads, as the shader would form it: the texture word, ORed with the
 // sampler word bound at its separate sampler slot when it has one (gfx.h samp_type; Ryujinx TextureHandle
 // ReadPackedId). The texture word's own sampler bits are replaced then.
 // The texture slot element k of a TEX resource reads: slot + k, or for a handle-table array (gfx.h table) the slot of
@@ -1893,7 +1893,7 @@ static void tex_info_lookup(VkExec *ex, const GfxShaderRes *r, uint64_t h, int s
                       .separate = (uint8_t)separate, .valid = 1, .image = image, .out = *out};
 }
 
-static int watch_dispatch;   // mlbts-native: the dispatch being bound stores into the watched range (vk_watch_hit)
+static int watch_dispatch;   // fastball: the dispatch being bound stores into the watched range (vk_watch_hit)
 static void tex_info_full(VkExec *ex, const GfxShaderRes *r, uint64_t h, int storage, int separate,
                           VkDescriptorImageInfo *out, VkImage *image) {
     int ms = (r->type & 0x200) != 0;
@@ -1923,7 +1923,7 @@ static void tex_info_full(VkExec *ex, const GfxShaderRes *r, uint64_t h, int sto
     if (!view) {
         int di = dummy_index(res_view_type(r->type), ms);
         view = storage ? storage_dummy(di, r->format) : Z.img[di].view;
-        if (h) {   // mlbts-native diagnosis: a named texture that gets the placeholder, once per texture, view type and cause
+        if (h) {   // fastball diagnosis: a named texture that gets the placeholder, once per texture, view type and cause
             static uint64_t seen[512];
             static int nseen;
             view_t v;
@@ -2117,7 +2117,7 @@ static Twin *twin_update(VkExec *ex, const VkTexImage *img) {
 // The image descriptor of slot h; in a dispatch, a compare-sampled colour image the driver cannot compare is swapped
 // for its depth twin; in a pass larger than it, the scene's light target, once DLSS scaled it this frame, for DLSS's
 // output (vk_dlaa.c).
-// mlbts-native: aa_before_draw holds the swap for MLB's composite draw alone (fsr_swapped), where DLAA's picture is as
+// fastball: aa_before_draw holds the swap for MLB's composite draw alone (fsr_swapped), where DLAA's picture is as
 // large as the scene it replaces: then the pass need not be larger.
 static int fsr_swapped;
 static void tex_info(VkExec *ex, const GfxShaderRes *r, uint64_t h, int storage, int separate, VkDescriptorImageInfo *out) {
@@ -2149,7 +2149,7 @@ static VkDescriptorSet alloc_set(VkExec *ex, VkDescriptorSetLayout layout) {
         }
         static const VkDescriptorPoolSize sizes[] = {
             {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 4096}, {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 2048},
-            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 16384}, {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1024},   // mlbts-native: 173-entry handle-table arrays
+            {VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 16384}, {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1024},   // fastball: 173-entry handle-table arrays
             {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1024}, {VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER, 256},
             {VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER, 256}};
         VkDescriptorPoolCreateInfo pi = {.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO, .maxSets = 256,
@@ -2361,12 +2361,12 @@ static const RsList *rs_list(const VkExec *ex, const VkPipeInfo *info) {
                        b->type != VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER) {
                 int img = b->kind == GFX_RES_IMG, cap = img ? 32 : 128;
                 for (uint32_t k = 0; k < cnt; k++) {
-                    int slot = img ? r->slot + (int)k : tex_slot_of(r, (int)k);   // mlbts-native: handle tables
+                    int slot = img ? r->slot + (int)k : tex_slot_of(r, (int)k);   // fastball: handle tables
                     if (slot >= 0 && slot < cap) rs_add(tmp, &n, ex, img ? &ex->img[st][slot] : &ex->tex[st][slot], 8);
                     else if (!img && r->img_handle && r->slot + (int)k >= 0 && r->slot + (int)k < 32)
                         rs_add(tmp, &n, ex, &ex->img[st][r->slot + (int)k], 8);   // a size query of a bound image
                 }
-                // mlbts-native: a separate sampler word is read too (res_tex_handle)
+                // fastball: a separate sampler word is read too (res_tex_handle)
                 if (!img && (r->samp_type == 1 || r->samp_type == 2) && r->samp_slot >= 0 && r->samp_slot < 128) {
                     if (n >= MAX_DESC) { ok = 0; break; }
                     rs_add(tmp, &n, ex, &ex->samp[st][r->samp_slot], 8);
@@ -2499,7 +2499,7 @@ static void bind_resources(VkExec *ex, const VkPipeInfo *info) {
         RS.rec = 1, RS.ncnt = 0, RS.cnt_over = 0, RS.volatile_ = 0, RS.cmds = 0;
     }
     if (gfx && lt_on()) LT.bdraw = 1, LT.bn = 0, LT.bover = 0;   // the draw's ranges are noted (compute between draws)
-    // mlbts-native: the descriptor memo entries (TD, 512 KiB, direct-mapped) of the draw's sampled textures are asked
+    // fastball: the descriptor memo entries (TD, 512 KiB, direct-mapped) of the draw's sampled textures are asked
     // for together before the loop reads them one by one. Each read waited for its line from memory in turn: the line
     // that compares the entry was the hottest of the replay in the 1.0.20 match profile (about 5 % of its time); the
     // prefetches let those waits overlap.
@@ -2556,7 +2556,7 @@ static void bind_resources(VkExec *ex, const VkPipeInfo *info) {
             int img = b->kind == GFX_RES_IMG;
             if (b->type == VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER || b->type == VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER) {
                 kind = 2;
-                for (uint32_t k = 0; k < cnt; k++) {   // mlbts-native: texel_view (was the zero view)
+                for (uint32_t k = 0; k < cnt; k++) {   // fastball: texel_view (was the zero view)
                     int slot = r->slot + (int)k;
                     uint64_t h = img ? (slot >= 0 && slot < 32 ? ex->img[st][slot] : 0) : res_tex_handle(ex, st, r, (int)k);
                     VkBufferView v = texel_view(ex, h, img && b->type == VK_DESCRIPTOR_TYPE_STORAGE_TEXEL_BUFFER);
@@ -2571,7 +2571,7 @@ static void bind_resources(VkExec *ex, const VkPipeInfo *info) {
                     int slot = r->slot + (int)k;
                     uint64_t h = 0;
                     if (img) h = slot >= 0 && slot < 32 ? ex->img[st][slot] : 0;
-                    else h = res_tex_handle(ex, st, r, (int)k);   // mlbts-native: separate sampler words
+                    else h = res_tex_handle(ex, st, r, (int)k);   // fastball: separate sampler words
                     if (LT.bdraw | LT.cand) lt_image(ex, h, img);
                     tex_info(ex, r, h, img, r->separate, &o[k].image);
                     o[k].w[2] = (uint32_t)o[k].image.imageLayout;   // zero the tail padding
@@ -2864,7 +2864,7 @@ static int pipe_memo_on(void) {
     return PM.on;
 }
 
-// mlbts-native: antialiasing of the 3D scene (vk_aa.c, MLB_AA). MLB's frame ends with one full-screen draw that
+// fastball: antialiasing of the 3D scene (vk_aa.c, MLB_AA). MLB's frame ends with one full-screen draw that
 // tone-maps its 3D scene (texture 0 of that draw: 1440x810 B10G11R11 at 0x154ea0000), scales it to 1080p and lays the
 // HUD over it; fragment shader daf10a59 in play, 1d3e4d6b on some menu screens (the drawlog's hashes, every saved
 // capture of 2026-11-10). Before that draw the scene is smoothed in place. MLB_AA_FS=<hash>,... adds composite shaders.
@@ -2950,14 +2950,14 @@ static void aa_before_draw(VkExec *ex, const GfxShader *fs) {
 // Pass, shaders, pipeline, fixed state and resources for a draw. 0: the draw is skipped.
 static int prepare_draw_inner(VkExec *ex, int prim, int32_t count, int restart);
 static long drawlog_now_l(void);
-// mlbts-native: in the drawlog frame, a draw prepare_draw_inner turns away is logged with what it can tell of why
-static const char *pd_why;   // mlbts-native diagnosis: why prepare_draw_inner returned 0
+// fastball: in the drawlog frame, a draw prepare_draw_inner turns away is logged with what it can tell of why
+static const char *pd_why;   // fastball diagnosis: why prepare_draw_inner returned 0
 int vk_exec_targets_watched(VkExec *ex);   // vk_exec.c
 static int prepare_draw(VkExec *ex, int prim, int32_t count, int restart) {
     vk_exec_dq_end(ex);   // the previous draw's query ends before this one's preparation can begin a game query
     pd_why = NULL;
     int ok = prepare_draw_inner(ex, prim, count, restart);
-    if (fsr_swapped) {   // mlbts-native: the FSR scene swap holds for the composite draw alone (aa_before_draw)
+    if (fsr_swapped) {   // fastball: the FSR scene swap holds for the composite draw alone (aa_before_draw)
         fsr_swapped = 0;
         vk_dlaa_swap_img = NULL;
         vk_dlaa_swap_view = VK_NULL_HANDLE;
@@ -3005,7 +3005,7 @@ static int prepare_draw_inner(VkExec *ex, int prim, int32_t count, int restart) 
     vk_exec_pass_begin(ex);
     VkRect2D sc = vk_exec_scissor(ex);
     if (!sc.extent.width || !sc.extent.height) return pd_why = "empty scissor", 0;
-    ex->prog = ex->prog_gfx;   // mlbts-native: the graphics stages' program (vk_exec.h stage_prog)
+    ex->prog = ex->prog_gfx;   // fastball: the graphics stages' program (vk_exec.h stage_prog)
     if (!ex->prog) return pd_why = "no program", warn_once(W_PROGRAM, "a draw without a bound program is skipped"), 0;
     int has_vs, has_fs, vs_wait = 0, fs_wait = 0, memo = shader_memo_on();
     const GfxShader *vs, *fs;
@@ -3039,7 +3039,7 @@ static int prepare_draw_inner(VkExec *ex, int prim, int32_t count, int restart) 
     }
     if (!vs || (has_fs && !fs)) return pd_why = !vs ? "vertex shader missing (translation failed?)" : "fragment shader missing (translation failed?)", 0;
     if (vk_dlaa_skip_draw(ex, fs)) return pd_why = "DLAA/FXAA replacement", 0;   // the game's FXAA off, or its scaling replaced by DLSS (vk_dlaa.c)
-    aa_before_draw(ex, fs);   // mlbts-native: the composite's 3D scene is antialiased first (vk_aa.c)
+    aa_before_draw(ex, fs);   // fastball: the composite's 3D scene is antialiased first (vk_aa.c)
     uint32_t fbl = feedback_prepare(ex, fs);
     VkPipeState s = ex->pipe;
     s.vs = vs, s.fs = fs;
@@ -3315,7 +3315,7 @@ static int mo_desc(VkExec *ex, const VkPipeInfo *info, MoDraw *q) {
             for (uint32_t k = 0; k < cnt; k++) o[k].buffer = ssbo_info(ex, st, r, 0);
         } else if (b->kind == GFX_RES_TEX && b->type != VK_DESCRIPTOR_TYPE_UNIFORM_TEXEL_BUFFER) {
             vk_texture_lock();
-            for (uint32_t k = 0; k < cnt; k++)   // mlbts-native: res_tex_handle, separate sampler words
+            for (uint32_t k = 0; k < cnt; k++)   // fastball: res_tex_handle, separate sampler words
                 tex_info(ex, r, res_tex_handle(ex, st, r, (int)k), 0, r->separate, &o[k].image);
             vk_texture_unlock();
         } else {
@@ -3900,7 +3900,7 @@ static void bind_index(VkExec *ex, const void *data, uint64_t bytes, VkIndexType
     ex->recorded++;
 }
 
-// mlbts-native diagnosis: MLB_DRAWLOG=<frame> logs every draw of that presented frame: pass, formats, program and a
+// fastball diagnosis: MLB_DRAWLOG=<frame> logs every draw of that presented frame: pass, formats, program and a
 // hash of each stage's code, blend and mask state, the fragment stage's first texture and sampler handles, and what
 // the textures resolve to (size, storage address, a byte sum of their storage). Off unless set.
 // gfx_stubs.c gfx_capture_arm (F12, MLB_DRAWLOG=game) arms it for a frame to come (vk_drawlog_arm_at).
@@ -3925,7 +3925,7 @@ static int drawlog_now(void) {
     long want = vk_drawlog_frame();
     return want >= 0 && (long)__atomic_load_n(&gfx_counters.frames, __ATOMIC_RELAXED) + 1 == want;
 }
-// mlbts-native diagnosis: in the drawlog frame every draw inside a pass, unless a game samples-passed query is open
+// fastball diagnosis: in the drawlog frame every draw inside a pass, unless a game samples-passed query is open
 // there, gets an occlusion query of its own ("q <n>" in its drawlog line); it ends at the next draw's preparation or
 // the pass end. vk_drawq_report logs the samples each one passed once the frame is done, so a draw that writes no
 // pixel (culled, every fragment failing depth or stencil, collapsed or off-screen vertices) shows as 0.
@@ -3967,7 +3967,7 @@ static int dq_ready(void) {
     return 1;
 }
 
-// mlbts-native diagnosis: an occlusion query around every draw into a watched target (vk_watch_hit), any frame; the
+// fastball diagnosis: an occlusion query around every draw into a watched target (vk_watch_hit), any frame; the
 // results go to the log as they become available (vk_watch_queries_report, at each present).
 #define WQ_N 4096
 static VkQueryPool wq_pool;
@@ -4039,7 +4039,7 @@ static int dq_begin(VkExec *ex) {
 }
 
 int vk_drawlog_now(void) { return drawlog_now(); }
-// mlbts-native diagnosis: 1 in the drawlog frame, 2-3 in the two frames after it (their copies and pass targets are
+// fastball diagnosis: 1 in the drawlog frame, 2-3 in the two frames after it (their copies and pass targets are
 // logged too, so a texture another frame fills shows where it comes from); 0 otherwise.
 int vk_drawlog_near(void) {
     long want = vk_drawlog_frame();
@@ -4166,7 +4166,7 @@ void vk_drawq_report(void) {
                    (unsigned long long)cz);
         }
     }
-    for (uint32_t q = 0, shown = 0; q < dq_n && shown < 96; q++) {   // mlbts-native: compute-skinned positions
+    for (uint32_t q = 0, shown = 0; q < dq_n && shown < 96; q++) {   // fastball: compute-skinned positions
         if (!res[q][0] || dq_a0[q].fmt != 0x2e || dq_a0[q].stride < 16 || !dq_a0[q].addr || !dq_a0[q].size) continue;
         uint32_t st = dq_a0[q].stride, nv = (uint32_t)(dq_a0[q].size / st);
         if (nv > 65536) nv = 65536;
@@ -4222,7 +4222,7 @@ void vk_drawq_report(void) {
                (unsigned long long)dq_a0[q].size, st, nv, zero, bad, far, med[0], med[1], med[2], mx > 0 ? sqrtf(mx) : 0, fl);
         free(b), free(ax[0]), free(ax[1]), free(ax[2]);
     }
-    {   // mlbts-native: the textures of the MLB_DRAWTEX draws as PNGs (vk_capture.c), each once
+    {   // fastball: the textures of the MLB_DRAWTEX draws as PNGs (vk_capture.c), each once
         static tex_t ts[64];
         const tex_t *tp[64];
         uint32_t ids[64];
@@ -4266,7 +4266,7 @@ void vk_drawq_report(void) {
     dq_n = 0;
 }
 
-// mlbts-native diagnosis: every uniform buffer (up to 0x1000 bytes) and the first bytes of every storage buffer bound to
+// fastball diagnosis: every uniform buffer (up to 0x1000 bytes) and the first bytes of every storage buffer bound to
 // the vertex and fragment stages, as floats and hex, into <profile>/drawdump-<frame>-<fs hash>-<why>.txt
 static void dump_draw_buffers(VkExec *ex, uint32_t vsh, uint32_t fsh, const char *why) {
     char path[1200];
@@ -4312,7 +4312,7 @@ static void dump_draw_buffers(VkExec *ex, uint32_t vsh, uint32_t fsh, const char
     rt_log("drawdump: %s", path);
 }
 
-// mlbts-native diagnosis (black heads): a draw into a watched render target (vk_watch_hit), with what its fragment
+// fastball diagnosis (black heads): a draw into a watched render target (vk_watch_hit), with what its fragment
 // shader reads; the textures of the first such draw are kept for the watch's PNGs (vk_capture.c vk_watch_keep).
 static void watch_draw(VkExec *ex, const char *kind, int count) {
     int hit = -1;
@@ -4375,7 +4375,7 @@ static void watch_draw(VkExec *ex, const char *kind, int count) {
             }
         }
         const uint8_t *sw = hv && v.set_swizzle ? v.swz : im ? im->swz : (const uint8_t *)"\0\0\0\0";
-        if (im) {   // mlbts-native diagnosis: every image at the texture's storage, and the texture joins the watch
+        if (im) {   // fastball diagnosis: every image at the texture's storage, and the texture joins the watch
             void vk_texture_log_at(uint64_t addr, const char *who);
             void vk_watch_add(uint64_t lo, uint64_t size);
             vk_texture_log_at(im->addr, "watch:");
@@ -4405,7 +4405,7 @@ static void watch_draw(VkExec *ex, const char *kind, int count) {
     }
 }
 
-// mlbts-native: MLB_DRAWTEX=<fs hash>[,<fs hash>...] (hex, as drawlog prints them): draws of the drawlog frame with one
+// fastball: MLB_DRAWTEX=<fs hash>[,<fs hash>...] (hex, as drawlog prints them): draws of the drawlog frame with one
 // of those fragment shaders list their textures, and the capture saves those textures as PNGs (vk_drawq_report).
 static int drawtex_match(uint32_t fs) {
     static uint32_t want[16];
@@ -4425,7 +4425,7 @@ static int drawtex_match(uint32_t fs) {
     return 0;
 }
 
-// mlbts-native: under RenderDoc each draw is preceded by a label naming its colour target and the guest address of
+// fastball: under RenderDoc each draw is preceded by a label naming its colour target and the guest address of
 // every texture its fragment shader reads (by binding), so a capture shows what a draw samples; the MCP's binding view
 // has no resource ids.
 static void draw_label(VkExec *ex, const char *kind, int count) {
@@ -4460,7 +4460,7 @@ static void draw_note(VkExec *ex, const char *kind, int prim, int count) {
     }
     int face = q >= 0 && dq_a0[q].fmt == 0x2e && dq_a0[q].stride == 16;
     if (q >= 0 && (h[0] == 0x4a65a97du || h[0] == 0x74d4d733u || h[0] == 0xff8fe22du)) {
-        // mlbts-native (RTTS room lamp shadow): the vertex shader reads its light matrices at c3 0xe0 + 64 x face and
+        // fastball (RTTS room lamp shadow): the vertex shader reads its light matrices at c3 0xe0 + 64 x face and
         // clamps at 0x3d0, past the 0x90 bytes the game binds; what the guest memory holds there
         const p_bind_buf *u = &ex->ubo[NVN_STAGE_VS][0];
         VkMemSpan sp;
@@ -4475,7 +4475,7 @@ static void draw_note(VkExec *ex, const char *kind, int prim, int count) {
         }
     }
     if (q >= 0 && (face || drawtex_match(h[1])) && B.st_valid && B.st.fs) {
-        // mlbts-native: a face draw (positions from the face skinning pass) or an MLB_DRAWTEX shader's: every texture
+        // fastball: a face draw (positions from the face skinning pass) or an MLB_DRAWTEX shader's: every texture
         // its fragment shader reads, resolved as the binding resolves it, with its NVN and view formats.
         const GfxShaderRes *tr;
         int nt = gfx_shader_resources(B.st.fs, GFX_RES_TEX, &tr);
@@ -4535,7 +4535,7 @@ static void draw_note(VkExec *ex, const char *kind, int prim, int count) {
            (unsigned long long)ex->tex[1][0], (unsigned long long)ex->tex[1][1], (unsigned long long)ex->tex[1][2],
            (unsigned long long)ex->tex[1][3], (unsigned long long)ex->samp[1][0], (unsigned long long)ex->samp[1][1],
            (unsigned long long)ex->ubo[1][3].addr, (unsigned long long)ex->ubo[1][3].size);
-    {   // depth / stencil and the viewport (mlbts-native)
+    {   // depth / stencil and the viewport (fastball)
         const ds_st *d = &ex->pipe.ds;
         rt_log("drawlog   ds: depth test %u write %u func %u; stencil %u funcs %u/%u ops f%u/zf%u/zp%u ref %u/%u vmask %#x/%#x "
                "wmask %#x/%#x; vp0 %.0f,%.0f %.0fx%.0f z %.3f..%.3f, range %.3f..%.3f; scissor %d,%d %dx%d (set %d); "
@@ -4548,7 +4548,7 @@ static void draw_note(VkExec *ex, const char *kind, int prim, int count) {
                (unsigned)ex->pipe.depth_minus_w, (unsigned long long)*(const uint32_t *)&ex->pipe.poly,
                (unsigned)ex->pipe.color.alpha_func, (double)*(const float *)&ex->alpha_ref);
     }
-    {   // vertex input and the vertex stage's storage buffers (mlbts-native)
+    {   // vertex input and the vertex stage's storage buffers (fastball)
         char line[700];
         int o = snprintf(line, sizeof line, "drawlog   vin:");
         for (int i = 0; i < 8; i++) {
@@ -4567,7 +4567,7 @@ static void draw_note(VkExec *ex, const char *kind, int prim, int count) {
                               (unsigned long long)ex->ssbo[NVN_STAGE_VS][i].size);
         rt_log("%s", line);
     }
-    {   // mlbts-native diagnosis (faint UI elements): the vertices' first two floats of a0 (bounding box) and every
+    {   // fastball diagnosis (faint UI elements): the vertices' first two floats of a0 (bounding box) and every
         // RGBA8 attribute (fmt 0x25: vertex colour, its alpha the element's opacity), min and max per channel; and the
         // vertex stage's c3 (the UI's position transform)
         va_st v0;
@@ -4624,7 +4624,7 @@ static void draw_note(VkExec *ex, const char *kind, int prim, int count) {
         for (int i = 0; i < n && o < (int)sizeof line - 16; i++) o += snprintf(line + o, sizeof line - o, " %g", f[i]);
         rt_log("%s", line);
     }
-    // mlbts-native: every texture the fragment shader uses (its resources and their handles), not slots 0-3
+    // fastball: every texture the fragment shader uses (its resources and their handles), not slots 0-3
     const GfxShaderRes *dtr = NULL;
     int dnt = B.st_valid && B.st.fs ? gfx_shader_resources(B.st.fs, GFX_RES_TEX, &dtr) : 0;
     for (int k = 0; k < dnt && k < 32; k++) {
@@ -4642,9 +4642,9 @@ static void draw_note(VkExec *ex, const char *kind, int prim, int count) {
                "vkfmt %d", k, (unsigned long long)(dh & 0xfffff), im->width, im->height,
                (unsigned long long)im->addr, im->mirrored, im->gpu_owned, (unsigned long long)sum,
                (unsigned long long)nz, (void *)im->image, (int)im->format);
-        void vk_texture_log_at(uint64_t addr, const char *who);   // vk_texture.c (mlbts-native diagnosis)
+        void vk_texture_log_at(uint64_t addr, const char *who);   // vk_texture.c (fastball diagnosis)
         if (im->width >= 128 && im->height >= 128) vk_texture_log_at(im->addr, "drawlog");
-        if (im->mirrored && !im->gpu_owned) {   // mlbts-native diagnosis: the image against the game's memory
+        if (im->mirrored && !im->gpu_owned) {   // fastball diagnosis: the image against the game's memory
             void vk_texture_verify(const tex_t *t);
             tex_t vt;
             if (vk_texture_slot_desc((int)(dh & 0xfffff), &vt)) vk_texture_verify(&vt);
@@ -4755,7 +4755,7 @@ static void op_draw_idx_ind(VkExec *ex, const p_draw_idx_ind *d) {
         return warn_once(W_INDEX, "index buffer %#llx is not backed or not aligned: indirect draws skipped", (unsigned long long)d->ibuf);
     if (!prepare_draw(ex, d->prim, 0x7fffffff, restart_for(ex, d->prim, d->itype))) return;
     vk_exec_frame.draws++;
-    draw_note(ex, "indirect-indexed", d->prim, -1);   // mlbts-native
+    draw_note(ex, "indirect-indexed", d->prim, -1);   // fastball
     lt_draw(ex, d->ind, sizeof(VkDrawIndexedIndirectCommand));
     lt_draw(ex, d->ibuf, ib.avail < (64ull << 20) ? ib.avail : (64ull << 20));   // the count is on the GPU
     VK_MEM_USE(ip);
@@ -4770,22 +4770,22 @@ static void op_draw_idx_ind(VkExec *ex, const p_draw_idx_ind *d) {
 
 // ---- dispatch and uniform buffer updates
 
-int vk_texture_cube_pending(void);   // vk_texture.c (mlbts-native)
+int vk_texture_cube_pending(void);   // vk_texture.c (fastball)
 void vk_texture_cube_flush(void);
 static void op_dispatch(VkExec *ex, const p_dispatch *d) {
     if (d->x <= 0 || d->y <= 0 || d->z <= 0) return;
     if (!ex->in_pass && vk_texture_cube_pending()) vk_texture_cube_flush();   // after the write that queued them
-    ex->prog = ex->prog_cs;   // mlbts-native: the compute stage's program (vk_exec.h stage_prog)
+    ex->prog = ex->prog_cs;   // fastball: the compute stage's program (vk_exec.h stage_prog)
     if (!ex->prog) return warn_once(W_PROGRAM, "a dispatch without a bound program is skipped");
     uint32_t csh = 0;
-    if (drawlog_now_l()) {   // mlbts-native: the compute shader's hash (FNV-1a of its code, as draw_note's vs/fs)
+    if (drawlog_now_l()) {   // fastball: the compute shader's hash (FNV-1a of its code, as draw_note's vs/fs)
         const uint8_t *ctl, *code; uint32_t len;
         if (find_stage(ex->prog, NVN_STAGE_CS, &ctl, &code, &len)) {
             csh = 2166136261u;
             for (uint32_t i = 0; i < len; i++) csh = (csh ^ code[i]) * 16777619u;
         }
     }
-    if (drawlog_now_l())   // mlbts-native: the buffer textures the dispatch's images 0 and 1 name
+    if (drawlog_now_l())   // fastball: the buffer textures the dispatch's images 0 and 1 name
         for (int k = 0; k < 2; k++) {
             uint64_t hi = ex->img[NVN_STAGE_CS][k];
             tex_t t;
@@ -4794,7 +4794,7 @@ static void op_dispatch(VkExec *ex, const p_dispatch *d) {
                 rt_log("drawlog   dispatch img %d: buffer %#llx+%#llx fmt %#x", k, (unsigned long long)(uintptr_t)t.mem,
                        (unsigned long long)t.d.width * (uint64_t)nvn_fmt_bpb(t.d.format, &bw, &bh), (unsigned)t.d.format);
         }
-    if (drawlog_now_l())   // mlbts-native: drawlog frame
+    if (drawlog_now_l())   // fastball: drawlog frame
         rt_log("drawlog dispatch %dx%dx%d prog %llu cs %08x img %llx %llx tex %llx %llx ssbo %#llx+%#llx %#llx+%#llx %#llx+%#llx "
                "%#llx+%#llx", d->x, d->y, d->z,
                (unsigned long long)ex->prog->serial, csh, (unsigned long long)ex->img[NVN_STAGE_CS][0],
@@ -4805,7 +4805,7 @@ static void op_dispatch(VkExec *ex, const p_dispatch *d) {
                (unsigned long long)ex->ssbo[NVN_STAGE_CS][2].addr, (unsigned long long)ex->ssbo[NVN_STAGE_CS][2].size,
                (unsigned long long)ex->ssbo[NVN_STAGE_CS][3].addr, (unsigned long long)ex->ssbo[NVN_STAGE_CS][3].size);
     if (drawlog_now_l() && (csh == 0x94216d5bu || csh == 0xc907a6dbu)) {
-        // mlbts-native (stretched torsos): MLB's skinning passes read 64-byte bone matrices from storage slot 0; the
+        // fastball (stretched torsos): MLB's skinning passes read 64-byte bone matrices from storage slot 0; the
         // translation part of each as the guest holds it now (row 3 and column 3: either layout)
         const p_bind_buf *b = &ex->ssbo[NVN_STAGE_CS][0];
         VkMemSpan sp;
@@ -4830,7 +4830,7 @@ static void op_dispatch(VkExec *ex, const p_dispatch *d) {
     const VkPipeInfo *info = NULL;
     VkPipeline p = vk_pipeline_compute(cs, &info);
     if (!p || !info) return warn_once(W_PIPELINE, "a compute pipeline could not be created: dispatches with it are skipped");
-    // mlbts-native: right after another dispatch (nothing recorded since), no barrier unless the uniform flush records
+    // fastball: right after another dispatch (nothing recorded since), no barrier unless the uniform flush records
     // copies (dispatch_chain_on)
     int chained = dispatch_chain_on() && !ex->in_pass && ex->cb == disp_cb && ex->fence == disp_fence && ex->recorded == disp_rec;
     if (chained) {
@@ -4860,7 +4860,7 @@ static void op_dispatch(VkExec *ex, const p_dispatch *d) {
     bind_resources(ex, info);
     twin_dispatch = 0;
     if (LT.cand) lt_end(ex, lt_rec + (B.pipe[1] != lt_pipe) + 1);
-    // mlbts-native diagnosis: the lighting-probe shaders (MLB_DISPATCH_DUMP, hex FNV hashes; default the RTTS room's
+    // fastball diagnosis: the lighting-probe shaders (MLB_DISPATCH_DUMP, hex FNV hashes; default the RTTS room's
     // probe and cube generators) get the dump below whatever addresses they use, their first 8 dispatches each.
     static uint32_t dd_want[16];
     static int dd_n = -1;
@@ -4896,7 +4896,7 @@ static void op_dispatch(VkExec *ex, const p_dispatch *d) {
         while (i < 16 && ddc[i].h && ddc[i].h != dd_h) i++;
         if (i < 16 && ddc[i].n < 8) ddc[i].h = dd_h, ddc[i].n++, watch_dispatch = 1;
     }
-    if (watch_dispatch) {   // mlbts-native: what a dispatch storing into the watched range reads
+    if (watch_dispatch) {   // fastball: what a dispatch storing into the watched range reads
         watch_dispatch = 0;
         const uint8_t *ctl, *code;
         uint32_t len, h32 = 2166136261u;
@@ -4926,7 +4926,7 @@ static void op_dispatch(VkExec *ex, const p_dispatch *d) {
                    im ? im->height : 0, im ? (int)im->format : 0, im ? im->levels : 0,
                    im ? (unsigned long long)im->addr : 0ull, im ? im->mirrored : 0, im ? im->gpu_owned : 0,
                    im ? (void *)im->image : NULL, (unsigned long long)nz, (unsigned long long)n);
-            void vk_texture_log_at(uint64_t addr, const char *who);   // vk_texture.c (mlbts-native diagnosis)
+            void vk_texture_log_at(uint64_t addr, const char *who);   // vk_texture.c (fastball diagnosis)
             if (im) vk_texture_log_at(im->addr, "watch:");
         }
         const GfxShaderRes *ur;
@@ -4981,7 +4981,7 @@ static void op_dispatch(VkExec *ex, const p_dispatch *d) {
 // DispatchComputeIndirect: vkCmdDispatchIndirect from the pool buffer. The shader reads the group counts from c0 0x200,
 // so they are copied there on the GPU, into a c0 range no other dispatch uses, before the dispatch.
 static void op_dispatch_ind(VkExec *ex, const p_dispatch_ind *d) {
-    ex->prog = ex->prog_cs;   // mlbts-native: as op_dispatch
+    ex->prog = ex->prog_cs;   // fastball: as op_dispatch
     if (!ex->prog) return warn_once(W_PROGRAM, "a dispatch without a bound program is skipped");
     VkMemSpan ip;
     if (!vk_mem_resolve(d->ind, sizeof(VkDispatchIndirectCommand), &ip) || ip.offset % 4)
@@ -5056,7 +5056,7 @@ static int ov_out_on(void) {
     return RT_KNOB_ON(mode);
 }
 
-// mlbts-native: where each range's overlay and pending copy sit in OV.o and OV.p. ov_add dropped the older entry of
+// fastball: where each range's overlay and pending copy sit in OV.o and OV.p. ov_add dropped the older entry of
 // the same range by scanning both lists and moving the rest down: with 1.0.20's ~1,000 updates a submission (the
 // 1.0.15 log had ~225) and lists up to OV_N long that grew with the square of the list, and in the batter walk-up
 // frames and the wide stadium shot about a quarter of the replay went to ov_add, its memmove and the list scans. Now
@@ -5129,7 +5129,7 @@ static void ov_add(uint64_t lo, uint64_t hi, VkBuffer b, VkDeviceSize o, const V
     if (hi > OV.hi) OV.hi = hi;
 }
 
-// mlbts-native: OV.f holds the submission's GPU writes of other kinds as disjoint ranges sorted by address, merged
+// fastball: OV.f holds the submission's GPU writes of other kinds as disjoint ranges sorted by address, merged
 // where they overlap or touch, so a lookup is a binary search. It was a list in arrival order scanned for every
 // overlaid update and every binding over an overlay: with 1.0.20's ~250 such writes and ~1,000 updates a submission
 // that was about 1.5 % of the replay in the match profile.
@@ -5191,7 +5191,7 @@ void vk_exec_ub_foreign(VkExec *ex, uint64_t addr, uint64_t n) {
     ov_retire(addr, addr + n);
 }
 
-// mlbts-native: which copies of a flush overlap one recorded since the last barrier, by 256-byte granule. The check
+// fastball: which copies of a flush overlap one recorded since the last barrier, by 256-byte granule. The check
 // compared each copy with every earlier one since the barrier: with up to OV_N copies in a batch that grew with the
 // square of the batch, and in the batter walk-up frames of 1.0.20 (about half a second each) the replay spent about
 // 17 % of its time in that loop. Now each copy looks up its granules in a hash set of those the batch's copies wrote
@@ -5320,7 +5320,7 @@ static int ub_bind(VkExec *ex, uint64_t addr, uint64_t n, uint64_t align, VkDesc
             return 1;
         }
     }
-    // mlbts-native: a large binding over the overlays (MLB binds storage buffers of hundreds of KiB to megabytes that
+    // fastball: a large binding over the overlays (MLB binds storage buffers of hundreds of KiB to megabytes that
     // hold the blocks it updates between draws, about 300 such bindings a submission in the pause menu) would copy all
     // of it for each draw: the replay spent most of a 100-200 ms frame in those copies. Instead the overlays' copies
     // are recorded now, behind a barrier (the pass ends and restarts, as for ub_written), and the binding reads the
@@ -5413,14 +5413,14 @@ static void op_update_ub(VkExec *ex, const p_update_ub *u) {
 // ---- bind ops
 
 static void bind_handles(uint64_t *dst, int cap, const p_bind_handles *b) {
-    if (b->stage < 0 || b->stage >= 6 || b->first < 0 || b->n < 0 || b->n > 128 || b->first + b->n > cap) {   // mlbts-native: 128 (nvn_obj.h)
+    if (b->stage < 0 || b->stage >= 6 || b->first < 0 || b->n < 0 || b->n > 128 || b->first + b->n > cap) {   // fastball: 128 (nvn_obj.h)
         warn_once(W_BIND, "a bind of %d handles at %d of stage %d is out of range: ignored", b->n, b->first, b->stage);
         return;
     }
     memcpy(&dst[b->first], b->h, sizeof(uint64_t) * (size_t)b->n);
 }
 
-// mlbts-native: the graphics program a draw sees when its stages come from different programs. One combined prog_t
+// fastball: the graphics program a draw sees when its stages come from different programs. One combined prog_t
 // per distinct set of {stage program, its serial}: it takes from each program the shader of the stage that program is
 // bound for and gets a serial of its own, so pipeline keys, shader memos and find_stage work on it unchanged. Kept for
 // the life of the process (a program set again gets a new serial and so a new combination). [H] Back-end state keyed
@@ -5485,7 +5485,7 @@ void vk_exec_op_draw(VkExec *ex, uint32_t op, const void *payload) {
     switch (op) {
     case OP_BIND_PROGRAM: {
         const p_bind_program *b = payload;
-        // mlbts-native: per stage (vk_exec.h stage_prog); prog follows the bind as before, for code that reads it
+        // fastball: per stage (vk_exec.h stage_prog); prog follows the bind as before, for code that reads it
         // between binds and draws
         for (int s = 0; s < 6; s++)
             if (b->stages >> s & 1) ex->stage_prog[s] = b->prog;

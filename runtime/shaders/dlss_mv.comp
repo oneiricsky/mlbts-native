@@ -1,4 +1,4 @@
-// mlbts-native, our own: camera motion vectors for DLSS (vk_dlaa.c mv_pass). Each pixel's depth is taken from this
+// fastball, our own: camera motion vectors for DLSS (vk_dlaa.c mv_pass). Each pixel's depth is taken from this
 // frame's clip space to last frame's through one matrix the CPU made in double precision (last view-projection times
 // the inverse of this one), and the vector is last frame's window position minus this frame's, in render pixels and
 // without the jitter: DLSS's default convention. Players and the ball that move on their own get only the camera's

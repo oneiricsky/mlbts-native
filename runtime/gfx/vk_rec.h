@@ -52,7 +52,7 @@ void rec_write_mask(PFN_vkCmdSetColorWriteMaskEXT fn, VkCommandBuffer cb, uint32
                     const VkColorComponentFlags *v);
 // A pass mark (vk_crumbs.c vk_pass_mark_cmd: a buffer marker and a checkpoint), in order with the commands around it.
 void rec_pass_mark(VkCommandBuffer cb, uint32_t id, int end);
-void rec_label(VkCommandBuffer cb, const char *text);   // mlbts-native: a debug label (RenderDoc)
+void rec_label(VkCommandBuffer cb, const char *text);   // fastball: a debug label (RenderDoc)
 
 #define REC_CMDS(X)                                                                                                       \
     X(BeginQuery, (VkCommandBuffer cb, VkQueryPool p, uint32_t q, VkQueryControlFlags f), (cb, p, q, f))                  \

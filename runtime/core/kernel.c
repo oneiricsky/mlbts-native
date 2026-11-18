@@ -1388,7 +1388,7 @@ static void lock_acquire_for(RtThread *t, uint64_t addr, uint32_t tag) {
         }
         if (cas32(addr, &v, v | WAITERS_BIT)) break;
     }
-    // mlbts-native: the signal ended the condvar wait (TOTK_TRACE=sched names the waker; it read "cv on ..." with no
+    // fastball: the signal ended the condvar wait (TOTK_TRACE=sched names the waker; it read "cv on ..." with no
     // waker when the signaller still held the lock, as if a timeout or a host thread had ended it).
     t->waker = tcur ? tcur->handle : 0;
     acct(t, S_LOCK);
@@ -1609,7 +1609,7 @@ static uint32_t handle_close(uint32_t h) {
             kind = type;
             ipc = o;
             ok = 1;
-        } else if (type == O_SHMEM) {   // mlbts-native: the block belongs to its service; mappings stay
+        } else if (type == O_SHMEM) {   // fastball: the block belongs to its service; mappings stay
             ok = 1;
         } else if (type == O_THREAD) {
             RtThread *t = o;
@@ -2058,7 +2058,7 @@ void *kern_handle_get(uint32_t h, int kind) {
     return o;
 }
 
-uint32_t kern_shmem_handle(RtSharedMem *m) { return kern_handle_new(KERN_SHMEM, m); }   // mlbts-native
+uint32_t kern_shmem_handle(RtSharedMem *m) { return kern_handle_new(KERN_SHMEM, m); }   // fastball
 
 uint32_t kern_event_new(void) {
     Event *e = calloc(1, sizeof *e);
@@ -2090,7 +2090,7 @@ void kern_event_signal(uint32_t hw) {
     unlock();
 }
 
-// mlbts-native: host services that keep a level-triggered event (am's message queue) clear it themselves.
+// fastball: host services that keep a level-triggered event (am's message queue) clear it themselves.
 void kern_event_clear(uint32_t hw) {
     lock();
     Event *e = h_peek(hw, O_EVENT_W);

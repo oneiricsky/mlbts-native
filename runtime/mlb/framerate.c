@@ -1,4 +1,4 @@
-// mlbts-native: the frame rate limit above (or below) the game's 60 fps (MLB_FPS_LIMIT, the settings menu's Display tab).
+// fastball: the frame rate limit above (or below) the game's 60 fps (MLB_FPS_LIMIT, the settings menu's Display tab).
 // Replaces the frame_step_* stubs of gfx_stubs.c; TotK Recomp's frame_rate.c is the model for the host half (the
 // present pacer holds frames to the limit, nvn_api_obj.c present_period).
 //

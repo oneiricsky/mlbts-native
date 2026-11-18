@@ -1,3 +1,3 @@
-/* The icon of MLBTS-Setup.exe: runtime/mlb/mlb.ico, the icon of mlb.exe. tools/make_release.py compiles this file
+/* The icon of Fastball.exe: runtime/mlb/mlb.ico, the icon of mlb.exe. tools/make_release.py compiles this file
    with llvm-windres -I runtime/mlb and links it with launcher.c. */
 1 ICON "mlb.ico"

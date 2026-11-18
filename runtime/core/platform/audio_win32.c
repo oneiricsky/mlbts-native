@@ -1,4 +1,4 @@
-// Host audio output on WASAPI (audio_out.h). mlbts-native, our own: it takes the place of the SDL3 audio stream in
+// Host audio output on WASAPI (audio_out.h). fastball, our own: it takes the place of the SDL3 audio stream in
 // TotK Recomp's audio_mixer.c, so the runtime needs no SDL3.dll.
 //
 // One thread owns everything COM: it opens the default render endpoint in shared mode with an event-driven float32

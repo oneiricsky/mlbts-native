@@ -1,4 +1,4 @@
-// mlbts-native offline packages (packages.c): Road to the Show's Packages through a server on this PC, when
+// fastball offline packages (packages.c): Road to the Show's Packages through a server on this PC, when
 // MLB_OFFLINE_PACKAGES=1. Off by default.
 #pragma once
 

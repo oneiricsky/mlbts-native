@@ -1,5 +1,5 @@
 // From TotK Recomp runtime/vk_fsr.c @ ae30a61 (MIT, Copyright (c) 2026 Valiantsin Dzerakh); the shaders and their
-// headers (runtime/shaders/fsr_*.comp, ffx/) and fsr_*_spv.h too. mlbts-native: MLB's scene upscale below
+// headers (runtime/shaders/fsr_*.comp, ffx/) and fsr_*_spv.h too. fastball: MLB's scene upscale below
 // (vk_fsr_scene), and MLB_ keys.
 //
 // AMD FidelityFX Super Resolution 1 on the present path (gfx_present.c present_image): when the window is larger than
@@ -222,7 +222,7 @@ int vk_fsr_record(VkCommandBuffer cb, unsigned slot, VkImage src, VkFormat fmt, 
     return 1;
 }
 
-// ---- mlbts-native: FSR 1 on MLB's 3D scene (MLB_UPSCALER=fsr, the settings menu's Graphics tab)
+// ---- fastball: FSR 1 on MLB's 3D scene (MLB_UPSCALER=fsr, the settings menu's Graphics tab)
 //
 // MLB renders its 3D scene at 1440x810 (resolution.c) and its final full-screen draw (fragment shader daf10a59,
 // vk_exec_draw.c aa_before_draw) stretches it to 1920x1080 with a plain bilinear sample while laying the HUD over it.

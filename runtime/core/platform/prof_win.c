@@ -65,7 +65,7 @@ static uint64_t frame_lo, frame_hi; // MLB_SAMPLER_FRAMES=<lo>-<hi>: sample only
 static int64_t world_lo, world_hi;  // MLB_SAMPLER_FRAMES=w<lo>-<hi>: only while the world clock is in [lo, hi) s (us)
 
 #define SLOW_RING (1u << 15)        // MLB_SAMPLER_SLOW: about 0.5 s of samples of every thread
-#define SLOW_DUMPS 400   // mlbts-native: 64 in TotK; one every 3 s at most (prof_sampler_frame)
+#define SLOW_DUMPS 400   // fastball: 64 in TotK; one every 3 s at most (prof_sampler_frame)
 typedef struct { uint64_t t; DWORD tid; uint32_t depth; uint64_t rip[PROF_DEPTH]; } Sample;
 static Sample ring[SLOW_RING];
 static uint64_t ring_n;
@@ -111,7 +111,7 @@ static void count_stack(const uint64_t *rip, uint32_t depth) {
 #ifdef _MSC_VER
 #define GUARDED(stmt, failed) __try { stmt; } __except (EXCEPTION_EXECUTE_HANDLER) { failed = 1; }
 #else
-// mlbts-native: llvm-mingw (the release toolchain, docs/release.md) has no __try. A vectored handler, first in the
+// fastball: llvm-mingw (the release toolchain, docs/release.md) has no __try. A vectored handler, first in the
 // chain, takes a fault of the sampler thread while it is inside a guarded call and resumes at the context captured
 // before the call, which then reads guard_fault set. Only the sampler thread arms it, only with MLB_SAMPLER.
 static CONTEXT guard_ctx;
@@ -150,7 +150,7 @@ static uint32_t unwind_copy(CONTEXT *c, uintptr_t lo, size_t n, uint64_t *rip) {
     while (d < PROF_DEPTH && c->Rip && c->Rsp >= buf && c->Rsp + 8 <= end) {
         rip[d++] = c->Rip;
         DWORD64 base;
-        // mlbts-native: the lookup faults too when the return address is in a module being unloaded at that moment
+        // fastball: the lookup faults too when the return address is in a module being unloaded at that moment
         // (startup, while the DLSS and driver DLLs load and unload: reading 0x7ffe03890a38 in ntdll ended two runs)
         PRUNTIME_FUNCTION volatile f = NULL;
         volatile int gone = 0;
@@ -159,7 +159,7 @@ static uint32_t unwind_copy(CONTEXT *c, uintptr_t lo, size_t n, uint64_t *rip) {
         if (f) {
             void *hd;
             DWORD64 est;
-            // mlbts-native: the unwind can read through a frame register that points outside the copy (a value the
+            // fastball: the unwind can read through a frame register that points outside the copy (a value the
             // suspended thread held for something else); that fault, in ntdll, ended the game in an RTTS cutscene
             // (reading 0x898). The chain ends at that frame instead. The fault is raised inside the call, which clang's
             // SEH catches without -fasync-exceptions; crash_veh leaves faults outside this executable alone.
@@ -370,7 +370,7 @@ void prof_sampler_write(void) {
 }
 
 int prof_sampler_start(void) {
-    out_path = cfg_get("SAMPLER_OUT");   // mlbts-native: main.c resolves MLB_SAMPLER (on, off or a path) into it
+    out_path = cfg_get("SAMPLER_OUT");   // fastball: main.c resolves MLB_SAMPLER (on, off or a path) into it
     if (!out_path || !*out_path) {
         out_path = NULL;
         return 0;

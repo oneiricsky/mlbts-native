@@ -1,5 +1,5 @@
 // Host audio output: one shared-mode stream of interleaved float32 frames that a device thread pulls from a callback.
-// mlbts-native, replacing the SDL3 audio stream TotK Recomp's audio_mixer.c opens. Windows: WASAPI (audio_win32.c).
+// fastball, replacing the SDL3 audio stream TotK Recomp's audio_mixer.c opens. Windows: WASAPI (audio_win32.c).
 #pragma once
 #include <stddef.h>
 #include <stdint.h>

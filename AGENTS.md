@@ -1,4 +1,4 @@
-# AGENTS.md — MLB The Show 26 native Windows port
+# AGENTS.md — Fastball, the MLB The Show 26 native Windows port
 
 Native Windows x86-64 static recompilation of **MLB The Show 26 for Switch, version 1.0.20** (the dev tree's version; 1.0.15 stays supported, see "Game
 versions" below; no other versions).
@@ -37,12 +37,12 @@ Windows 11). Most current work is graphics correctness (wrong or missing images,
 | `runtime/mlb/` | MLB layer: `main.c` (log, crash reporter), `boot.c`, `cfg.c` (all settings), `services.c`, `hid.c` (input) |
 | `runtime/gfx/` | NVN front end and Vulkan back end (from TotK), present, window, RenderDoc support (`rdoc.c`) |
 | `tools/` | Build, extraction and analysis scripts (below) |
-| `installer/` | The player's setup and launcher (`MLBTS-Setup.exe`): extracts their files, builds `mlb.exe` on their PC (`docs/release.md`) |
+| `installer/` | The player's setup and launcher (`Fastball.exe`): extracts their files, builds `mlb.exe` on their PC (`docs/release.md`) |
 | `docs/` | `recon-report.md` (binary facts), `runtime-port.md` (build and boot), `graphics-plan.md` |
 | `work/` (ignored) | `gen/` generated C, `build/` exe and logs, `profile/` saves and captures, `romfs/`, `scratch/` |
 | `refs/` (ignored) | Reference checkouts: TotK Recomp (primary), Astral Chain Recomp, Power Moon Recomp |
 
-Changes to vendored TotK files are marked `mlbts-native` with a comment saying what MLB does and why. Keep that style:
+Changes to vendored TotK files are marked `fastball` with a comment saying what MLB does and why. Keep that style:
 comments explain the observed case (screen, texture, address) that made the code necessary.
 Third-party code goes in `THIRD_PARTY_NOTICES.md`.
 
@@ -93,16 +93,20 @@ MSVC-only APIs): check with `tools/build.py --toolchain work/toolchain/llvm-ming
 work/build-mingw`. Details: `docs/release.md`.
 
 The release keeps to RecompLauncher's standards for recomp projects (`docs/release.md`, "Portable and one
-executable", "Command line"): one program to run (`MLBTS-Setup.exe` starts the built game without a window), portable
+executable", "Command line"): one program to run (`Fastball.exe` starts the built game without a window), portable
 (the game in `MLBTS\` inside the setup folder, the setup's memory in `launcher.json` there, updates swapped in place,
 nothing in `%LOCALAPPDATA%` or shortcuts unless asked), and a flag for every choice (`mlb.exe --help`: every `cfg.c`
 setting is a flag). A new setting needs no extra flag code, but anything new the setup writes must stay in its folder.
 
 Publishing a version: bump `VERSION`, write `docs/release-notes-<version>.md`, commit and push, run
-`tools/make_release.py`, then `gh release create v<version> work/release/MLBTS-Setup-<version>-windows.zip --target
-<full commit SHA> --title "MLB The Show 26 for PC <version>" --notes-file docs/release-notes-<version>.md` (a short SHA
+`tools/make_release.py`, then `gh release create v<version> work/release/Fastball-<version>-windows.zip
+work/release/MLBTS-Setup-<version>-windows.zip --target <full commit SHA> --title "Fastball <version>" --notes-file
+docs/release-notes-<version>.md` (a short SHA
 is refused). Players' launchers (0.1.1 and later) find the newest release through GitHub's API and update from it
-(`installer/update.py`): the asset must keep the name `MLBTS-Setup-<version>-windows.zip`.
+(`installer/update.py`): the assets must keep the names `Fastball-<version>-windows.zip` and
+`MLBTS-Setup-<version>-windows.zip` (the second, with a copy of the launcher as `MLBTS-Setup.exe`, is the only one the
+updaters of setups 0.1.1 to 0.1.5 find and can start). Repository URLs still say `mlbts-native`: the GitHub repository
+keeps that name until it is renamed (GitHub then redirects the old URLs, the updaters' API request included).
 
 ## Logs and crash reports
 

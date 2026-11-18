@@ -1,5 +1,5 @@
 /* The application manifest of mlb.exe (mlb.manifest) and its icon (mlb.ico, tools/make_icon.py; also the icon of
-   MLBTS-Setup.exe). tools/build.py compiles it with the runtime objects; in a release it is a member of libmlbrt.a,
+   Fastball.exe). tools/build.py compiles it with the runtime objects; in a release it is a member of libmlbrt.a,
    which the install links whole (--whole-archive). After TotK Recomp runtime/totk.rc @ ae30a61 (MIT). */
 1 24 "mlb.manifest"
 1 ICON "mlb.ico"

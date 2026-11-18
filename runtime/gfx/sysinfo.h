@@ -1,4 +1,4 @@
-// mlbts-native: from TotK Recomp runtime/sysinfo.h @ ae30a61 (MIT, Copyright (c) 2026 Valiantsin Dzerakh), for the settings
+// fastball: from TotK Recomp runtime/sysinfo.h @ ae30a61 (MIT, Copyright (c) 2026 Valiantsin Dzerakh), for the settings
 // menu (ui/menu.cpp). MLB names.
 // What a bug report needs about the machine (sysinfo.c), for the menu's "Copy system info" and "Open log folder".
 #pragma once

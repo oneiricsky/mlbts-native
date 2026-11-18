@@ -126,6 +126,7 @@
     "start": {
         "program": [
             "MLBTS/mlb.exe",
+            "Fastball.exe",
             "MLBTS-Setup.exe"
         ]
     },

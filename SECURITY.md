@@ -2,12 +2,12 @@
 
 ## Supported Versions
 
-Security fixes are provided only for the **latest release** of `MLBTS-Setup` (`VERSION`, currently `0.1.4`), targeting offline play on Nintendo Switch game versions **1.0.20** (primary) and **1.0.15**.
+Security fixes are provided only for the **latest release** of Fastball (`VERSION`, currently `0.1.4`), targeting offline play on Nintendo Switch game versions **1.0.20** (primary) and **1.0.15**.
 
 | Target | Supported |
 |---|---|
-| Latest `MLBTS-Setup` release (`0.1.4`) | Yes |
-| Older `MLBTS-Setup` releases | No (update to the latest release) |
+| Latest Fastball release (`0.1.4`) | Yes |
+| Older Fastball releases | No (update to the latest release) |
 | Switch game versions `1.0.20` and `1.0.15` (offline only) | Yes |
 | Other Switch game versions | No |
 
@@ -23,13 +23,13 @@ Please report security vulnerabilities privately through **GitHub Private Vulner
 
 ### What to Include
 
-- `MLBTS-Setup` version (from `VERSION`) and Switch game version (`1.0.20` or `1.0.15`)
+- Fastball version (from `VERSION`) and Switch game version (`1.0.20` or `1.0.15`)
 - Affected component or file path, if known
 - Clear steps to reproduce or proof of concept (without proprietary game files or keys)
 
 ### Response Expectations
 
-This is a fan project maintained on a best-effort basis. Reports are triaged as time permits, and coordinated disclosure is preferred after a patched `MLBTS-Setup` release is published.
+This is a fan project maintained on a best-effort basis. Reports are triaged as time permits, and coordinated disclosure is preferred after a patched Fastball release is published.
 
 ## Scope
 

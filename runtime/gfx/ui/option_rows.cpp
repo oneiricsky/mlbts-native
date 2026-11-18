@@ -4,7 +4,7 @@
 // from SavageWindRecomp's runtime/ui/option_rows.mm (https://github.com/Revivedx/SavageWindRecomp @
 // 575ad88e02f9a89a9a885d90039d48af33c982f4, MIT, Copyright (c) 2026 Revivedx and the Savage Wind Recomp contributors,
 // Copyright (c) 2026 Peiikai): the row look, the two panes, the left / right stepping and the hold speed-up.
-// mlbts-native: plain strings instead of TotK's translated catalog, mlb.cfg instead of totk.ini, and the binding,
+// fastball: plain strings instead of TotK's translated catalog, mlb.cfg instead of totk.ini, and the binding,
 // movable and text rows left out.
 #include <math.h>
 #include <stdio.h>

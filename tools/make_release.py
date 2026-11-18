@@ -2,7 +2,7 @@
 
     .venv/Scripts/python -I tools/make_release.py [--out work/release] [--no-zip] [--from-worktree]
 
-Writes work/release/MLBTS-Setup-<version>/ and MLBTS-Setup-<version>-windows.zip next to it, from a clean export of the
+Writes work/release/Fastball-<version>/ and Fastball-<version>-windows.zip next to it, from a clean export of the
 last commit (git archive HEAD into work/release-src): uncommitted changes are never in a release, and the working
 tree is not touched. --from-worktree builds from the working tree instead, for tests. Needs network access on the
 first run: downloads are cached in work/toolchain/release-dl and checked against the SHA-256 in PINS (TotK Recomp's
@@ -15,7 +15,7 @@ pins for the same files); a mismatch stops the build. Also needs, built beforeha
 
 The folder:
 
-    MLBTS-Setup.exe   installer/launcher/launcher.c built with llvm/: starts python/pythonw.exe -m installer.gui
+    Fastball.exe      installer/launcher/launcher.c built with llvm/: starts python/pythonw.exe -m installer.gui
     python/           python.org embeddable 3.14.9, numpy and lz4 (tools/requirements-release.txt), and tkinter (the
                       Tcl/Tk files come out of the python.org installer's own component MSI, unpacked with msiexec /a;
                       the installer is never run)
@@ -31,6 +31,9 @@ objects of it, no shader translations. Before zipping, every file is checked (ch
 marker and key lines; and no executable but the listed tools), then the folder's own Python imports what the setup
 needs, the window builds every screen (--selftest), and a setup run without game files must stop at the missing files
 after passing the folder check.
+
+Also MLBTS-Setup-<version>-windows.zip: the same folder plus a copy of Fastball.exe named MLBTS-Setup.exe, for the
+updaters of setups up to 0.1.5, which look only for that zip and start only that exe (installer/update.py). Publish both.
 """
 import argparse
 import hashlib
@@ -82,11 +85,11 @@ TOOLS_FILES = ['build.py', 'check_content.py', 'romfs_dump.py', 'nxextract.py', 
 # the release instead of a player's install (recomp/gen.py's hostmem did, after the 37 GB extraction)
 SETUP_SCRIPTS = ['recomp/gen.py', 'tools/build.py', 'tools/romfs_dump.py']
 # The only executables and libraries a release may hold (folders are prefixes); anything else stops the release
-EXE_ALLOWED = ('MLBTS-Setup.exe', 'python/', 'llvm/', 'bin/ninja.exe', 'bin/totk_xlate.exe', 'runtime/deps/bin/SDL3.dll',
+EXE_ALLOWED = ('Fastball.exe', 'python/', 'llvm/', 'bin/ninja.exe', 'bin/totk_xlate.exe', 'runtime/deps/bin/SDL3.dll',
                'runtime/deps/lib/vulkan-1.lib', 'runtime/libmlbrt.a')
-README = """MLB The Show 26 - PC port setup {version}
+README = """Fastball {version}: MLB The Show 26 for PC
 
-Start MLBTS-Setup.exe. It builds the game on this PC from your own game files, into the MLBTS folder here (or a
+Start Fastball.exe. It builds the game on this PC from your own game files, into the MLBTS folder here (or a
 folder you pick). Everything stays in this folder: delete it and the port is gone.
 
 You need:
@@ -98,10 +101,10 @@ You need:
 No game files, keys or code of the game are in this download, and the setup never uploads anything. The game is
 built on your PC, from your files, for your own use: do not share the installed folder.
 
-After the install, MLBTS-Setup.exe starts the game straight away. Hold Shift while starting it (or start it with
+After the install, Fastball.exe starts the game straight away. Hold Shift while starting it (or start it with
 --menu) for its window: Play, Repair, Import Ryujinx save, and "Download and update" when GitHub has a new version
 (it checks once a day; the update replaces this folder's files, and the game files are not needed again).
-Settings: F1 in the game, or flags: MLBTS-Setup.exe --fullscreen --fps-limit 120 (MLBTS\\mlb.exe --help lists them
+Settings: F1 in the game, or flags: Fastball.exe --fullscreen --fps-limit 120 (MLBTS\\mlb.exe --help lists them
 all, from a console window).
 
 Source, issues and help: https://github.com/sam110411/mlbts-native
@@ -323,7 +326,7 @@ def build_launcher(out, llvm):
     run([llvm / 'bin' / 'llvm-windres.exe', '-I', SRC / 'runtime' / 'mlb', '-O', 'coff',
          SRC / 'installer' / 'launcher' / 'launcher.rc', '-o', tmp / 'launcher_rc.o'], env=clean_env(llvm / 'bin'))
     run([llvm / 'bin' / 'clang.exe', '-O2', '-mwindows',
-         SRC / 'installer' / 'launcher' / 'launcher.c', tmp / 'launcher_rc.o', '-o', out / 'MLBTS-Setup.exe'],
+         SRC / 'installer' / 'launcher' / 'launcher.c', tmp / 'launcher_rc.o', '-o', out / 'Fastball.exe'],
         env=clean_env(llvm / 'bin'))
 
 
@@ -429,7 +432,7 @@ def main():
     SRC = ROOT if a.from_worktree else export_head()
     ver = version(a.from_worktree)
     semver = ver.split('+')[0]
-    folder = a.out / f'MLBTS-Setup-{semver}'
+    folder = a.out / f'Fastball-{semver}'
     shutil.rmtree(folder, ignore_errors=True)
     folder.mkdir(parents=True)
     build_python(folder)
@@ -443,13 +446,18 @@ def main():
     size = sum(p.stat().st_size for p in folder.rglob('*') if p.is_file())
     print(f'{folder}: {size / (1 << 20):.0f} MiB, version {ver}')
     if not a.no_zip:
-        zpath = a.out / f'MLBTS-Setup-{semver}-windows.zip'
-        zpath.unlink(missing_ok=True)
-        with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
-            for p in sorted(folder.rglob('*')):
-                if p.is_file():
-                    z.write(p, Path(folder.name) / p.relative_to(folder))
-        print(f'{zpath}: {zpath.stat().st_size / (1 << 20):.0f} MiB, sha256 {sha256_file(zpath)}')
+        # the release, and the same for the updaters of setups up to 0.1.5 (the module docstring)
+        for zname, extra in ((f'Fastball-{semver}-windows.zip', None),
+                             (f'MLBTS-Setup-{semver}-windows.zip', 'MLBTS-Setup.exe')):
+            zpath = a.out / zname
+            zpath.unlink(missing_ok=True)
+            with zipfile.ZipFile(zpath, 'w', zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+                for p in sorted(folder.rglob('*')):
+                    if p.is_file():
+                        z.write(p, Path(folder.name) / p.relative_to(folder))
+                if extra:
+                    z.write(folder / 'Fastball.exe', Path(folder.name) / extra)
+            print(f'{zpath}: {zpath.stat().st_size / (1 << 20):.0f} MiB, sha256 {sha256_file(zpath)}')
 
 
 if __name__ == '__main__':

@@ -61,7 +61,7 @@ static void warn_once(int key, const char *fmt, ...) {
 }
 
 static uint32_t max1(uint32_t v) { return v ? v : 1; }
-int vk_watch_hit(uint64_t a, uint64_t n);   // vk_texture.c (mlbts-native diagnosis)
+int vk_watch_hit(uint64_t a, uint64_t n);   // vk_texture.c (fastball diagnosis)
 
 // ---- completion callbacks (completion thread)
 
@@ -87,7 +87,7 @@ static void note_gpu_write(VkExec *ex, uint64_t addr, uint64_t size) {
 
 typedef struct { volatile uint32_t *val; uint32_t mode, value; uint64_t fence; } EventWrite;
 
-// mlbts-native diagnosis (MLB_TRACE=perf): per event word, the timeline value of its newest signal, when the replay
+// fastball diagnosis (MLB_TRACE=perf): per event word, the timeline value of its newest signal, when the replay
 // recorded it and when its write was applied, for gfx_event_story. At each batter walk-up of 1.0.20 the game's main
 // thread spins in its GPU wait (f_70005a1a90 polls nvnEventGetValue until the count it signalled is reached) for
 // about half a second while the replay and the GPU look idle half of that time. The replay thread fills an entry, the
@@ -135,7 +135,7 @@ void gfx_event_story(const volatile uint32_t *val, uint64_t t0, char *b, size_t 
              af ? ((double)evs[s].applied_ns - (double)t0) * ms : 0.0, fs, cs);
 }
 
-// mlbts-native diagnosis (MLB_TRACE=perf): the game's GPU waits in bursts. Each batter walk-up of 1.0.20 is about 50
+// fastball diagnosis (MLB_TRACE=perf): the game's GPU waits in bursts. Each batter walk-up of 1.0.20 is about 50
 // waits in a row (submit, wait for the event, submit the next), each under 30 ms, about 10 ms apiece, with the replay
 // thread idle about 60 % of the time. nvn_api_core.c calls this when a thread's poll of an event word ends (the value
 // moved on or another event was polled): t0 the first poll at the old value, t1 now, polls how many. Waits closer than
@@ -191,7 +191,7 @@ static void write_counter(uint64_t addr, uint64_t counter) {
     memcpy((void *)(uintptr_t)addr, rec, sizeof rec);
 }
 
-// mlbts-native experiment (MLB_OQ_FORCE=1; off by default): samples-passed reports
+// fastball experiment (MLB_OQ_FORCE=1; off by default): samples-passed reports
 // write at least 1 << 20, and the other non-timestamp counters 1 << 20, instead of the count (or 0).
 static int oq_force = -1;
 static int oq_force_on(void) {
@@ -344,7 +344,7 @@ static void oq_cb(void *arg) {
         oq_count += sum;
         if (s->lost && !oq_count) oq_count = 1;
         static volatile int32_t n_logged;
-        if (plat_inc32(&n_logged) <= 300)   // mlbts-native diagnosis
+        if (plat_inc32(&n_logged) <= 300)   // fastball diagnosis
             rt_log("counter: samples passed report %#llx: %llu (queries %u%s)", (unsigned long long)s->addr,
                    (unsigned long long)oq_count, s->n, s->lost ? ", some uncounted" : "");
         if (s->addr) write_counter(s->addr, oq_force_on() && oq_count < (1u << 20) ? 1u << 20 : oq_count);
@@ -381,7 +381,7 @@ static void oq_report(VkExec *ex, uint64_t addr) {
     if (!oq_keep) oq_counting = 0;
 }
 
-// mlbts-native: an event signal takes effect where it is in the command stream. NVN writes the event when the GPU gets
+// fastball: an event signal takes effect where it is in the command stream. NVN writes the event when the GPU gets
 // there; the replay wrote it when the whole submission completed (vk_completion_add), and MLB's main thread spins on
 // nvnEventGetValue for such an event (f_70005a1310: 400,000-670,000 nvnSyncWait and GetValue calls a frame in the draft
 // cutscene), so it waited for the submission's end, the completion thread and the replay queue: 45-55 fps with the
@@ -509,7 +509,7 @@ static void signal_event(VkExec *ex, const p_signal_event *p) {
 }
 
 static void report_counter(VkExec *ex, const p_report_counter *p) {
-    {   // mlbts-native diagnosis: the game's counter reports by type
+    {   // fastball diagnosis: the game's counter reports by type
         static uint64_t by_type[18], total;
         by_type[p->type < 17 ? p->type : 17]++;
         static volatile int32_t n_logged;
@@ -667,7 +667,7 @@ static int buffer_side(const VkExec *ex, const Sub *s, uint64_t addr, uint64_t *
 static void copy_buffer_image(VkExec *ex, const p_copy_b2t *p, int to_image) {
     Sub s;
     int dl_near = vk_drawlog_near();
-    if (dl_near)   // mlbts-native diagnosis
+    if (dl_near)   // fastball diagnosis
         rt_log("drawlog%s copy%s buffer %#llx %s texture %#llx fmt %#x %ux%u, region %d,%d %dx%d",
                dl_near > 1 ? (dl_near == 2 ? "+1" : "+2") : "", to_image ? "b2t" : "t2b", (unsigned long long)p->src,
                to_image ? "->" : "<-", (unsigned long long)(uintptr_t)p->tex->mem, (unsigned)p->tex->d.format,
@@ -687,7 +687,7 @@ static void copy_buffer_image(VkExec *ex, const p_copy_b2t *p, int to_image) {
     if (to_image) vkCmdCopyBufferToImage(ex->cb, m.buffer, s.img->image, VK_IMAGE_LAYOUT_GENERAL, 1, &c);
     else vkCmdCopyImageToBuffer(ex->cb, s.img->image, VK_IMAGE_LAYOUT_GENERAL, m.buffer, 1, &c);
     ex->recorded++;
-    if (to_image && vk_watch_hit((uint64_t)(uintptr_t)p->tex->mem, p->tex->L.size)) {   // mlbts-native diagnosis
+    if (to_image && vk_watch_hit((uint64_t)(uintptr_t)p->tex->mem, p->tex->L.size)) {   // fastball diagnosis
         uint64_t nz = 0;
         VkMemSpan cm;
         if (vk_mem_resolve(p->src, size, &cm))
@@ -700,11 +700,11 @@ static void copy_buffer_image(VkExec *ex, const p_copy_b2t *p, int to_image) {
     else vk_mem_gpu_wrote(&m, size), note_gpu_write(ex, p->src, size);
 }
 
-int vk_watch_hit(uint64_t a, uint64_t n);   // vk_texture.c (mlbts-native diagnosis)
+int vk_watch_hit(uint64_t a, uint64_t n);   // vk_texture.c (fastball diagnosis)
 static void copy_t2t(VkExec *ex, const p_copy_t2t *p) {
     Sub s, d;
     int dl_near = vk_drawlog_near();
-    if (dl_near)   // mlbts-native diagnosis: drawlog frame and the two after it
+    if (dl_near)   // fastball diagnosis: drawlog frame and the two after it
         rt_log("drawlog%s copytex %#llx fmt %#x %ux%u s%d level %u -> %#llx fmt %#x %ux%u s%d level %u, region %d,%d %dx%d -> "
                "%d,%d %dx%d flags %#x", dl_near > 1 ? (dl_near == 2 ? "+1" : "+2") : "",
                (unsigned long long)(uintptr_t)p->src->mem, (unsigned)p->src->d.format, p->src->d.width, p->src->d.height,
@@ -736,7 +736,7 @@ static void copy_t2t(VkExec *ex, const p_copy_t2t *p) {
     }
     VkImageSubresourceLayers sl = sub_layers(&s), dl = sub_layers(&d);
     if (vk_watch_hit((uint64_t)(uintptr_t)p->src->mem, p->src->L.size) ||
-        vk_watch_hit((uint64_t)(uintptr_t)p->dst->mem, p->dst->L.size))   // mlbts-native diagnosis
+        vk_watch_hit((uint64_t)(uintptr_t)p->dst->mem, p->dst->L.size))   // fastball diagnosis
         rt_log("watch: copy %#llx fmt %#x level %u layers %u+%u %d,%d %ux%u -> %#llx fmt %#x level %u layers %u+%u %d,%d "
                "%ux%u (%s%s)", (unsigned long long)(uintptr_t)p->src->mem, (unsigned)p->src->d.format, sl.mipLevel,
                sl.baseArrayLayer, sl.layerCount, s.x, s.y, s.w, s.h, (unsigned long long)(uintptr_t)p->dst->mem,
@@ -769,11 +769,11 @@ static void copy_t2t(VkExec *ex, const p_copy_t2t *p) {
 // ---- buffer to buffer
 
 static void copy_b2b(VkExec *ex, const p_copy_b2b *p) {
-    if (vk_drawlog_now())   // mlbts-native: drawlog frame
+    if (vk_drawlog_now())   // fastball: drawlog frame
         rt_log("drawlog copybuf %#llx -> %#llx +%#llx", (unsigned long long)p->src, (unsigned long long)p->dst,
                (unsigned long long)p->size);
     {
-        int vk_watch_hit(uint64_t a, uint64_t n);   // vk_texture.c (mlbts-native diagnosis)
+        int vk_watch_hit(uint64_t a, uint64_t n);   // vk_texture.c (fastball diagnosis)
         if (vk_watch_hit(p->dst, p->size))
             rt_log("watch: buffer copy %#llx -> %#llx +%#llx", (unsigned long long)p->src, (unsigned long long)p->dst,
                    (unsigned long long)p->size);
@@ -813,7 +813,7 @@ static void copy_b2b(VkExec *ex, const p_copy_b2b *p) {
 // vk_guest_written at the fence, as copies do. Works in CPU-invisible pools.
 
 static void clear_buf(VkExec *ex, const p_clear_buf *p) {
-    if (vk_drawlog_now())   // mlbts-native: drawlog frame
+    if (vk_drawlog_now())   // fastball: drawlog frame
         rt_log("drawlog clearbuf %#llx +%#llx value %#x", (unsigned long long)p->addr, (unsigned long long)p->size,
                (unsigned)p->value);
     if ((p->addr | p->size) & 3) {
@@ -897,7 +897,7 @@ static void clear_tex(VkExec *ex, const p_clear_tex *p) {
         vkCmdClearDepthStencilImage(ex->cb, img->image, VK_IMAGE_LAYOUT_GENERAL, &dv, 1, &rng);
     }
     ex->recorded++;
-    if (vk_watch_hit((uint64_t)(uintptr_t)t->mem, t->L.size))   // mlbts-native diagnosis
+    if (vk_watch_hit((uint64_t)(uintptr_t)t->mem, t->L.size))   // fastball diagnosis
         rt_log("watch: texture clear of %#llx fmt %#x to %g %g %g %g", (unsigned long long)(uintptr_t)t->mem,
                (unsigned)t->d.format, p->c.f[0], p->c.f[1], p->c.f[2], p->c.f[3]);
     vk_texture_gpu_written(t);

@@ -48,14 +48,14 @@ static _Thread_local int x_here;   // this thread is inside vk_exec_record (vk_e
 // ---- TOTK_TRACE=gfx frame counters
 
 VkExecFrame vk_exec_frame;
-static struct { const uint8_t *mem; uint32_t w, h, fmt, n; const tex_t *t; } fw[64];   // textures written this frame (mlbts-native: t, for vk_capture.c)
+static struct { const uint8_t *mem; uint32_t w, h, fmt, n; const tex_t *t; } fw[64];   // textures written this frame (fastball: t, for vk_capture.c)
 static int nfw;
 
 uint64_t vk_exec_recording_fence(void) { return x_here ? X.fence : 0; }
 
 long vk_drawlog_frame(void);   // vk_exec_draw.c: the frame F12 / MLB_DRAWLOG asks for, -1 none
 void vk_exec_frame_written(const tex_t *t) {
-    long cap = vk_drawlog_frame();   // mlbts-native: also listed in the capture frame (vk_capture.c)
+    long cap = vk_drawlog_frame();   // fastball: also listed in the capture frame (vk_capture.c)
     int capturing = cap >= 0 && (long)__atomic_load_n(&gfx_counters.frames, __ATOMIC_RELAXED) + 1 == cap;
     if ((!(rt_trace & RT_TRACE_GFX) && !capturing) || !t) return;
     for (int i = 0; i < nfw; i++)
@@ -68,22 +68,22 @@ void vk_exec_frame_written(const tex_t *t) {
 void vk_capture_targets(const tex_t *const *ts, int n, uint64_t frame);   // vk_capture.c
 void vk_watch_frame(uint64_t frame);   // vk_capture.c
 void vk_watch_queries_report(void);   // vk_exec_draw.c
-void vk_texture_verify_frame(uint64_t frame);   // vk_texture.c (mlbts-native diagnosis)
+void vk_texture_verify_frame(uint64_t frame);   // vk_texture.c (fastball diagnosis)
 void vk_exec_frame_log(const tex_t *p, uint64_t frame) {
     vk_watch_frame(frame);
     vk_texture_verify_frame(frame);
     vk_watch_queries_report();
     VkExecFrame *f = &vk_exec_frame;
     long cap = vk_drawlog_frame();
-    if (cap >= 0 && (uint64_t)cap == frame) {   // mlbts-native: the capture frame's render targets as PNGs
+    if (cap >= 0 && (uint64_t)cap == frame) {   // fastball: the capture frame's render targets as PNGs
         const tex_t *ts[64];
         for (int i = 0; i < nfw; i++) ts[i] = fw[i].t;
         vk_capture_targets(ts, nfw, frame);
         vk_drawq_report();
-        void vk_watch_capture(uint64_t frame);   // vk_capture.c: also without draw queries (mlbts-native)
+        void vk_watch_capture(uint64_t frame);   // vk_capture.c: also without draw queries (fastball)
         vk_watch_capture(frame);
     }
-    if (!(rt_trace & RT_TRACE_GFX)) {   // mlbts-native: the summary of the drawlog frame too, counted from the one before
+    if (!(rt_trace & RT_TRACE_GFX)) {   // fastball: the summary of the drawlog frame too, counted from the one before
         long want = vk_drawlog_frame();
         if (want < 0 || (uint64_t)want != frame) {
             if (want > 0 && (uint64_t)want == frame + 1) memset(f, 0, sizeof *f), nfw = 0;
@@ -545,7 +545,7 @@ int vk_exec_targets_recent(VkExec *ex, int any) {
     return any ? color || (depth && !color_first) : n > 0;
 }
 
-// mlbts-native diagnosis: whether a target of the current pass is in an address-watch range (vk_watch_hit)
+// fastball diagnosis: whether a target of the current pass is in an address-watch range (vk_watch_hit)
 int vk_watch_hit(uint64_t a, uint64_t n);
 int vk_exec_targets_watched(VkExec *ex) {
     resolve_rt(ex);
@@ -627,7 +627,7 @@ static void barrier_to(VkExec *ex, const VkImage *want, const VkImageAspectFlags
 
 void vk_exec_barrier(VkExec *ex) { barrier_to(ex, NULL, NULL, 0); }
 
-int vk_texture_cube_pending(void);   // vk_texture.c (mlbts-native)
+int vk_texture_cube_pending(void);   // vk_texture.c (fastball)
 void vk_texture_cube_flush(void);
 void vk_exec_pass_begin(VkExec *ex) {
     if (ex->in_pass) return;
@@ -675,7 +675,7 @@ void vk_exec_pass_begin(VkExec *ex) {
     }
     // The start mark goes between the barrier and vkCmdBeginRendering, its end right after vkCmdEndRendering
     // (vk_exec_pass_end): outside the pass, and without breaking it.
-    {   // mlbts-native diagnosis: the targets of the passes of the two frames after the drawlog frame (its own draws log them)
+    {   // fastball diagnosis: the targets of the passes of the two frames after the drawlog frame (its own draws log them)
         int nr = vk_drawlog_near();
         if (nr > 1)
             rt_log("drawlog+%d pass %ux%u rt0 %#llx fmt %d rt1 %#llx ds %#llx", nr - 1, ex->pass_w, ex->pass_h,
@@ -819,7 +819,7 @@ static void clear_color(VkExec *ex, const p_clear_color *c) {
     const VkExecTarget *t = &ex->color[i];
     VkClearColorValue cv;
     memcpy(cv.float32, c->rgba, sizeof cv.float32);   // integer targets: the payload's bits as the front end stored them
-    if (t->tex && t->tex->mem && vk_watch_hit((uint64_t)(uintptr_t)t->tex->mem, t->tex->L.size))   // mlbts-native diagnosis
+    if (t->tex && t->tex->mem && vk_watch_hit((uint64_t)(uintptr_t)t->tex->mem, t->tex->L.size))   // fastball diagnosis
         rt_log("watch: colour clear of %#llx layer %u level %u to %g %g %g %g (%s)", (unsigned long long)(uintptr_t)t->tex->mem,
                t->base_layer, t->level, c->rgba[0], c->rgba[1], c->rgba[2], c->rgba[3], whole_target(ex, t) ? "whole" : "scissored");
     if (whole_target(ex, t)) {
@@ -850,7 +850,7 @@ static void clear_ds(VkExec *ex, const p_clear_ds *c) {
     if (!asp) return;
     float d = c->depth < 0.0f ? 0.0f : c->depth > 1.0f ? 1.0f : c->depth;
     VkClearDepthStencilValue v = {d, (uint32_t)c->stencil & 0xff};
-    if (vk_drawlog_now())   // mlbts-native: the drawlog frame's depth clears
+    if (vk_drawlog_now())   // fastball: the drawlog frame's depth clears
         rt_log("drawlog clear depth %g (game %g) mask %d stencil %u/%#x target %#llx %ux%u level %u layers %u+%u %s",
                d, c->depth, c->depth_mask, (unsigned)c->stencil & 0xff, sm,
                (unsigned long long)(uintptr_t)(t->tex ? t->tex->mem : NULL), t->width, t->height, t->level,
@@ -914,7 +914,7 @@ static void maybe_split(VkExec *ex) {
     n_parts++;
 }
 
-// mlbts-native diagnosis (the batting frame rate), MLB_TRACE=perf: the replay's CPU time and count per command type
+// fastball diagnosis (the batting frame rate), MLB_TRACE=perf: the replay's CPU time and count per command type
 // (TSC ticks from one command to the next on this thread; OP_CALL and OP_JUMP are not commands of their own), and
 // every 600 presents a line with the commands that took the most time per frame.
 static uint64_t opn[OP_COUNT_], opt[OP_COUNT_], op_t0;
@@ -1048,7 +1048,7 @@ static void walk(VkExec *ex, const op_hdr *h, int depth) {
         }
         case OP_STENCIL: {
             const p_stencil *s = a;
-            if (s->which == 3) {   // mlbts-native: the alpha test reference (nvnCommandBufferSetAlphaRef)
+            if (s->which == 3) {   // fastball: the alpha test reference (nvnCommandBufferSetAlphaRef)
                 ex->alpha_ref = (uint32_t)s->ref;
                 break;
             }

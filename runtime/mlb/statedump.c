@@ -1,4 +1,4 @@
-// mlbts-native (diagnostic): F8 in the game window writes main's writable memory (data and bss) to
+// fastball (diagnostic): F8 in the game window writes main's writable memory (data and bss) to
 // <profile>/state-<frame>.bin, with a beep. Snapshots taken in different game situations (a menu, live fielding) are
 // compared offline to find the game's own variables that tell them apart (the controller face-button mode, hid.c).
 // Only with MLB_STATEDUMP=1: a player's report (0.1.3, RTTS batting) showed F8 pressed three times by mistake, each a

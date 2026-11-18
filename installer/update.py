@@ -2,15 +2,21 @@
 
 The launcher asks GitHub's API for the latest release of the project (one small request, no data about the player sent;
 nothing is checked in --selftest). When its version is newer than this setup's, the launcher offers the update:
-download() fetches MLBTS-Setup-<version>-windows.zip, checks it against the SHA-256 GitHub lists for the file, and
-unpacks it into <setup folder>/.update/MLBTS-Setup-<version>/. start_apply() then starts that release's own Python on
+download() fetches Fastball-<version>-windows.zip, checks it against the SHA-256 GitHub lists for the file, and
+unpacks it into <setup folder>/.update/Fastball-<version>/. start_apply() then starts that release's own Python on
 apply() and the launcher quits: apply() waits for it to end, moves the new release's files over the old ones (the old
-ones go to .update/old-<time>/, and come back if anything fails), and starts the new MLBTS-Setup.exe with --update
+ones go to .update/old-<time>/, and come back if anything fails), and starts the new Fastball.exe with --update
 <install folder>, which rebuilds mlb.exe. The game files, saves, settings, logs and launcher.json are never touched:
 apply() moves only what a release holds (layout.RELEASE_ENTRIES). The next window removes .update/.
 
 So the port stays in one folder (portable). Setups up to 0.1.5 unpacked each update beside the old setup folder, or
 into %LOCALAPPDATA%; they still do that when they update to this one, which then works from the new folder.
+
+Releases are named Fastball-<version>-windows.zip (the launcher Fastball.exe) from 0.1.6; up to 0.1.5 they were
+MLBTS-Setup-<version>-windows.zip (MLBTS-Setup.exe), and the updaters of those setups look only for that name and start
+only MLBTS-Setup.exe. So a release also carries MLBTS-Setup-<version>-windows.zip, the same folder plus a copy of the
+launcher as MLBTS-Setup.exe (tools/make_release.py); the window removes that copy once it runs (gui.py). This updater
+takes either name, Fastball's first.
 
     python -m installer.update --apply NEW --root ROOT [--wait PID] [--dest DIR]
 """
@@ -34,8 +40,9 @@ from . import layout as layouts
 
 REPO = 'sam110411/mlbts-native'
 API = f'https://api.github.com/repos/{REPO}/releases/latest'
-ASSET = re.compile(r'^MLBTS-Setup-(\d+(?:\.\d+)*)-windows\.zip$')
-HEADERS = {'User-Agent': 'MLBTS-Setup', 'Accept': 'application/vnd.github+json'}
+ASSET = re.compile(r'^(Fastball|MLBTS-Setup)-(\d+(?:\.\d+)*)-windows\.zip$')   # MLBTS-Setup: up to 0.1.5
+HEADERS = {'User-Agent': 'Fastball', 'Accept': 'application/vnd.github+json'}
+LAUNCHERS = ('Fastball.exe', 'MLBTS-Setup.exe')   # a setup folder's launcher: this one's, an older one's
 
 
 class Cancelled(Exception):
@@ -60,11 +67,12 @@ def latest(timeout=10):
     req = urllib.request.Request(API, headers=HEADERS)
     with urllib.request.urlopen(req, timeout=timeout, context=ctx) as r:
         rel = json.load(r)
-    for a in rel.get('assets') or []:
-        m = ASSET.match(a.get('name') or '')
+    assets = [(a, ASSET.match(a.get('name') or '')) for a in rel.get('assets') or []]
+    assets.sort(key=lambda am: not (am[1] and am[1].group(1) == 'Fastball'))   # Fastball's zip first
+    for a, m in assets:
         if m and a.get('browser_download_url'):
             digest = a.get('digest') or ''
-            return {'version': m.group(1), 'url': a['browser_download_url'], 'size': int(a.get('size') or 0),
+            return {'version': m.group(2), 'url': a['browser_download_url'], 'size': int(a.get('size') or 0),
                     'sha256': digest[7:].lower() if digest.startswith('sha256:') else None,
                     'page': rel.get('html_url') or f'https://github.com/{REPO}/releases'}
     return None
@@ -73,7 +81,7 @@ def latest(timeout=10):
 def ready(folder, version):
     """folder holds an unpacked setup of that version (its VERSION is '<version>+<commit>')."""
     try:
-        return (folder / 'MLBTS-Setup.exe').is_file() and (folder / 'python' / 'pythonw.exe').is_file() and \
+        return any((folder / x).is_file() for x in LAUNCHERS) and (folder / 'python' / 'pythonw.exe').is_file() and \
             version_key((folder / 'VERSION').read_text(encoding='utf-8')) == version_key(version)
     except OSError:
         return False
@@ -83,11 +91,11 @@ def download(info, setup_root, progress=None, cancel=None):
     """Download, check and unpack info's setup; returns the new setup folder. progress(text, done, total) is called
     as it goes; cancel() returning true stops it (Cancelled). Raises OSError / ValueError on failure."""
     parent = Path(setup_root).resolve() / layouts.UPDATE_DIR
-    folder = parent / f'MLBTS-Setup-{info["version"]}'
+    folder = parent / f'Fastball-{info["version"]}'
     if ready(folder, info['version']):
         return folder
     parent.mkdir(parents=True, exist_ok=True)
-    zpath = parent / f'MLBTS-Setup-{info["version"]}-windows.zip'
+    zpath = parent / f'Fastball-{info["version"]}-windows.zip'
     part = zpath.with_name(zpath.name + '.part')
     h = hashlib.sha256()
     req = urllib.request.Request(info['url'], headers={'User-Agent': HEADERS['User-Agent']})
@@ -115,7 +123,7 @@ def download(info, setup_root, progress=None, cancel=None):
     except BaseException:
         part.unlink(missing_ok=True)
         raise
-    stage = parent / f'.MLBTS-Setup-{info["version"]}-unpacking'
+    stage = parent / f'.Fastball-{info["version"]}-unpacking'
     shutil.rmtree(stage, ignore_errors=True)
     try:
         with zipfile.ZipFile(zpath) as z:
@@ -199,6 +207,11 @@ def apply(new, root, log=print):
             else:
                 retry(lambda: src.replace(dst))
             log(f'update: {name} replaced')
+        for name in layouts.LEGACY_ENTRIES:   # an older release's file this one has not got (the old launcher)
+            if (root / name).exists() and not (new / name).exists():
+                retry(lambda: (root / name).replace(trash / name))
+                done.append((name, True))
+                log(f'update: {name} removed')
     except BaseException:
         log('update: failed, putting the old files back\n' + traceback.format_exc())
         for name, had in reversed(done):
@@ -234,8 +247,9 @@ def main(argv=None):
             if os.name == 'nt':
                 ctypes.windll.user32.MessageBoxW(
                     None, f'The update could not be installed: {e}\n\nThe previous version is still in place. The '
-                    f'details are in {f.name}.', 'MLB The Show 26 - update', 0x10)
-        args = [str(a.root / 'MLBTS-Setup.exe')] + (['--update', str(a.dest)] if ok and a.dest else [])
+                    f'details are in {f.name}.', 'Fastball - update', 0x10)
+        launcher = next((a.root / x for x in LAUNCHERS if (a.root / x).is_file()), a.root / LAUNCHERS[0])
+        args = [str(launcher)] + (['--update', str(a.dest)] if ok and a.dest else [])
         log('update: starting ' + ' '.join(args))
         subprocess.Popen(args, cwd=str(a.root), close_fds=True)
     return 0 if ok else 1

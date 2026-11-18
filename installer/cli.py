@@ -1,7 +1,7 @@
 """Command line: python -m installer --dest DIR [--base NSP --update NSP --keys prod.keys] [--titlekeys FILE]
                                      [--root DIR] [--dlss] [--shortcut] [--import-save] [--launcher]
 
-A first install needs the game files and the keys. On a folder with mlbts-install.json (resume after a cancel or a
+A first install needs the game files and the keys. On a folder with fastball-install.json (resume after a cancel or a
 failure, or update with a newer release) only --dest is needed, unless the extraction must run again. Prints JSON
 events on stdout (events.py). Exit code: 0 done, 1 failed, 2 bad command line, 3 cancelled (Ctrl+C or Ctrl+Break).
 

@@ -72,7 +72,7 @@ typedef struct VkExec {
     int has_scissor;                     // a scissor was set; else unbounded
     float depth_range[2];                // OP_DEPTH_RANGE: overrides the viewports' near and far
     uint32_t st_vmask[2], st_wmask[2], st_ref[2];   // OP_STENCIL per face (0 front, 1 back): compare mask, write mask, ref
-    uint32_t alpha_ref;                              // mlbts-native: OP_STENCIL which 3, nvnCommandBufferSetAlphaRef (float bits)
+    uint32_t alpha_ref;                              // fastball: OP_STENCIL which 3, nvnCommandBufferSetAlphaRef (float bits)
     float point_size;                    // OP_BIND_STATE kind 6: NVN point size for the support buffer; 0 = never set = 1
     p_poly_offset poly_offset;           // OP_POLY_OFFSET: depth bias factor, units, clamp
     p_prim_restart prim_restart;         // OP_PRIM_RESTART: applied to indexed strip and fan draws (op_draw_idx)
@@ -87,7 +87,7 @@ typedef struct VkExec {
     // ---- vk_exec_draw.c slots (draws, binds, dispatch): left empty by vk_exec.c
     const prog_t *prog;                  // OP_BIND_PROGRAM
     int32_t prog_stages;
-    // mlbts-native: nvnCommandBufferBindProgram binds a program for the stages in its mask, and MLB binds one program
+    // fastball: nvnCommandBufferBindProgram binds a program for the stages in its mask, and MLB binds one program
     // per stage. stage_prog is each stage's program; prog_gfx (the graphics stages', combined when they differ:
     // vk_exec_draw.c graphics_program) and prog_cs are what prog is set to before a draw and before a dispatch.
     const prog_t *stage_prog[6];
@@ -212,10 +212,10 @@ void vk_contact_flush(VkExec *ex);
 // when counting and none is active), and the open pass about to end (ends the active query).
 void vk_exec_oq_draw(VkExec *ex);
 void vk_exec_oq_pass_end(VkExec *ex);
-int vk_exec_oq_active(void);       // mlbts-native: a game samples-passed query is open in the pass
-void vk_exec_dq_end(VkExec *ex);   // mlbts-native: the drawlog frame's per-draw query ends (vk_exec_draw.c)
+int vk_exec_oq_active(void);       // fastball: a game samples-passed query is open in the pass
+void vk_exec_dq_end(VkExec *ex);   // fastball: the drawlog frame's per-draw query ends (vk_exec_draw.c)
 void vk_drawq_report(void);
 int vk_drawlog_now(void);
-int vk_drawlog_near(void);           // mlbts-native: 1 the drawlog frame, 2-3 the two after it, else 0           // mlbts-native: the frame being replayed is the drawlog frame
-int vk_capture_read(uint64_t addr, void *out, uint32_t n);   // mlbts-native vk_capture.c: GPU bytes at addr (queue idle)
-        // mlbts-native: logs the drawlog frame's per-draw samples, after the queue is idle
+int vk_drawlog_near(void);           // fastball: 1 the drawlog frame, 2-3 the two after it, else 0           // fastball: the frame being replayed is the drawlog frame
+int vk_capture_read(uint64_t addr, void *out, uint32_t n);   // fastball vk_capture.c: GPU bytes at addr (queue idle)
+        // fastball: logs the drawlog frame's per-draw samples, after the queue is idle

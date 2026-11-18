@@ -1,4 +1,4 @@
-// mlbts-native: the game's button prompts show the controller in use: Xbox or PlayStation icons in place of the
+// fastball: the game's button prompts show the controller in use: Xbox or PlayStation icons in place of the
 // Switch ones.
 //
 // MLB writes prompts as text tokens (^b0^ a button, ^b16^ a stick) and draws each as a cell of one 1024x1024 BC7

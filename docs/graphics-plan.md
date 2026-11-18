@@ -33,7 +33,7 @@ TotK Recomp (MIT) has a working NVN to Vulkan path on Windows. Its NVN front end
 we reuse it instead of writing one. Astral Chain Recomp and Power Moon Recomp were compared in the recon report;
 TotK's is the most complete Windows/Vulkan path of the three.
 
-Layers, all vendored with attribution and `mlbts-native` markers on changes:
+Layers, all vendored with attribution and `fastball` markers on changes:
 
 | Layer | TotK files | Notes |
 |---|---|---|

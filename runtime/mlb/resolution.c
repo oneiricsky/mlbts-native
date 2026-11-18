@@ -1,4 +1,4 @@
-// mlbts-native: the size MLB renders its 3D scene at (MLB_RENDER_SCALE, the settings menu's Graphics tab).
+// fastball: the size MLB renders its 3D scene at (MLB_RENDER_SCALE, the settings menu's Graphics tab).
 //
 // MLB draws its 3D scene into one image smaller than its 1920x1080 output and stretches it there in its final pass
 // (vk_exec_draw.c aa_composite: fragment shader daf10a59), with the HUD drawn into a separate 1080p layer. The scene's

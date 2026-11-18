@@ -1,4 +1,4 @@
-// mlbts-native: Xbox and PlayStation button icons in the game's prompts (prompts.c). No Vulkan here: vk_texture.c
+// fastball: Xbox and PlayStation button icons in the game's prompts (prompts.c). No Vulkan here: vk_texture.c
 // records the copies.
 #pragma once
 #include <stddef.h>

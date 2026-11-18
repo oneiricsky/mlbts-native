@@ -298,7 +298,7 @@ static void texel_strides(const tex_t *o, const NVNcopyRegion *r, uint64_t *row,
     if (!*img) *img = *row * hb;
     if (*row < wb || *img < *row * hb) rt_fatal("nvn: %s: stride smaller than the region", what);
 }
-// mlbts-native diagnosis (black faces): ReadTexels / WriteTexels calls, the first 400 of each kind: texture storage,
+// fastball diagnosis (black faces): ReadTexels / WriteTexels calls, the first 400 of each kind: texture storage,
 // format and size, region, and the byte sum of the texels moved.
 static void texels_log(const char *what, const tex_t *o, const NVNcopyRegion *r, const uint8_t *p, uint64_t row,
                        uint64_t img) {
@@ -666,7 +666,7 @@ static uint64_t present_period(const win_t *o) {
 // less than a period: present at once and keep the phase. Behind by a period or more: restart from now, no catch-up
 // burst. Returns the ns to wait.
 //
-// mlbts-native: the slot leads the game's present by the replay's recent lag. A frame goes to the display at its slot or
+// fastball: the slot leads the game's present by the replay's recent lag. A frame goes to the display at its slot or
 // when the replay thread has recorded it and the present thread submitted its blit, whichever is later (vk_backend.c
 // present_main), and MLB paces itself with a sleep each frame on its own 60 Hz phase. The pacer kept whatever phase it
 // had after its last restart (a camera cut, a load), so the same batting scene ran with even presents in one pitch,
@@ -701,7 +701,7 @@ static uint64_t pace(uint64_t *target, uint64_t now, uint64_t period) {
     return next - now;
 }
 
-// mlbts-native: the high-resolution timer to 1 ms before the deadline, then yields (as vk_backend.c wait_until); the
+// fastball: the high-resolution timer to 1 ms before the deadline, then yields (as vk_backend.c wait_until); the
 // millisecond Sleep woke up to a millisecond or more late. MLB_TRACE=perf: how late the wake-ups were, per 600.
 static void sleep_until(uint64_t deadline) {
     static uint64_t n, late_sum, late_max;
@@ -773,7 +773,7 @@ NVN_API(nvnQueuePresentTexture) {
     uint64_t slot = now + pace(&o->pace, now, period);
     gfx_backend()->present(t, o->crop, slot);
     o->ticket[idx] = o->presents;
-    // mlbts-native: the setting read again only when a setting changed (cfg_get is two getenv calls and a scan)
+    // fastball: the setting read again only when a setting changed (cfg_get is two getenv calls and a scan)
     static unsigned fq_ver;
     static int fq;
     if (fq_ver != cfg_version()) fq = cfg_bool("TOTK_FRAME_QUEUE"), fq_ver = cfg_version();

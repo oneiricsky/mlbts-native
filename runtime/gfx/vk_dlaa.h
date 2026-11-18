@@ -1,5 +1,5 @@
 // DLAA (vk_dlaa.c): NVIDIA DLSS at the scene's own size, behind TOTK_DLAA (totk.ini dlaa = 1).
-// mlbts-native: DLSS and DLAA on MLB's scene behind MLB_DLSS (off|dlaa|quality|balanced|performance|ultra_performance).
+// fastball: DLSS and DLAA on MLB's scene behind MLB_DLSS (off|dlaa|quality|balanced|performance|ultra_performance).
 // vk_dlaa_scene runs it at the composite draw; the per-object motion and survey entries below stay stubs (gfx_stubs.c).
 #pragma once
 #include "vk.h"
@@ -49,7 +49,7 @@ void vk_mvcheck_output(VkCommandBuffer cb, VkImage out, uint32_t ow, uint32_t oh
 // scaling draw when DLSS wrote the scaled picture).
 int vk_dlaa_skip_draw(VkExec *ex, const GfxShader *fs);
 
-// mlbts-native (vk_dlaa.c). vk_exec_draw.c aa_before_draw, at MLB's composite draw, outside a pass: when DLSS is on and
+// fastball (vk_dlaa.c). vk_exec_draw.c aa_before_draw, at MLB's composite draw, outside a pass: when DLSS is on and
 // im is the scene armed this frame, DLSS's picture of it at pw x ph (the composite's pass; the scene's own size when
 // that is not smaller) into *out, 1; the composite samples it in the scene's place. 0: not run (FXAA and FSR as set).
 int vk_dlaa_scene(VkExec *ex, const VkTexImage *im, uint32_t pw, uint32_t ph, VkImageView *out);

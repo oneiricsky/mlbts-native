@@ -879,7 +879,7 @@ __attribute__((constructor)) static void pgo_flush_start(void) {
 }
 #endif
 
-// mlbts-native: an installed game is a windowed program, so a fatal error that only went to stderr and the log would
+// fastball: an installed game is a windowed program, so a fatal error that only went to stderr and the log would
 // end it without a word. Topmost, because the game's full-screen window may still cover the screen.
 void plat_fatal_notice(const char *what) {
     static volatile LONG shown;

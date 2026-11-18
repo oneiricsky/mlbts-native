@@ -185,7 +185,7 @@ static void svc_body(Cpu *c, uint32_t imm, uint64_t pc) {
         x[1] = 0;
         return;
     }
-    case 0x13: case 0x14: {   // Map/UnmapSharedMemory(w0 handle, x1 address, x2 size[, w3 permission]) (mlbts-native)
+    case 0x13: case 0x14: {   // Map/UnmapSharedMemory(w0 handle, x1 address, x2 size[, w3 permission]) (fastball)
         RtSharedMem *m = kern_handle_get((uint32_t)x[0], KERN_SHMEM);
         if (!m) {
             x[0] = KERN_R_BAD_HANDLE;

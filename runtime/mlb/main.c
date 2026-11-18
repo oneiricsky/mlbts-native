@@ -337,7 +337,7 @@ static void crash_handler(const PlatCrash *x) {
     plat_exit(71);
 }
 
-// ---- command line. mlbts-native: every setting is also a flag, so a launcher (RecompLauncher, a shortcut, a script)
+// ---- command line. fastball: every setting is also a flag, so a launcher (RecompLauncher, a shortcut, a script)
 // can start the game the way it wants without writing mlb.cfg: --fullscreen, --fps-limit 120, --set KEY=VALUE. A flag
 // is for this run: it beats mlb.cfg and the environment, and is not written into mlb.cfg (the in-game menu still saves
 // what the player changes there). A self-restart (plat_restart) starts with the same command line.
@@ -388,7 +388,7 @@ static void cli_say(int error, const char *text, int with_settings) {
     char box[2400];
     snprintf(box, sizeof box, "%s%s", text, with_settings ? "\nmlb.exe --help in a console window lists every "
              "setting." : "");
-    plat_message(error ? "MLB The Show 26: wrong command line" : "MLB The Show 26", box);
+    plat_message(error ? "Fastball: wrong command line" : "Fastball", box);
 }
 
 static int usage_error(const char *fmt, const char *arg) {
@@ -439,7 +439,7 @@ static const char *beside_exe(const char *p) {
 
 int main(int argc, char **argv) {
     mem_init();   // first: claim the guest address space before anything else can land there
-    rt_log("version: mlbts-native %s, game MLB The Show 26 %s", rt_port_version, rt_game_build);
+    rt_log("version: Fastball %s, game MLB The Show 26 %s", rt_port_version, rt_game_build);
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
     plat_crash_hook(crash_handler);
@@ -455,13 +455,13 @@ int main(int argc, char **argv) {
             *path = argv[i];
         } else if (!strcmp(a, "--help") || !strcmp(a, "-h") || !strcmp(a, "/?")) {
             char text[sizeof USAGE + 200];
-            snprintf(text, sizeof text, "MLB The Show 26 for PC (mlbts-native %s), game version %s\n\n%s", rt_port_version,
+            snprintf(text, sizeof text, "Fastball %s: MLB The Show 26 for PC, game version %s\n\n%s", rt_port_version,
                      rt_game_build, USAGE);
             cli_say(0, text, 1);
             return 0;
         } else if (!strcmp(a, "--version")) {
             char text[200];
-            snprintf(text, sizeof text, "mlbts-native %s, MLB The Show 26 %s\n", rt_port_version, rt_game_build);
+            snprintf(text, sizeof text, "Fastball %s, MLB The Show 26 %s\n", rt_port_version, rt_game_build);
             cli_say(0, text, 0);
             return 0;
         } else if (!strcmp(a, "--boot")) {
@@ -500,7 +500,7 @@ int main(int argc, char **argv) {
             return usage_error("Unknown argument %s.", a);
         }
     }
-    // mlbts-native: no tracing unless MLB_TRACE asks for it. Releases had perf,sched on for every player (from the
+    // fastball: no tracing unless MLB_TRACE asks for it. Releases had perf,sched on for every player (from the
     // batting frame-rate work): counting and timing in the replay and the scheduler, and lines every second in mlb.log.
     // The developer's own mlb.cfg sets MLB_TRACE.
     // REPLAY_ASYNC and FRAME_QUEUE are on by default: their rows in cfg.c say why (the settings menu's reset needs the
@@ -526,7 +526,7 @@ int main(int argc, char **argv) {
     }
     log_open();
     if (probe) return probe_fs();
-    // mlbts-native: the sampling profiler only when asked (it suspends every thread to sample it). MLB_SAMPLER=on: every
+    // fastball: the sampling profiler only when asked (it suspends every thread to sample it). MLB_SAMPLER=on: every
     // thread's call chains for each frame of 19 ms or more (one every 3 s at most) in <profile>/prof.txt.f<frame>;
     // MLB_SAMPLER=<path>: a profile there; off or unset: none.
     // The path goes to SAMPLER_OUT (prof_win.c), which an MLB_SAMPLER in the environment cannot shadow.

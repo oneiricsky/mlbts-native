@@ -719,7 +719,7 @@ void rec_polygon_mode(PFN_vkCmdSetPolygonModeEXT fn, VkCommandBuffer cb, VkPolyg
 }
 
 typedef struct { uint32_t id; int end; } A_PassMark;
-// mlbts-native: a debug label (under RenderDoc, vk_exec_draw.c draw_label), the text after the packet header
+// fastball: a debug label (under RenderDoc, vk_exec_draw.c draw_label), the text after the packet header
 void rec_label(VkCommandBuffer cb, const char *text) {
     if (!OWNED(cb)) { vk_debug_label_cmd(cb, text); return; }
     size_t n = strlen(text) + 1;

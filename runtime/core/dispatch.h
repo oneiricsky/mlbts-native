@@ -28,7 +28,7 @@ int rt_linked_modules(RtModule *out, int max);
 // Register a host function at a guest address outside every module (HLE entry points). Allowed only before
 // rt_dispatch_init; the registry is fixed afterwards.
 void rt_register_host(uint64_t addr, GuestFn fn);
-// mlbts-native: one function for a window of host functions 16 bytes apart (hostfn.c), found without the hash table.
+// fastball: one function for a window of host functions 16 bytes apart (hostfn.c), found without the hash table.
 void rt_register_host_range(uint64_t base, uint64_t size, GuestFn fn);
 
 // Build the table from the modules (kept by pointer; they must outlive the process). Call it once, before any guest

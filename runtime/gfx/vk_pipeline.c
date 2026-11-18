@@ -960,7 +960,7 @@ static int add_stage(Bindings *B, const GfxShader *s, uint32_t off) {
 
 // The first binding a module's resource variables use that the binding list b[0..n) lacks (module bindings >= 1 moved
 // by off), or -1. A reflection that misses a resource would otherwise hand the driver an invalid layout.
-// mlbts-native: only variables some instruction uses count. Ryujinx declares a constant buffer as soon as its binding is
+// fastball: only variables some instruction uses count. Ryujinx declares a constant buffer as soon as its binding is
 // asked for, and its texture-array pass asks for c2 (the handle bank) and then rewrites the reads, so some of MLB's
 // fragment shaders declare an unused c2 at binding 1 that the reflection rightly leaves out; Vulkan needs only
 // statically used resources in the layout. Those pipelines were refused and every draw with them skipped.

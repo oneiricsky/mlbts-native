@@ -27,9 +27,12 @@ from pathlib import Path
 
 # What a release folder holds (tools/make_release.py); an update replaces these and nothing else. UPDATE_DIR: where
 # the launcher unpacks a new release before it swaps it in (update.py).
-RELEASE_ENTRIES = ('MLBTS-Setup.exe', 'python', 'llvm', 'runtime', 'bin', 'recomp', 'tools', 'installer', 'licenses',
+RELEASE_ENTRIES = ('Fastball.exe', 'python', 'llvm', 'runtime', 'bin', 'recomp', 'tools', 'installer', 'licenses',
                    'LICENSE', 'THIRD_PARTY_NOTICES.md', 'README.txt', 'VERSION', 'recomplauncher.json')
 UPDATE_DIR = '.update'
+# What older releases held and this one no longer does: an in-place update removes them (update.apply), and the window
+# removes them from a folder an older updater unpacked (gui.py). MLBTS-Setup.exe: the launcher up to 0.1.5.
+LEGACY_ENTRIES = ('MLBTS-Setup.exe',)
 
 # The game versions the port builds, newest first: each has tools/data/expected-<version>.json (ExeFS hashes, RomFS
 # size). A setup builds the version of the update NSP it is given (steps.Context.pick_version).

@@ -132,7 +132,7 @@ void rt_boot(void) {
     ldr_load(rt_config()->exefs);
     packages_loaded();
     rt_patches_init();
-    res_apply();   // mlbts-native, resolution.c: MLB_RENDER_SCALE rewrites the scene size table before the game reads it
+    res_apply();   // fastball, resolution.c: MLB_RENDER_SCALE rewrites the scene size table before the game reads it
     cb_addr[0] = hostfn_register("<rtld loader_ready>", cb_loader_ready);
     cb_addr[1] = hostfn_register("<rtld module_inits>", cb_module_inits);
     cb_addr[2] = hostfn_register("<rtld module_finis>", cb_module_finis);
