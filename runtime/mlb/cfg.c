@@ -117,6 +117,7 @@ static const CfgMeta metas[] = {
     {"PASS_CRUMBS", "", "0|1", RESTART},   // vk_crumbs.c pass marks; unset: VK_AMD_buffer_marker only
     {"STATEDUMP", "0", "0|1", RESTART},    // statedump.c: F8 writes main's data and bss to the profile folder
     {"CAPTURE_KEY", "0", "0|1", RESTART},  // gfx_stubs.c: F12 captures a frame (always F9 under RenderDoc)
+    {"HEAP_CENSUS", "0", "0|1", RESTART},  // heap.c: with TRACE=perf, the malloc heap's live blocks by kind (#17)
     {"INPUT_RECORD", "", NULL, RESTART},
 };
 

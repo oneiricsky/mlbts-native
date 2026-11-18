@@ -32,6 +32,7 @@ void kern_backtrace(const Cpu *c);
 enum { KERN_WAIT_NONE, KERN_WAIT_LOCK, KERN_WAIT_CONDVAR, KERN_WAIT_ADDRESS, KERN_WAIT_SYNC };
 #define KERN_THREAD_EXITED 100
 int kern_thread_state(uint32_t handle);               // KERN_WAIT_*, KERN_THREAD_EXITED, or -1 for a bad handle
+int kern_threads_with_stack_in(uint64_t lo, uint64_t hi, char *out, int n);   // threads with a stack top in (lo, hi]
 void kern_core_stats(int *held_now, int *held_max);   // virtual-core holders now and the most ever at once
 void kern_core_stats_reset(void);
 extern volatile int kern_test_cv_old_order;           // WaitProcessWideKeyAtomic: release the lock before setting

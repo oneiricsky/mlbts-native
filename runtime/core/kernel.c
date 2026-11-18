@@ -1592,6 +1592,24 @@ int kern_thread_state(uint32_t h) {
     return r;
 }
 
+// fastball (diagnostic, MLB heap census): the threads whose stack top lies in (lo, hi], described into out.
+int kern_threads_with_stack_in(uint64_t lo, uint64_t hi, char *out, int n) {
+    int found = 0, len = 0;
+    out[0] = 0;
+    lock();
+    for (RtThread *t = g_all; t; t = t->all) {
+        if (t->stack_top <= lo || t->stack_top > hi) continue;
+        char d[96];
+        len += snprintf(out + len, len < n ? (size_t)(n - len) : 0, "%sthread %#x entry %s %s wait %d", found ? "; " : "",
+                        t->handle, ldr_describe(t->entry, d, sizeof d),
+                        t->exited ? "exited" : t->started ? "running" : "not started", t->wkind);
+        found++;
+        if (len >= n) break;
+    }
+    unlock();
+    return found;
+}
+
 // CloseHandle: an event goes with its last end; a thread object once it has also exited.
 static uint32_t handle_close(uint32_t h) {
     unsigned i = h - 0x1000;

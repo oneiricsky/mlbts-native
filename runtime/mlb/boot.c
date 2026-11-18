@@ -136,6 +136,8 @@ void rt_boot(void) {
     cb_addr[0] = hostfn_register("<rtld loader_ready>", cb_loader_ready);
     cb_addr[1] = hostfn_register("<rtld module_inits>", cb_module_inits);
     cb_addr[2] = hostfn_register("<rtld module_finis>", cb_module_finis);
+    void mlb_heap_init(void);
+    mlb_heap_init();   // heap.c: the census callback (MLB_TRACE=perf, MLB_HEAP_CENSUS=1)
     hostfn_seal();
     rt_log("boot: guest starts %llu ms after process start",
            (unsigned long long)(plat_process_uptime_ns() / 1000000));

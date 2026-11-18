@@ -47,6 +47,7 @@ typedef struct {
     uint64_t *plt_slot, *plt_stub, nplt;   // PLT stubs sorted by GOT slot (ldr_plt_stub), built on first use
     // statistics
     uint64_t kinds[K_COUNT], sym_import, sym_own;
+    uint32_t own_elsewhere;   // own symbols bound to another module's definition (resolve)
     uint32_t imports, import_to[MOD_COUNT], weak_unresolved, strong_unresolved;
     uint32_t init_off;
 } Mod;
@@ -319,13 +320,24 @@ static void mark_used(int observers, const char *name) {
         if (!strcmp(hostfn_table_name(observers, i), name)) (observers ? obs_used : ovr_used)[i] = 1;
 }
 
-// Order (MNG loader.c:216-224): observer (JUMP_SLOT only), override by name, own definition, other modules in load
-// order, weak -> 0, strong -> named fatal stub. Overrides also replace a module's own symbols.
+// Order (MNG loader.c:216-224): observer (JUMP_SLOT only), override by name, guest definition, weak -> 0, strong ->
+// named fatal stub. Overrides also replace a module's own symbols.
+// fastball: the guest definition is found as Horizon's rtld finds it (ModuleObject::TryResolveSymbol): a module's own
+// definition first only for a symbol of hidden or protected visibility; any other, even one the module defines
+// itself, is the first definition in load order (main, subsdk0, sdk). MNG took the own definition first. MLB's sdk
+// defines weak operator new and delete, which main also defines (with libc++ stream classes and Opus tables: 1.0.20's
+// sdk binds 103 of its own symbols to main's this way, the "loaded" line), so its libc++
+// allocated through sdk's operator new (malloc) while the game's inline code freed through main's operator delete
+// (the game's pools), which leaves malloc blocks alone: every match start leaked the 2.1 MiB JSON text a std::string
+// held (main+0x569f50 reads a file into one; 1.0.20 heap census), and after 5-6 hours the 136 MiB malloc keeps beside
+// the game's pools ran out and the SDK aborted in operator new (issue #17).
 static Res resolve(Mod *m, uint32_t si, int jump) {
     Res *cache = jump ? &m->res_jump[si] : &m->res_plain[si];
     if (cache->kind != RES_UNSET) return *cache;
     const char *name = sym_name(m, si);
-    uint64_t guest = sym_defined(m, si) ? m->pub.base + m->syms[si].value : find_symbol(name, NULL);
+    uint64_t guest = sym_defined(m, si) && (m->syms[si].other & 3) ? m->pub.base + m->syms[si].value
+                                                                     : find_symbol(name, NULL);
+    if (sym_defined(m, si) && guest != m->pub.base + m->syms[si].value) m->own_elsewhere++;
     GuestFn f;
     Res r;
     if (jump && (f = hostfn_observer(name))) {
@@ -460,9 +472,9 @@ void ldr_load(const char *exefs_dir) {
     for (int i = 0; i < nmods; i++) seal(&mods[i]);
     for (int i = 0; i < nmods; i++) {
         const Mod *m = &mods[i];
-        rt_log("loaded %-8s at %#llx size %#llx: %llu relocations, %u imports", m->pub.name,
-               (unsigned long long)m->pub.base, (unsigned long long)m->pub.size,
-               (unsigned long long)(m->nrela + m->njmprel + m->relr_count), m->imports);
+        rt_log("loaded %-8s at %#llx size %#llx: %llu relocations, %u imports; %u own symbols bound to an earlier "
+               "module's definition", m->pub.name, (unsigned long long)m->pub.base, (unsigned long long)m->pub.size,
+               (unsigned long long)(m->nrela + m->njmprel + m->relr_count), m->imports, m->own_elsewhere);
     }
 }
 
