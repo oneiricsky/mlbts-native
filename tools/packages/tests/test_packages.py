@@ -10,6 +10,7 @@ import struct
 import sys
 import tempfile
 import threading
+import time
 import unittest
 from pathlib import Path
 
@@ -272,6 +273,23 @@ class Packages(unittest.TestCase):
         self.game.close()
         s = self.game.log_in()                                                 # the game logs in again from its title
         self.assertEqual(self.game.call(s, 1, 'inventory.view_packs', {'view_mode': 'RTTS'}).count('<item '), 3)
+
+    def test_stays_connected_on_the_post_game_screen_after_packages(self):
+        # The end of an RTTS game asks about RTTS too; a hang-up there leaves the game stuck on its progress screen
+        services.BACK_ON_THE_MENU = 0.05
+        services.AFTER_POST_GAME = 0.5
+        s = self.game.log_in()
+        ask = {'content_update_type': 'RTTS'}
+        self.game.call(s, 1, 'content_update.latest', ask)                     # the login asks once
+        self.game.call(s, 2, 'inventory.view_packs', {'care_packages_only': True, 'view_mode': 'RTTS'})   # Packages
+        self.game.call(s, 3, 'mlb_game.view_post_game', {'client_mission_ids': ''})    # a game ends
+        self.game.call(s, 4, 'content_update.latest', ask)                     # the progress screen asks
+        time.sleep(0.2)
+        self.assertEqual(self.game.call(s, 5, 'inventory.view_packs', {'view_mode': 'RTTS'}).count('<item '), 3)
+        time.sleep(0.5)
+        self.game.call(s, 6, 'content_update.latest', ask)                     # later, back on the main menu
+        with self.assertRaisesRegex(AssertionError, 'closed the connection'):
+            self.game.exchange(s, None, rpc.MSG_SERVICE_RESPONSE)
 
     def test_the_package_counter_is_given_back_after_a_login(self):
         s = self.game.log_in()

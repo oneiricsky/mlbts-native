@@ -65,7 +65,9 @@ Only Road to the Show's Packages are served. The game believes it is online, tho
   there: packs only come from playing.
 
 If the server stops while the game sits on the main menu, the game shows the same message and goes back to its title
-screen, offline. A server stopping in the middle of a mode has not been tried.
+screen, offline. A connection lost in the middle of Road to the Show is not recovered: on the progress screen after a
+game it shows "lost connection to Road to the Show online services" and stays there. The end of every game asks the
+same question as leaving the mode, so the server tells the two apart by the post-game request just before it.
 
 This cannot be used to play online or to reach the real servers. No game data, key or certificate of the game is in
 this folder. The protocol code was written from the game's behaviour on the player's own files; addresses in comments
@@ -99,4 +101,4 @@ Standard library only: TLS and XML from Python, and the certificate is made with
 | `codec.py`, `server_msgs.py`, `rpc.py` | the game's messages: framing, the login, requests and responses |
 | `login.py`, `handlers.py`, `services.py`, `profile_state.py` | the answers |
 | `core.py` | the log and the handler registry |
-| `tests/` | 16 tests, no game needed |
+| `tests/` | 17 tests, no game needed |

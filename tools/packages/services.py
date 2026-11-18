@@ -9,6 +9,7 @@ state (packs owned, items they gave, which are new) is in state.json (server.Sta
 import random
 import re
 import threading
+import time
 import xml.etree.ElementTree as ET
 from xml.sax.saxutils import quoteattr
 
@@ -244,7 +245,13 @@ def mission_trigger(conn, p):
     return ''
 
 
-@service('mlb_game.view_post_game', 'mlb_game.view_post_game2', 'inventory.check_for_rewards')
+@service('mlb_game.view_post_game', 'mlb_game.view_post_game2')
+def view_post_game(conn, p):
+    conn.ctx['post_game_at'] = time.monotonic()     # the post-game screen asks every content type next (content_latest)
+    return post_game(conn, p)
+
+
+@service('inventory.check_for_rewards')
 def post_game(conn, p):
     ids = _mission_ids(p.get('client_mission_ids'))
     if ids:
@@ -286,15 +293,25 @@ def check_daily(conn, p):
 # Back on the main menu that return leads nowhere: the game stays on an empty screen. So when the game is back on the
 # main menu after Packages was opened, the server hangs up. A connection lost there is something the game handles
 # well: one message, the title screen, and a new login from there.
+#
+# The end of every Road to the Show game asks about every content type too, RTTS included, within a second of
+# mlb_game.view_post_game, while the progress screen (PostGameProgression) is up. A connection lost there is NOT
+# handled: the game shows "lost connection to Road to the Show online services" and stays on the progress screen for
+# good (seen on 1.0.20, second game of a session after Packages was opened). So no hang-up just after a post game.
 BACK_ON_THE_MENU = 2.0      # seconds after the question, so the menu is up when the connection goes
+AFTER_POST_GAME = 15.0      # seconds after mlb_game.view_post_game during which an RTTS question is the post game's
 
 
 @service('content_update.latest')
 def content_latest(conn, p):
     kind = p.get('content_update_type')
     asked = conn.ctx.setdefault('content_asked', set())
-    if kind == 'RTTS' and kind in asked and conn.ctx.pop('packages_opened', False):
-        threading.Timer(BACK_ON_THE_MENU, conn.hang_up, ['back on the main menu after Packages was opened']).start()
+    if kind == 'RTTS' and kind in asked and conn.ctx.get('packages_opened'):
+        if time.monotonic() - conn.ctx.get('post_game_at', float('-inf')) < AFTER_POST_GAME:
+            log(f'{conn.tag()} RTTS content asked by the post-game screen: staying connected')
+        else:
+            del conn.ctx['packages_opened']
+            threading.Timer(BACK_ON_THE_MENU, conn.hang_up, ['back on the main menu after Packages was opened']).start()
     asked.add(kind)
     return ''
 
