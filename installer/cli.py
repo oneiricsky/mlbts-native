@@ -6,12 +6,16 @@ failure, or update with a newer release) only --dest is needed, unless the extra
 events on stdout (events.py). Exit code: 0 done, 1 failed, 2 bad command line, 3 cancelled (Ctrl+C or Ctrl+Break).
 
 --launcher: run by a launcher without a window (RecompLauncher, recomplauncher.json `prepare`; progress.py): prints
-`progress <0..1> <text>` lines instead of the events (events.ProgressLines), ends the tools when the launcher kills
-the setup (_arm_lifeline),
-and lets the install folder be inside the setup folder, which the launcher keeps.
+`progress <0..1> <text>` lines instead of the events (events.ProgressLines) and ends the tools when the launcher kills
+the setup (_arm_lifeline).
+
+The install folder may be inside the setup folder (the window's default is MLBTS\\ there: portable), only not the setup
+folder itself or one of its own folders (layout.reserved). --temp moves the build's temporary files (about 2 GB, gone
+after the build) out of <setup>/temp. Every option is a flag: --help lists them.
 """
 import argparse
 import ctypes
+import dataclasses
 import os
 import signal
 import sys
@@ -87,8 +91,9 @@ def main(argv=None):
     ap.add_argument('--keys', type=Path, help='prod.keys')
     ap.add_argument('--titlekeys', type=Path, help='title.keys (only when the NSPs lack their tickets)')
     ap.add_argument('--root', type=Path, help='the setup folder or a repository (default: the folder above installer/)')
+    ap.add_argument('--temp', type=Path, help="the build's temporary folder (default: temp in the setup folder)")
     ap.add_argument('--dlss', action='store_true', help="download NVIDIA's nvngx_dlss.dll next to the game")
-    ap.add_argument('--shortcut', action='store_true', help='desktop and Start menu shortcuts')
+    ap.add_argument('--shortcut', action='store_true', help='desktop and Start menu shortcuts (off by default)')
     ap.add_argument('--import-save', action='store_true', help="copy the game's Ryujinx save (mlb.exe --import-save)")
     ap.add_argument('--equipment', action='store_true',
                     help='add every Road to the Show equipment item, offline (tools/equipment)')
@@ -100,7 +105,7 @@ def main(argv=None):
                     help='take the packages out again; this unlocks all equipment items in every Road to the Show '
                          'save')
     ap.add_argument('--launcher', action='store_true',
-                    help='run by a launcher: progress lines instead of JSON events, install folder may be inside the setup')
+                    help='run by a launcher: progress lines instead of JSON events')
     args = ap.parse_args(argv)
     out = None
     if args.launcher:
@@ -115,8 +120,10 @@ def main(argv=None):
         if hasattr(signal, name):
             signal.signal(getattr(signal, name), cancel)
     layout = layouts.find(args.root)
+    if args.temp:
+        layout = dataclasses.replace(layout, temp=args.temp.resolve())
     dest = args.dest.resolve()
-    log = layout.temp.parent / 'logs' / time.strftime('setup-%Y%m%d-%H%M%S.log')   # release: logs/ of the setup folder
+    log = layout.logs / time.strftime('setup-%Y%m%d-%H%M%S.log')   # release: logs/ of the setup folder
     rep = Reporter(out=out, log_path=log)
     t0 = time.monotonic()
     ctx = Context(layout, dest, rep, args)

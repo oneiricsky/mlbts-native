@@ -6,20 +6,35 @@ One window, three screens:
 - the progress screen: the steps of the command-line setup (installer/cli.py, run as a child process; its JSON events
   drive the screen), a progress bar, Cancel;
 - the launcher: Play, and Update when this setup is newer than the install, Import Ryujinx save, Open folder. It also
-  asks GitHub for a newer release (update.py) and offers "Download and update": the new setup is downloaded, unpacked
-  beside this one and started with --update <install folder>, which goes straight to the rebuild.
+  asks GitHub for a newer release (update.py) and offers "Download and update": the new release is downloaded and
+  swapped in over this one in its own folder, then started with --update <install folder>, which goes straight to the
+  rebuild.
 
-The last install folder and the file paths are remembered in %LOCALAPPDATA%\\MLBTS-Native\\setup.json (paths only,
-never the keys' contents), so starting the setup again opens the launcher on that folder.
+One executable: once the game is built, MLBTS-Setup.exe starts it at once, without the window (straight_to_game). The
+window opens instead when there is something to do (no install yet, an install to finish or rebuild, a newer release
+on GitHub: asked at most once a day, in 3 s), with --menu, or with Shift held while it starts.
 
---selftest builds every screen and closes (tests; no network).
+Portable: the game goes into MLBTS\\ inside the setup folder by default (the folder RecompLauncher uses too), and the
+last install folder and the file paths are remembered in launcher.json in the setup folder (paths only, never the keys'
+contents). Setups up to 0.1.5 kept that in %LOCALAPPDATA%\\MLBTS-Native\\setup.json: it is read once and removed.
+
+Command line (MLBTS-Setup.exe passes its arguments on):
+  --menu            open the window even when the game is ready
+  --dest DIR        the install to play or manage (default: the last one)
+  --update DIR      rebuild that install with this setup (the updater starts the new setup with it)
+  --selftest        build every screen and close (tests; no network)
+Every other argument goes to mlb.exe when the game starts: MLBTS-Setup.exe --fullscreen --fps-limit 120 (mlb.exe
+--help lists them). The setup without a window is python\\python.exe -m installer (installer/cli.py).
 """
+import ctypes
 import json
 import os
 import queue
+import shutil
 import subprocess
 import sys
 import threading
+import time
 import tkinter as tk
 from pathlib import Path
 from tkinter import filedialog, messagebox, ttk
@@ -31,8 +46,25 @@ from .steps import STATE
 
 ROOT = Path(__file__).resolve().parent.parent
 LAYOUT = layouts.find(ROOT)
-SETTINGS = layouts.settings_dir() / 'setup.json'
+SETTINGS = LAYOUT.state
 NO_WINDOW = subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0
+GIB = 1 << 30
+UPDATE_EVERY = 20 * 3600   # straight_to_game asks GitHub for a newer release at most this often (seconds)
+# The window's own arguments; every other one is the game's (mlb.exe)
+OWN_FLAGS, OWN_OPTIONS = ('--menu', '--selftest'), ('--update', '--dest')
+
+
+def game_args(argv=None):
+    """The arguments for mlb.exe: what the window was started with, without its own."""
+    argv, out, i = list(sys.argv[1:] if argv is None else argv), [], 0
+    while i < len(argv):
+        if argv[i] in OWN_OPTIONS:
+            i += 2
+            continue
+        if argv[i] not in OWN_FLAGS:
+            out.append(argv[i])
+        i += 1
+    return out
 # The command line, from any working directory and with -I: runpy finds the package beside this one
 RUN_CLI = ("import sys, runpy; sys.path.insert(0, sys.argv.pop(1)); sys.argv[0] = 'installer'; "
            "runpy.run_module('installer', run_name='__main__', alter_sys=True)")
@@ -40,12 +72,29 @@ RUN_CLI = ("import sys, runpy; sys.path.insert(0, sys.argv.pop(1)); sys.argv[0] 
 ACCENT, HEADER_BG, HEADER_FG, OK, BAD, MUTED = '#0b4f9c', '#0d2340', '#ffffff', '#1b7f3b', '#b3261e', '#5f6b7a'
 
 
-def load_settings():
+def read_json(path):
     try:
-        data = json.loads(SETTINGS.read_text(encoding='utf-8'))
+        data = json.loads(Path(path).read_text(encoding='utf-8'))
         return data if isinstance(data, dict) else {}
     except (OSError, ValueError):
         return {}
+
+
+def load_settings():
+    if SETTINGS.is_file() or LAYOUT.dev or '--selftest' in sys.argv:
+        return read_json(SETTINGS)
+    # From a setup up to 0.1.5: its memory moves into this folder, and nothing stays in %LOCALAPPDATA%
+    old = layouts.legacy_settings()
+    data = {k: v for k, v in read_json(old).items() if k in ('base', 'update', 'keys', 'dest')}
+    if data:
+        save_settings(data)
+        if SETTINGS.is_file():
+            try:
+                old.unlink()
+                old.parent.rmdir()   # only when empty: an older updater's setups\ folder stays
+            except OSError:
+                pass
+    return data
 
 
 def save_settings(data):
@@ -69,15 +118,61 @@ def install_state(dest):
         return None
 
 
-def inside_setup(dest):
-    """dest is the setup folder or inside it (a release only: the repository's work/ is fine for tests)."""
-    if LAYOUT.dev:
-        return False
+def default_dest():
+    """MLBTS inside the setup folder (portable), unless its disk lacks room for the game: then a folder on the disk
+    with the most free space."""
+    d = LAYOUT.default_dest()
+    if LAYOUT.dev or (d / 'game' / 'romfs.complete').is_file() or detect.free_bytes(ROOT) >= 39 * GIB:
+        return d
+    return detect.default_dest()
+
+
+def shift_held():
     try:
-        d = Path(dest).resolve()
-    except OSError:
+        return bool(os.name == 'nt' and ctypes.windll.user32.GetAsyncKeyState(0x10) & 0x8000)   # VK_SHIFT
+    except (AttributeError, OSError):
         return False
-    return d == ROOT or ROOT in d.parents
+
+
+def start_game(dest, args=()):
+    """mlb.exe of dest, with the game's arguments; False (and why) when it could not start."""
+    try:
+        subprocess.Popen([str(Path(dest) / 'mlb.exe'), *args], cwd=dest,
+                         creationflags=subprocess.DETACHED_PROCESS | NO_WINDOW, close_fds=True)
+        return True, None
+    except OSError as e:
+        return False, e
+
+
+def newer_release(settings):
+    """GitHub's latest release when it is newer than this setup, at most one request every UPDATE_EVERY seconds (the
+    answer is kept in launcher.json); None offline or when there is none."""
+    last = settings.get('update_check') or {}
+    if time.time() - float(last.get('time') or 0) >= UPDATE_EVERY:
+        try:
+            last = {'time': time.time(), 'info': update.latest(timeout=3)}
+        except Exception:   # noqa: BLE001 (offline, GitHub down, a rate limit: the game starts anyway)
+            last = {'time': time.time(), 'info': last.get('info')}
+        settings['update_check'] = last
+        save_settings(settings)
+    info = last.get('info')
+    return info if info and update.newer(info.get('version'), LAYOUT.release) else None
+
+
+def straight_to_game():
+    """The game starts without the window when its install is ready and nothing waits for the player. True when it
+    started."""
+    if any(a in sys.argv for a in ('--menu', '--selftest', '--update')) or shift_held():
+        return False
+    settings = load_settings()
+    dest = arg_after('--dest') or settings.get('dest')
+    state = install_state(dest) if dest else None
+    if not state:
+        return False
+    installed = state.get('release')
+    if setup_newer_than(installed) or update.newer(installed, LAYOUT.release) or newer_release(settings):
+        return False   # a rebuild, an older setup, an update on GitHub: the window says so
+    return start_game(dest, game_args())[0]
 
 
 def arg_after(flag):
@@ -131,7 +226,7 @@ class App:
         self.selftest = selftest
         self.download_cancel = None   # a threading.Event while an update downloads
         self.update_checked = False
-        dest = self.settings.get('dest')
+        dest = arg_after('--dest') or self.settings.get('dest')
         update_dest = arg_after('--update')   # started by the previous setup's updater
         if update_dest and install_state(update_dest):
             dest = update_dest
@@ -141,6 +236,12 @@ class App:
                 self.run_setup(['--dest', str(dest)], Path(dest))
         else:
             self.show_form()
+        if not selftest and not LAYOUT.dev and (ROOT / layouts.UPDATE_DIR).exists():
+            # what the last in-place update left (update.py): the old files, the unpacked release; its Python may
+            # still be ending, so a moment later, and what is still held stays for the next start
+            cleanup = threading.Timer(5, shutil.rmtree, (ROOT / layouts.UPDATE_DIR,), {'ignore_errors': True})
+            cleanup.daemon = True   # never keeps the process after the window
+            cleanup.start()
         self.root.after(100, self.poll)
 
     # ---- look -------------------------------------------------------------------------------------------------------
@@ -203,7 +304,8 @@ class App:
             self.notes[key] = note
             self.vars[key].trace_add('write', lambda *_a, k=key: self.validate(k))
         ttk.Label(b, text='Options', style='Section.TLabel').pack(anchor='w', pady=(14, 4))
-        self.opt = {'shortcut': tk.BooleanVar(value=True), 'dlss': tk.BooleanVar(value=False),
+        # shortcuts off by default: the port lives in its folder, and deleting the folder removes all of it
+        self.opt = {'shortcut': tk.BooleanVar(value=False), 'dlss': tk.BooleanVar(value=False),
                     'import_save': tk.BooleanVar(value=False), 'equipment': tk.BooleanVar(value=False),
                     'packages': tk.BooleanVar(value=False)}
         ttk.Checkbutton(b, text='Shortcuts on the desktop and in the Start menu', variable=self.opt['shortcut']).pack(
@@ -238,7 +340,7 @@ class App:
         found = detect.find_game_files(extra)
         keys = detect.find_keys([ROOT, ROOT.parent] + [p.parent for p in found.values() if p])
         info = {'found': found, 'keys': keys, 'rtx': detect.nvidia_rtx(), 'save': detect.ryujinx_save(),
-                'dest': detect.default_dest()}
+                'dest': default_dest()}
         self.events.put(('detected', info))
 
     def detected(self, info):
@@ -271,9 +373,8 @@ class App:
             if not v:
                 note.configure(text='', style='Muted.TLabel')
                 return
-            if inside_setup(v):
-                note.configure(text='Pick a folder outside the setup folder (it can be deleted after the install)',
-                               style='Bad.TLabel')
+            if LAYOUT.reserved(v):
+                note.configure(text=f'Pick a folder of its own, such as {LAYOUT.default_dest()}', style='Bad.TLabel')
                 return
             free = detect.free_bytes(v)
             done = (Path(v) / 'game' / 'romfs.complete').is_file()
@@ -330,8 +431,8 @@ class App:
 
     def start_install(self):
         v = {k: self.vars[k].get().strip().strip('"') for k in self.vars}
-        if not v['dest'] or inside_setup(v['dest']):
-            self.form_error.configure(text='Pick an install folder outside the setup folder.')
+        if not v['dest'] or LAYOUT.reserved(v['dest']):
+            self.form_error.configure(text=f'Pick an install folder of its own, such as {LAYOUT.default_dest()}.')
             return
         resume = (Path(v['dest']) / STATE).is_file()
         if not resume:
@@ -539,8 +640,9 @@ class App:
             ttk.Label(extra, text='adding packages will lock all equipment items until you earn them from packs',
                       style='Muted.TLabel').pack(side='left', padx=8)
         tips = ('In the game: F1 opens the settings menu, F11 switches full screen. Controllers: Xbox and '
-                'PlayStation pads work; the keyboard works too.\nThis window checks for new versions of the port '
-                'when it opens; an update keeps your game files, saves and settings.')
+                'PlayStation pads work; the keyboard works too.\nFrom now on MLBTS-Setup.exe starts the game '
+                'straight away; hold Shift while starting it (or pass --menu) to open this window. It checks for new '
+                'versions of the port once a day; an update keeps your game files, saves and settings.')
         ttk.Label(b, text=tips, wraplength=700, style='Muted.TLabel', justify='left').pack(side='bottom', anchor='w')
         self.settings['dest'] = str(dest)
         save_settings(self.settings)
@@ -573,8 +675,8 @@ class App:
         ttk.Button(row, text='Download and update', command=lambda: self.start_download(info)).pack(side='left')
         ttk.Button(row, text="What's new", command=lambda: os.startfile(info['page'])).pack(side='left', padx=8)
         size = f'about {info["size"] >> 20} MB, ' if info.get('size') else ''
-        ttk.Label(box, text=f'Downloads the new setup ({size}from GitHub) next to this one, then rebuilds the game '
-                            'with it in a few minutes.', style='Muted.TLabel', wraplength=700).pack(anchor='w')
+        ttk.Label(box, text=f'Downloads the new version ({size}from GitHub) into this folder, then rebuilds the '
+                            'game with it in a few minutes.', style='Muted.TLabel', wraplength=700).pack(anchor='w')
 
     def start_download(self, info):
         dest = self.launcher_dest
@@ -589,7 +691,7 @@ class App:
         foot.pack(side='bottom', fill='x')
         ttk.Button(foot, text='Cancel', command=lambda: self.download_cancel and self.download_cancel.set()).pack(
             side='right')
-        ttk.Label(foot, text='After the download, the new setup opens and rebuilds the game.',
+        ttk.Label(foot, text='After the download, the new version replaces this one and rebuilds the game.',
                   style='Muted.TLabel').pack(side='left')
         self.download_cancel = cancel = threading.Event()
 
@@ -614,9 +716,11 @@ class App:
             return
         self.download_cancel = None
         if kind == 'done':
-            exe = Path(a) / 'MLBTS-Setup.exe'
             try:
-                subprocess.Popen([str(exe), '--update', str(b)], cwd=a, close_fds=True)
+                if LAYOUT.dev:   # never over a repository: the new setup runs from where it was unpacked
+                    subprocess.Popen([str(Path(a) / 'MLBTS-Setup.exe'), '--update', str(b)], cwd=a, close_fds=True)
+                else:   # in place: its own Python swaps it in once this window is gone, then starts it (update.py)
+                    update.start_apply(a, ROOT, b)
             except OSError as e:
                 messagebox.showerror('Update', f'The new setup could not start: {e}\n\nIt is in {a}.',
                                      parent=self.root)
@@ -630,11 +734,8 @@ class App:
         self.show_launcher(b)
 
     def play(self, dest):
-        exe = Path(dest) / 'mlb.exe'
-        try:
-            subprocess.Popen([str(exe)], cwd=dest, creationflags=subprocess.DETACHED_PROCESS | NO_WINDOW,
-                             close_fds=True)
-        except OSError as e:
+        ok, e = start_game(dest, game_args())
+        if not ok:
             messagebox.showerror('Play', f'mlb.exe could not start: {e}', parent=self.root)
             return
         self.root.after(500, self.root.destroy)
@@ -696,6 +797,8 @@ class App:
 
 
 def main():
+    if straight_to_game():
+        return
     App(selftest='--selftest' in sys.argv).run()
 
 

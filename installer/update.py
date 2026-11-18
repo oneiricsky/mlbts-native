@@ -1,17 +1,31 @@
-"""Updating the port from the launcher: the newest setup on GitHub Releases, downloaded and unpacked beside this one.
+"""Updating the port from the launcher, in its own folder: the newest setup on GitHub Releases replaces this one.
 
 The launcher asks GitHub's API for the latest release of the project (one small request, no data about the player sent;
 nothing is checked in --selftest). When its version is newer than this setup's, the launcher offers the update:
 download() fetches MLBTS-Setup-<version>-windows.zip, checks it against the SHA-256 GitHub lists for the file, and
-unpacks it next to this setup folder as MLBTS-Setup-<version>/ (into %LOCALAPPDATA%\\MLBTS-Native\\setups when that
-folder cannot be written). The launcher then starts the new MLBTS-Setup.exe with --update <install folder>, which
-rebuilds mlb.exe with the new release; the game files, saves and settings stay.
+unpacks it into <setup folder>/.update/MLBTS-Setup-<version>/. start_apply() then starts that release's own Python on
+apply() and the launcher quits: apply() waits for it to end, moves the new release's files over the old ones (the old
+ones go to .update/old-<time>/, and come back if anything fails), and starts the new MLBTS-Setup.exe with --update
+<install folder>, which rebuilds mlb.exe. The game files, saves, settings, logs and launcher.json are never touched:
+apply() moves only what a release holds (layout.RELEASE_ENTRIES). The next window removes .update/.
+
+So the port stays in one folder (portable). Setups up to 0.1.5 unpacked each update beside the old setup folder, or
+into %LOCALAPPDATA%; they still do that when they update to this one, which then works from the new folder.
+
+    python -m installer.update --apply NEW --root ROOT [--wait PID] [--dest DIR]
 """
+import argparse
+import ctypes
 import hashlib
 import json
+import os
 import re
 import shutil
 import ssl
+import subprocess
+import sys
+import time
+import traceback
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -56,18 +70,6 @@ def latest(timeout=10):
     return None
 
 
-def target_parent(setup_root):
-    """Where the new setup folder goes: beside this one when that folder is writable."""
-    parent = Path(setup_root).resolve().parent
-    try:
-        probe = parent / '.mlbts-write-test'
-        probe.write_bytes(b'')
-        probe.unlink()
-        return parent
-    except OSError:
-        return layouts.settings_dir() / 'setups'
-
-
 def ready(folder, version):
     """folder holds an unpacked setup of that version (its VERSION is '<version>+<commit>')."""
     try:
@@ -80,7 +82,7 @@ def ready(folder, version):
 def download(info, setup_root, progress=None, cancel=None):
     """Download, check and unpack info's setup; returns the new setup folder. progress(text, done, total) is called
     as it goes; cancel() returning true stops it (Cancelled). Raises OSError / ValueError on failure."""
-    parent = target_parent(setup_root)
+    parent = Path(setup_root).resolve() / layouts.UPDATE_DIR
     folder = parent / f'MLBTS-Setup-{info["version"]}'
     if ready(folder, info['version']):
         return folder
@@ -138,3 +140,106 @@ def download(info, setup_root, progress=None, cancel=None):
         shutil.rmtree(stage, ignore_errors=True)
     zpath.unlink(missing_ok=True)
     return folder
+
+
+# ---- the swap ---------------------------------------------------------------------------------------------------------
+
+NO_WINDOW = 0x08000000      # CREATE_NO_WINDOW
+DETACHED = 0x00000008       # DETACHED_PROCESS
+
+
+def start_apply(new, root, dest=None):
+    """Starts apply() in the new release's own Python (its code does the swap), waiting for this process to end. The
+    caller quits at once: until it has, its Python and the files it holds cannot be replaced."""
+    cmd = [str(Path(new) / 'python' / 'pythonw.exe'), '-I', '-m', 'installer.update', '--apply', str(new),
+           '--root', str(root), '--wait', str(os.getpid())]
+    if dest:
+        cmd += ['--dest', str(dest)]
+    subprocess.Popen(cmd, cwd=str(new), creationflags=DETACHED | NO_WINDOW, close_fds=True)
+
+
+def wait_for(pid, timeout_ms=60000):
+    if os.name != 'nt' or not pid:
+        return
+    k = ctypes.windll.kernel32
+    h = k.OpenProcess(0x00100000, False, int(pid))   # SYNCHRONIZE
+    if h:
+        k.WaitForSingleObject(h, timeout_ms)
+        k.CloseHandle(h)
+
+
+def retry(fn, tries=40):
+    """fn, again for up to 10 s while Windows refuses it: a virus scanner or Explorer may hold a file for a moment."""
+    for i in range(tries):
+        try:
+            return fn()
+        except PermissionError:
+            if i == tries - 1:
+                raise
+            time.sleep(0.25)
+
+
+def apply(new, root, log=print):
+    """Moves the release in new over the one in root. The replaced files go to root/.update/old-<time>/; on a failure
+    they are put back and the error is raised."""
+    new, root = Path(new).resolve(), Path(root).resolve()
+    trash = root / layouts.UPDATE_DIR / time.strftime('old-%Y%m%d-%H%M%S')
+    trash.mkdir(parents=True, exist_ok=True)
+    names = [n for n in layouts.RELEASE_ENTRIES if (new / n).exists()]
+    done = []   # (name, an old one was moved to trash)
+    try:
+        for name in names:
+            src, dst = new / name, root / name
+            had = dst.exists()
+            if had:
+                retry(lambda: dst.replace(trash / name))
+            done.append((name, had))
+            if name == 'python':   # this process runs from new/python: a copy, not a move
+                shutil.copytree(src, dst)
+            else:
+                retry(lambda: src.replace(dst))
+            log(f'update: {name} replaced')
+    except BaseException:
+        log('update: failed, putting the old files back\n' + traceback.format_exc())
+        for name, had in reversed(done):
+            dst = root / name
+            if dst.is_dir():
+                shutil.rmtree(dst, ignore_errors=True)
+            elif dst.exists():
+                dst.unlink()
+            if had:
+                retry(lambda: (trash / name).replace(dst))
+        raise
+
+
+def main(argv=None):
+    ap = argparse.ArgumentParser(prog='python -m installer.update')
+    ap.add_argument('--apply', type=Path, required=True, help='the unpacked new release')
+    ap.add_argument('--root', type=Path, required=True, help='the setup folder to update')
+    ap.add_argument('--wait', type=int, help='the launcher process to wait for')
+    ap.add_argument('--dest', type=Path, help='the install folder, rebuilt by the new launcher')
+    a = ap.parse_args(argv)
+    logs = a.root / 'logs'
+    logs.mkdir(parents=True, exist_ok=True)
+    with open(logs / time.strftime('update-%Y%m%d-%H%M%S.log'), 'w', encoding='utf-8') as f:
+        def log(text):
+            f.write(text + '\n')
+            f.flush()
+        wait_for(a.wait)
+        ok = True
+        try:
+            apply(a.apply, a.root, log)
+        except BaseException as e:   # noqa: BLE001 (told to the player; the old setup still works)
+            ok = False
+            if os.name == 'nt':
+                ctypes.windll.user32.MessageBoxW(
+                    None, f'The update could not be installed: {e}\n\nThe previous version is still in place. The '
+                    f'details are in {f.name}.', 'MLB The Show 26 - update', 0x10)
+        args = [str(a.root / 'MLBTS-Setup.exe')] + (['--update', str(a.dest)] if ok and a.dest else [])
+        log('update: starting ' + ' '.join(args))
+        subprocess.Popen(args, cwd=str(a.root), close_fds=True)
+    return 0 if ok else 1
+
+
+if __name__ == '__main__':
+    sys.exit(main())

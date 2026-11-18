@@ -11,15 +11,25 @@ Release (docs/release.md, "Release layout"), root = the unpacked folder:
                           optional setup steps)
     VERSION               the release version, one line
     temp/                 the default temp folder (created)
+    logs/                 the setup's logs (created)
+    launcher.json         the launcher's memory: the install folder, the file paths, the last update check (created)
+    MLBTS/                the default install folder (portable: everything stays in the folder the player unpacked;
+                          RecompLauncher installs there too, recomplauncher.json)
 
 Dev mode, root = a repository checkout (no python/python.exe): the venv's Python, work/toolchain/llvm-mingw-*,
 work/rtlib/libmlbrt.a (tools/build.py --toolchain ... --make-runtime-lib --out work/rtlib), work/deps, the venv's ninja,
-work/xlate and work/install-temp. Its version is VERSION plus -dev.
+work/xlate and work/install-temp, work/launcher.json and work/logs. Its version is VERSION plus -dev.
 """
 import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+
+# What a release folder holds (tools/make_release.py); an update replaces these and nothing else. UPDATE_DIR: where
+# the launcher unpacks a new release before it swaps it in (update.py).
+RELEASE_ENTRIES = ('MLBTS-Setup.exe', 'python', 'llvm', 'runtime', 'bin', 'recomp', 'tools', 'installer', 'licenses',
+                   'LICENSE', 'THIRD_PARTY_NOTICES.md', 'README.txt', 'VERSION', 'recomplauncher.json')
+UPDATE_DIR = '.update'
 
 # The game versions the port builds, newest first: each has tools/data/expected-<version>.json (ExeFS hashes, RomFS
 # size). A setup builds the version of the update NSP it is given (steps.Context.pick_version).
@@ -40,6 +50,28 @@ class Layout:
     ninja: Path
     xlate: Path          # totk_xlate.exe; the totk_xlate.id beside it is copied too
     temp: Path
+    state: Path          # launcher.json
+
+    @property
+    def logs(self):
+        """The setup's logs: logs in the setup folder (a repository: work/logs)."""
+        return self.state.parent / 'logs'
+
+    def default_dest(self):
+        """The portable install folder: MLBTS inside the setup folder (a repository: work/install)."""
+        return self.root / ('work/install' if self.dev else 'MLBTS')
+
+    def reserved(self, dest):
+        """dest is the setup folder itself or one of the setup's own folders (or inside one), which an update
+        replaces: no place for the game. A folder of its own inside the setup folder (MLBTS/) is fine."""
+        try:
+            d = Path(dest).resolve()
+        except OSError:
+            return True
+        if self.dev:
+            return d == self.root
+        own = [self.root / n for n in RELEASE_ENTRIES] + [self.temp, self.logs, self.root / UPDATE_DIR]
+        return d == self.root or any(d == o or o in d.parents for o in own)
 
     def expected(self, version):
         return self.tools / 'data' / f'expected-{version}.json'
@@ -60,7 +92,8 @@ def release_layout(root):
                   release=version.read_text(encoding='utf-8').strip() if version.is_file() else 'unknown',
                   python=root / 'python' / 'python.exe', tools=root / 'tools', recomp=root / 'recomp',
                   llvm=root / 'llvm', deps=root / 'runtime' / 'deps', runtime_lib=root / 'runtime' / 'libmlbrt.a',
-                  ninja=root / 'bin' / 'ninja.exe', xlate=root / 'bin' / 'totk_xlate.exe', temp=root / 'temp')
+                  ninja=root / 'bin' / 'ninja.exe', xlate=root / 'bin' / 'totk_xlate.exe', temp=root / 'temp',
+                  state=root / 'launcher.json')
 
 
 def dev_layout(root):
@@ -72,7 +105,7 @@ def dev_layout(root):
                   llvm=trees[-1] if trees else root / 'work' / 'toolchain' / 'llvm-mingw-missing',
                   deps=root / 'work' / 'deps', runtime_lib=root / 'work' / 'rtlib' / 'libmlbrt.a',
                   ninja=venv / 'ninja.exe', xlate=root / 'work' / 'xlate' / 'totk_xlate.exe',
-                  temp=root / 'work' / 'install-temp')
+                  temp=root / 'work' / 'install-temp', state=root / 'work' / 'launcher.json')
 
 
 def find(root=None):
@@ -81,7 +114,8 @@ def find(root=None):
     return release_layout(root) if (root / 'python' / 'python.exe').is_file() else dev_layout(root)
 
 
-def settings_dir():
-    """%LOCALAPPDATA%\\MLBTS-Native: the setup's memory of the last install (paths only, never key contents)."""
+def legacy_settings():
+    """%LOCALAPPDATA%\\MLBTS-Native\\setup.json: where setups up to 0.1.5 remembered the install. A newer setup without
+    a launcher.json reads it once (gui.load_settings) and removes it: nothing of the port stays outside its folders."""
     base = os.environ.get('LOCALAPPDATA') or str(Path.home() / 'AppData' / 'Local')
-    return Path(base) / 'MLBTS-Native'
+    return Path(base) / 'MLBTS-Native' / 'setup.json'

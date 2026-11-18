@@ -3,10 +3,12 @@
 // generated code calls (cpu.h), the crash reporter. Dropped: TotK's settings file, probes, Discord, play time,
 // resolution hooks and the graphics modes.
 //
-// mlb.exe [--exefs DIR] [--romfs DIR] [--profile DIR] [--boot | --probe-fs]
+// mlb.exe [--game DIR | --exefs DIR --romfs DIR] [--profile DIR] [--fullscreen] [--<setting> VALUE ...]: --help lists
+// them (USAGE below).
 // Without arguments the paths come from MLB_EXEFS / MLB_ROMFS / MLB_PROFILE, else the defaults tools/build.py bakes in:
 // the repository's work/update/exefs, work/romfs/romfs and work/profile for a dev build, game/exefs, game/romfs and
 // profile beside mlb.exe for an installed one (--portable, docs/release.md).
+#include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -335,10 +337,89 @@ static void crash_handler(const PlatCrash *x) {
     plat_exit(71);
 }
 
-static int usage(const char *argv0) {
-    fprintf(stderr, "usage: %s [--exefs DIR] [--romfs DIR] [--profile DIR] [--boot | --probe-fs | --import-save "
-            "[ryujinx | FOLDER]]\n", argv0);
+// ---- command line. mlbts-native: every setting is also a flag, so a launcher (RecompLauncher, a shortcut, a script)
+// can start the game the way it wants without writing mlb.cfg: --fullscreen, --fps-limit 120, --set KEY=VALUE. A flag
+// is for this run: it beats mlb.cfg and the environment, and is not written into mlb.cfg (the in-game menu still saves
+// what the player changes there). A self-restart (plat_restart) starts with the same command line.
+static const char USAGE[] =
+    "usage: mlb.exe [options]\n"
+    "\n"
+    "Game files (default: game/exefs, game/romfs and profile beside mlb.exe):\n"
+    "  --game DIR             the extracted game: DIR/exefs and DIR/romfs\n"
+    "  --exefs DIR            the game's code (main, sdk, rtld, main.npdm)\n"
+    "  --romfs DIR            the game's data\n"
+    "  --profile DIR          saves, account and play time\n"
+    "\n"
+    "Settings, for this run (the same keys as mlb.cfg; mlb.cfg and the in-game menu keep theirs):\n"
+    "  --fullscreen, --windowed\n"
+    "  --<setting> VALUE      any setting below: --fps-limit 120, --output-res 2560x1440, --dlss quality\n"
+    "  --<setting>=VALUE      the same\n"
+    "  --<setting>, --no-<setting>   a 0|1 setting on or off: --hdr, --no-rumble\n"
+    "  --set KEY=VALUE        any key, as mlb.cfg writes it (MLB_FPS_LIMIT=120 or FPS_LIMIT=120)\n"
+    "\n"
+    "Other:\n"
+    "  --import-save [ryujinx | FOLDER]   copy another host's save of the game into the profile, then exit\n"
+    "  --probe-fs             test the file system overrides, then exit\n"
+    "  --boot                 load the game and stop before it runs\n"
+    "  --version              the port's and the game's version\n"
+    "  --help                 this text and every setting\n";
+
+static void print_settings(FILE *f) {
+    fputs("\nSettings (flag, values, default):\n", f);
+    for (int i = 0; cfg_meta_at(i); i++) {
+        const CfgMeta *m = cfg_meta_at(i);
+        if (cfg_meta(m->key) != m) continue;   // a key's second row (PROMPTS): the first one is the one read
+        char flag[64];
+        size_t n = 0;
+        for (; m->key[n] && n < sizeof flag - 1; n++) flag[n] = m->key[n] == '_' ? '-' : (char)tolower((unsigned char)m->key[n]);
+        flag[n] = 0;
+        fprintf(f, "  --%-22s %-34s %s\n", flag, m->values ? m->values : "(text)", *m->def ? m->def : "(auto)");
+    }
+}
+
+// Shows text a command-line answer gives: on the console the game was started from, else in a message box (a shortcut
+// with a wrong flag must not end the game without a word).
+static void cli_say(int error, const char *text, int with_settings) {
+    if (plat_console_attach()) {
+        fputs(text, error ? stderr : stdout);
+        if (with_settings) print_settings(error ? stderr : stdout);
+        return;
+    }
+    char box[2400];
+    snprintf(box, sizeof box, "%s%s", text, with_settings ? "\nmlb.exe --help in a console window lists every "
+             "setting." : "");
+    plat_message(error ? "MLB The Show 26: wrong command line" : "MLB The Show 26", box);
+}
+
+static int usage_error(const char *fmt, const char *arg) {
+    char text[sizeof USAGE + 300];
+    int n = snprintf(text, 300, fmt, arg);
+    if (n < 0 || n >= 300) n = 299;
+    snprintf(text + n, sizeof text - n, "\n\n%s", USAGE);
+    cli_say(1, text, 0);
     return 2;
+}
+
+// "--fps-limit" -> "FPS_LIMIT" (k, 64 bytes); the setting's row, or NULL
+static const CfgMeta *flag_setting(const char *flag, size_t len, char *k) {
+    size_t n = 0;
+    for (; n < len && n < 63; n++) k[n] = flag[n] == '-' ? '_' : (char)toupper((unsigned char)flag[n]);
+    k[n] = 0;
+    return n ? cfg_meta(k) : NULL;
+}
+
+// A setting from the command line: cfg_set (this run, not saved), and the environment's MLB_X / TOTK_X removed, which
+// would otherwise win over it.
+static void cli_set(const char *key, const char *value) {
+    char k[64], var[80];
+    snprintf(k, sizeof k, "%s", !strncmp(key, "MLB_", 4) ? key + 4 : !strncmp(key, "TOTK_", 5) ? key + 5 : key);
+    for (char *p = k; *p; p++) *p = (char)toupper((unsigned char)*p);
+    snprintf(var, sizeof var, "MLB_%s", k);
+    plat_setenv(var, NULL);
+    snprintf(var, sizeof var, "TOTK_%s", k);
+    plat_setenv(var, NULL);
+    cfg_set(k, value);
+    rt_log("cfg: command line: %s=%s%s", k, value, cfg_meta(k) ? "" : " (no setting of that name in the table)");
 }
 
 // A relative default path (an installed folder: tools/build.py --portable bakes game/exefs, game/romfs and profile) is
@@ -363,6 +444,62 @@ int main(int argc, char **argv) {
     setvbuf(stderr, NULL, _IONBF, 0);
     plat_crash_hook(crash_handler);
     cfg_load_file();   // mlb.cfg beside the exe: before any setting is read (the defaults below leave its values alone)
+    const char *exefs = NULL, *romfs = NULL, *profile = NULL, *game = NULL;
+    int probe = 0, import = 0, boot = 0;
+    const char *import_from = NULL;
+    for (int i = 1; i < argc; i++) {   // before anything reads a setting: the flags below are settings too
+        const char *a = argv[i], **path = !strcmp(a, "--exefs") ? &exefs : !strcmp(a, "--romfs") ? &romfs
+                                        : !strcmp(a, "--profile") ? &profile : !strcmp(a, "--game") ? &game : NULL;
+        if (path) {
+            if (++i == argc) return usage_error("%s needs a folder.", a);
+            *path = argv[i];
+        } else if (!strcmp(a, "--help") || !strcmp(a, "-h") || !strcmp(a, "/?")) {
+            char text[sizeof USAGE + 200];
+            snprintf(text, sizeof text, "MLB The Show 26 for PC (mlbts-native %s), game version %s\n\n%s", rt_port_version,
+                     rt_game_build, USAGE);
+            cli_say(0, text, 1);
+            return 0;
+        } else if (!strcmp(a, "--version")) {
+            char text[200];
+            snprintf(text, sizeof text, "mlbts-native %s, MLB The Show 26 %s\n", rt_port_version, rt_game_build);
+            cli_say(0, text, 0);
+            return 0;
+        } else if (!strcmp(a, "--boot")) {
+            boot = 1;
+        } else if (!strcmp(a, "--probe-fs")) {   // fs_host.c: the nn::fs overrides on the RomFS and in a temporary
+            probe = 1;                           // profile; no guest code runs
+        } else if (!strcmp(a, "--import-save")) {   // save_import.c: another host's save of the game (Ryujinx's by
+            import = 1;                              // default) becomes the profile's save; no guest code runs
+            if (i + 1 < argc && strncmp(argv[i + 1], "--", 2)) import_from = argv[++i];
+        } else if (!strcmp(a, "--fullscreen") || !strcmp(a, "--windowed")) {
+            cli_set("FULLSCREEN", a[2] == 'f' ? "1" : "0");
+        } else if (!strcmp(a, "--set")) {
+            const char *eq = i + 1 < argc ? strchr(argv[i + 1], '=') : NULL;
+            if (!eq || eq == argv[i + 1]) return usage_error("--set needs KEY=VALUE%s.", "");
+            char k[64];
+            snprintf(k, sizeof k, "%.*s", (int)(eq - argv[i + 1]), argv[i + 1]);
+            cli_set(k, eq + 1);
+            i++;
+        } else if (!strncmp(a, "--", 2) && a[2]) {   // --<setting> VALUE, --<setting>=VALUE, --<setting>, --no-<setting>
+            const char *name = a + 2, *eq = strchr(name, '=');
+            size_t len = eq ? (size_t)(eq - name) : strlen(name);
+            char k[64];
+            const CfgMeta *m = flag_setting(name, len, k);
+            int off = 0;
+            if (!m && !eq && !strncmp(name, "no-", 3) && (m = flag_setting(name + 3, len - 3, k)))
+                off = 1;
+            if (!m) return usage_error("Unknown option %s (mlb.exe --help lists every setting).", a);
+            int onoff = m->values && !strcmp(m->values, "0|1");
+            if (off && !onoff) return usage_error("%s: only a 0|1 setting has a --no- form.", a);
+            if (eq) cli_set(k, eq + 1);
+            else if (off) cli_set(k, "0");
+            else if (i + 1 < argc && strncmp(argv[i + 1], "--", 2)) cli_set(k, argv[++i]);
+            else if (onoff) cli_set(k, "1");
+            else return usage_error("%s needs a value (mlb.exe --help lists them).", a);
+        } else {
+            return usage_error("Unknown argument %s.", a);
+        }
+    }
     // mlbts-native: no tracing unless MLB_TRACE asks for it. Releases had perf,sched on for every player (from the
     // batting frame-rate work): counting and timing in the replay and the scheduler, and lines every second in mlb.log.
     // The developer's own mlb.cfg sets MLB_TRACE.
@@ -370,31 +507,23 @@ int main(int argc, char **argv) {
     // defaults in the table)
     parse_trace();
     parse_fntrace();
-    cfg = (RtConfig){.exefs = cfg_get("MLB_EXEFS") ? cfg_get("MLB_EXEFS") : beside_exe(rt_default_exefs),
-                     .romfs = cfg_get("MLB_ROMFS") ? cfg_get("MLB_ROMFS") : beside_exe(rt_default_romfs),
-                     .profile = cfg_get("MLB_PROFILE") ? cfg_get("MLB_PROFILE") : beside_exe(rt_default_profile),
-                     .gpu = cfg_value("MLB_GPU")};
-    int probe = 0, import = 0;
-    const char *import_from = NULL;
-    for (int i = 1; i < argc; i++) {
-        const char **path = !strcmp(argv[i], "--exefs") ? &cfg.exefs : !strcmp(argv[i], "--romfs") ? &cfg.romfs
-                          : !strcmp(argv[i], "--profile") ? &cfg.profile : NULL;
-        if (path) {
-            if (++i == argc) return usage(argv[0]);
-            *path = argv[i];
-        } else if (!strcmp(argv[i], "--boot")) {
-            cfg.boot = 1;
-        } else if (!strcmp(argv[i], "--probe-fs")) {   // fs_host.c: the nn::fs overrides on the RomFS and in a
-            probe = 1;                                 // temporary profile; no guest code runs
-        } else if (!strcmp(argv[i], "--import-save")) {   // save_import.c: another host's save of the game (Ryujinx's
-            import = 1;                                    // by default) becomes the profile's save; no guest code runs
-            if (i + 1 < argc && strncmp(argv[i + 1], "--", 2)) import_from = argv[++i];
-        } else {
-            return usage(argv[0]);
-        }
+    static char game_exefs[PLAT_PATH_MAX], game_romfs[PLAT_PATH_MAX];
+    if (game) {
+        snprintf(game_exefs, sizeof game_exefs, "%s/exefs", game);
+        snprintf(game_romfs, sizeof game_romfs, "%s/romfs", game);
     }
+    cfg = (RtConfig){.exefs = exefs ? exefs : game ? game_exefs : cfg_get("MLB_EXEFS") ? cfg_get("MLB_EXEFS")
+                            : beside_exe(rt_default_exefs),
+                     .romfs = romfs ? romfs : game ? game_romfs : cfg_get("MLB_ROMFS") ? cfg_get("MLB_ROMFS")
+                            : beside_exe(rt_default_romfs),
+                     .profile = profile ? profile : cfg_get("MLB_PROFILE") ? cfg_get("MLB_PROFILE")
+                              : beside_exe(rt_default_profile),
+                     .gpu = cfg_value("MLB_GPU"), .boot = boot};
     // --import-save reports on the console only: opening the log would replace mlb.log, a running game's too
-    if (import) return save_import_main(import_from);
+    if (import) {
+        plat_console_attach();   // started from a console window: its report shows there
+        return save_import_main(import_from);
+    }
     log_open();
     if (probe) return probe_fs();
     // mlbts-native: the sampling profiler only when asked (it suspends every thread to sample it). MLB_SAMPLER=on: every

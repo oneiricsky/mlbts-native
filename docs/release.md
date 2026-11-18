@@ -11,29 +11,64 @@ data or assets, and no file built from them**: no `mlb.exe`, no generated C or i
    `MLBTS-Setup.exe`.
 2. The window is already filled in when it can be: `prod.keys` from Ryujinx's or yuzu's (and forks') folder, the base
    game and update NSPs (1.0.20 preferred, else 1.0.15) from the emulators' game folders, Downloads, Desktop, Documents, `~/Games` or the folder
-   around the setup (`installer/detect.py`), and an install folder on the disk with the most free space. They check
-   it, change what is wrong and press **Install**. Options: shortcuts (on), NVIDIA DLSS (on with an RTX card),
+   around the setup (`installer/detect.py`), and the install folder `MLBTS\` inside the setup folder (on the disk
+   with the most free space instead when the setup's disk lacks the room). They check it, change what is wrong and
+   press **Install**. Options: shortcuts (off), NVIDIA DLSS (on with an RTX card),
    copy the Ryujinx save (on when Ryujinx has one and the install has none), Road to the Show equipment offline
    and Road to the Show packages offline (both off; the launcher screen can add or remove them later).
 3. Waits about 10 minutes (on the dev PC: 4 for the 37 GB of game data, 1 to lift, 3 to compile).
-4. Presses **Play**. Next time, the desktop shortcut starts the game; starting the setup again opens its launcher
-   screen (Play, Update, Repair, Import Ryujinx save, Open install folder).
+4. Presses **Play**. Next time, `MLBTS-Setup.exe` starts the game at once, without a window. Its launcher screen
+   (Play, Update, Repair, Import Ryujinx save, Open install folder) opens when there is something to do (a rebuild, a
+   newer release on GitHub), with `--menu`, or with Shift held while it starts.
 
 The base and update can be picked the wrong way round: the setup swaps them.
 
-Updating the port (from 0.1.1): the launcher screen asks GitHub for the latest release when it opens
-(`installer/update.py`; one API request, nothing about the player is sent, a failure is silent). When that release is
-newer than the setup, it shows **Download and update**: the setup zip is downloaded, checked against the SHA-256
-GitHub lists for the asset, and unpacked next to the old setup folder as `MLBTS-Setup-<version>/` (or in
-`%LOCALAPPDATA%\MLBTS-Native\setups` when that folder is read-only). The new `MLBTS-Setup.exe` then starts with
-`--update <install folder>` (the launcher passes its arguments on to the window) and rebuilds `mlb.exe` at once. The
-game files, saves and settings stay; the game files are not needed again. The manual way still works: download the new
-setup, start it, press **Update**. Setup 0.1.0 has no updater, so its players update by hand once.
+Updating the port (from 0.1.1): the launcher asks GitHub for the latest release (`installer/update.py`; one API
+request, nothing about the player is sent, a failure is silent): when its screen opens, and before it starts the game
+straight away at most once every 20 hours, waiting 3 s at most (the answer is kept in `launcher.json`). When that
+release is newer than the setup, the screen shows **Download and update**: the setup zip is downloaded, checked against
+the SHA-256 GitHub lists for the asset, and unpacked into `.update\MLBTS-Setup-<version>\` in the setup folder. The
+window quits and that release's own Python swaps it in (`python -m installer.update --apply`): it moves the release's
+files (`layout.RELEASE_ENTRIES`) over the old ones, which go to `.update\old-<time>\` and come back if anything
+fails, then starts the new `MLBTS-Setup.exe` with `--update <install folder>`, which rebuilds `mlb.exe` at once. The
+game files, saves, settings and `launcher.json` stay; the game files are not needed again; the next window removes
+`.update\`. The manual way still works: download the new setup, start it, press **Update**. Setup 0.1.0 has no
+updater, so its players update by hand once. Setups 0.1.1 to 0.1.5 unpack the update beside their folder (their own
+updater): the new setup then keeps working from that folder with the old install folder.
+
+## Portable and one executable
+
+The port keeps to the folder the player unpacked (after RecompLauncher's call for shared standards of recomp
+projects):
+
+- The player runs one program, `MLBTS-Setup.exe`: the setup the first time, the game afterwards (it starts the built
+  `mlb.exe` without a window). Shortcuts, when ticked, point at it too.
+- The game goes into `MLBTS\` in the setup folder (RecompLauncher's place for it as well). The setup's memory
+  (`launcher.json`), its logs (`logs\`), its temporary build files (`temp\`, removed after the build) and updates
+  (`.update\`) are in the setup folder; `mlb.exe` keeps its settings, logs, saves and caches beside itself. Deleting
+  the folder removes the port. Nothing is written elsewhere unless the player asks: desktop and Start menu shortcuts
+  (off by default), or an install folder they pick on another disk. Setups up to 0.1.5 remembered the install in
+  `%LOCALAPPDATA%\MLBTS-Native\setup.json`; a newer setup reads it once and removes it.
+
+## Command line
+
+Every choice is a flag, so launchers and scripts need no window:
+
+- `MLBTS-Setup.exe [--menu] [--dest DIR] [game flags]`: starts the game (or the window, `installer/gui.py`); every
+  argument it does not know goes to `mlb.exe`.
+- `mlb.exe --help` lists the game's flags: `--game DIR` (or `--exefs`, `--romfs`), `--profile DIR`, `--fullscreen`,
+  `--windowed`, and every setting of `mlb.cfg` as `--<setting> VALUE` (`--fps-limit 120`, `--dlss quality`, `--hdr`,
+  `--no-rumble`) or `--set KEY=VALUE`. A flag is for that run: it beats `mlb.cfg` and the environment and is not
+  written into `mlb.cfg`. `mlb.exe` is a windowed program: its answers go to the console it was started from, else to a
+  message box.
+- `python\python.exe -m installer --help`: the setup without a window (`installer/cli.py`): `--dest`, `--base`,
+  `--update`, `--keys`, `--titlekeys`, `--temp` (the build folder), `--dlss`, `--shortcut`, `--import-save`, the Road
+  to the Show options, `--launcher`.
 
 ## The install folder
 
 ```
-<install folder>/
+<install folder>/                default MLBTS\ in the setup folder
   mlb.exe, SDL3.dll              the game, built on this PC (tools/build.py --portable: paths beside the exe)
   totk_xlate.exe, totk_xlate.id  the shader translator
   nvngx_dlss.dll                 NVIDIA DLSS, downloaded from NVIDIA's DLSS repository when the box is ticked
@@ -76,7 +111,7 @@ update only rebuilds.
    certificate) and writes `MLB_OFFLINE_PACKAGES=1` into `mlb.cfg`
    ([tools/packages](../tools/packages/README.md)). It brings the equipment step with it, with the equipment not
    owned at the start. `--no-packages` removes the folder and the setting; the equipment then goes back to owned.
-7. **Finish**: `mlb.cfg` (when missing), DLSS, shortcuts (PowerShell's `WScript.Shell`), `mlb.exe --import-save`,
+7. **Finish**: `mlb.cfg` (when missing), DLSS, shortcuts (PowerShell's `WScript.Shell`; to `MLBTS-Setup.exe`, only when asked), `mlb.exe --import-save`,
    and `temp/` deleted.
 
 Logs: `logs/setup-<time>.log` in the setup folder. The keys file's path is passed to the tools; its contents are never

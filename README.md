@@ -26,14 +26,19 @@ Game versions 1.0.20 (the latest) and 1.0.15 are supported; other versions are n
 ## Playing it
 
 1. Download `MLBTS-Setup-<version>-windows.zip` from [Releases](https://github.com/sam110411/mlbts-native/releases),
-   unpack it anywhere and start **`MLBTS-Setup.exe`**.
+   unpack it where you want the game to live (it needs about 40 GB there) and start **`MLBTS-Setup.exe`**.
 2. The setup looks for your game files and keys by itself (Ryujinx's and yuzu's folders, Downloads, Desktop, ...).
    Check what it found, pick anything missing, and press **Install**.
-3. After about 10 minutes, press **Play**. From then on, use the "MLB The Show 26" shortcut.
+3. After about 10 minutes, press **Play**. From then on, `MLBTS-Setup.exe` starts the game straight away (hold Shift
+   while starting it for its window: updates, repair, save import).
+
+Everything stays in that folder: the game goes into `MLBTS\`, and deleting the folder removes the port. Flags work too:
+`MLBTS-Setup.exe --fullscreen --fps-limit 120` (`MLBTS\mlb.exe --help` lists every setting).
 
 The download contains no part of the game. The setup builds the game on your PC from your own files: the base game and
 the 1.0.20 update (or 1.0.15) as NSP files dumped from your Switch, and your `prod.keys`. It needs about 40 GB free. To update the
-port, start a newer setup and press **Update**; your game files, saves and settings stay. How the setup works and how a
+port, press **Download and update** when the setup offers it (it checks once a day), or start a newer setup and press
+**Update**; your game files, saves and settings stay. How the setup works and how a
 release is made: [docs/release.md](docs/release.md).
 
 ## Features

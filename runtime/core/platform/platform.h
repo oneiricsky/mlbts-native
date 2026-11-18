@@ -256,6 +256,11 @@ _Noreturn void plat_exit(int code);       // ends the process at once: other thr
 // mlbts-native: tells the player why the process is about to end, in a message box, when it has no console (an
 // installed build is a windowed program: tools/build.py --portable). With a console (dev builds) it does nothing.
 void plat_fatal_notice(const char *what);
+// mlbts-native: stdout and stderr for a command-line answer (mlb.exe --help, --import-save). A windowed program started
+// from a console window has neither: they are reopened on that console. Kept when they already go somewhere (a pipe,
+// a file, a console build). 1 when the text can be seen; 0 when there is nowhere to write (started from Explorer).
+int plat_console_attach(void);
+void plat_message(const char *title, const char *text);   // a message box (UTF-8), for a windowed program's errors
 int plat_setenv(const char *name, const char *value);    // value NULL removes it; 1 on success
 uint32_t plat_process_id(void);
 // CPU time of the process since it started (user and kernel), and wall time since it started, in ns; 0 when unknown.

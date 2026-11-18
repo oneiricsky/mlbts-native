@@ -6,7 +6,9 @@
    System DPI aware, like the window's Python process (installer/gui.py): the error box is drawn at the display's
    scale instead of stretched.
    Its own arguments are passed on to the window (installer/gui.py): the updater (installer/update.py) starts the new
-   setup with --update <install folder>. */
+   setup with --update <install folder>; --menu opens the window; any other argument goes to mlb.exe.
+   It is the one program a player runs: once the game is built, installer/gui.py starts mlb.exe at once without a
+   window (straight_to_game). */
 #include <windows.h>
 #include <wchar.h>
 

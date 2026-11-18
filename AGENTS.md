@@ -92,6 +92,12 @@ fails the content check. The dev build stays MSVC; runtime code must also compil
 MSVC-only APIs): check with `tools/build.py --toolchain work/toolchain/llvm-mingw-20261020-ucrt-x86_64 --out
 work/build-mingw`. Details: `docs/release.md`.
 
+The release keeps to RecompLauncher's standards for recomp projects (`docs/release.md`, "Portable and one
+executable", "Command line"): one program to run (`MLBTS-Setup.exe` starts the built game without a window), portable
+(the game in `MLBTS\` inside the setup folder, the setup's memory in `launcher.json` there, updates swapped in place,
+nothing in `%LOCALAPPDATA%` or shortcuts unless asked), and a flag for every choice (`mlb.exe --help`: every `cfg.c`
+setting is a flag). A new setting needs no extra flag code, but anything new the setup writes must stay in its folder.
+
 Publishing a version: bump `VERSION`, write `docs/release-notes-<version>.md`, commit and push, run
 `tools/make_release.py`, then `gh release create v<version> work/release/MLBTS-Setup-<version>-windows.zip --target
 <full commit SHA> --title "MLB The Show 26 for PC <version>" --notes-file docs/release-notes-<version>.md` (a short SHA

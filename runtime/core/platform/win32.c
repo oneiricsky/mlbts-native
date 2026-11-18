@@ -892,6 +892,30 @@ void plat_fatal_notice(const char *what) {
     MessageBoxW(NULL, w, L"Error", MB_OK | MB_ICONERROR | MB_TOPMOST | MB_SETFOREGROUND);
 }
 
+static int std_handle_ok(DWORD which) {
+    HANDLE h = GetStdHandle(which);
+    return h && h != INVALID_HANDLE_VALUE && GetFileType(h) != FILE_TYPE_UNKNOWN;
+}
+
+int plat_console_attach(void) {
+    if (std_handle_ok(STD_ERROR_HANDLE) || GetConsoleWindow()) return 1;
+    if (!AttachConsole(ATTACH_PARENT_PROCESS)) return 0;
+    FILE *f;
+    if (!std_handle_ok(STD_OUTPUT_HANDLE)) freopen_s(&f, "CONOUT$", "w", stdout);
+    freopen_s(&f, "CONOUT$", "w", stderr);
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+    fputs("\n", stderr);   // the shell's prompt is already on the line: cmd does not wait for a windowed program
+    return 1;
+}
+
+void plat_message(const char *title, const char *text) {
+    wchar_t t[128], w[4096];
+    if (!MultiByteToWideChar(CP_UTF8, 0, title, -1, t, 128) || !MultiByteToWideChar(CP_UTF8, 0, text, -1, w, 4096))
+        return;
+    MessageBoxW(NULL, w, t, MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND);
+}
+
 void plat_exit(int code) {
 #ifdef TOTK_PGO_GEN
     __llvm_profile_dump();

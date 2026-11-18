@@ -200,11 +200,11 @@ class Check(Step):
                                'AMD Zen or newer).')
         if not detect.vulkan():
             raise InstallError('No Vulkan driver found (vulkan-1.dll). Install the latest driver for your graphics card.')
-        # A launcher keeps its folder, so the game may go in a folder of its own inside it (cli.py --launcher)
-        inside_ok = getattr(opt, 'launcher', False) and ctx.dest != lay.root and lay.temp not in (ctx.dest, *ctx.dest.parents)
-        if not lay.dev and not inside_ok and (ctx.dest == lay.root or lay.root in ctx.dest.parents):
-            raise InstallError('Pick an install folder outside the setup folder: the setup folder can be deleted after '
-                               'the install.')
+        # Portable: the game goes in a folder of its own inside the setup folder (MLBTS\ by default, as RecompLauncher
+        # does), never in the setup folder itself or one of the setup's own folders, which an update replaces
+        if lay.reserved(ctx.dest):
+            raise InstallError(f'Pick an install folder of its own, such as {lay.default_dest()}: not the setup folder '
+                               'or one of its folders.')
         needs_files = ctx.plan_runs('exefs') or ctx.plan_runs('romfs')
         if needs_files:
             self.check_files(ctx)
@@ -596,7 +596,9 @@ class Finish(Step):
             self.dlss(ctx)
         if opt.shortcut:
             rep.progress(self.id, 'Making shortcuts', force=True)
-            shortcuts(dest / 'mlb.exe')
+            # the launcher when there is one: it starts the game at once and checks for updates once a day
+            launcher = ctx.layout.root / 'MLBTS-Setup.exe'
+            shortcuts(launcher if launcher.is_file() and not ctx.layout.dev else dest / 'mlb.exe', dest / 'mlb.exe')
         if opt.import_save:
             rep.progress(self.id, 'Copying your Ryujinx save', force=True)
             r = subprocess.run([str(dest / 'mlb.exe'), '--import-save'], cwd=dest, capture_output=True,
@@ -636,15 +638,16 @@ class Finish(Step):
                         'setup again to retry.')
 
 
-def shortcuts(exe):
-    """'MLB The Show 26' on the desktop and in the Start menu, through the Windows shell (WScript.Shell)."""
+def shortcuts(exe, icon):
+    """'MLB The Show 26' on the desktop and in the Start menu, through the Windows shell (WScript.Shell). Only when the
+    player ticks the option (off by default: the port is portable and keeps to its folder)."""
     script = ("$w = New-Object -ComObject WScript.Shell; "
               "foreach ($d in @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs'))) { "
               "$s = $w.CreateShortcut((Join-Path $d 'MLB The Show 26.lnk')); $s.TargetPath = $env:MLBTS_EXE; "
-              "$s.WorkingDirectory = (Split-Path $env:MLBTS_EXE); $s.IconLocation = $env:MLBTS_EXE + ',0'; "
+              "$s.WorkingDirectory = (Split-Path $env:MLBTS_EXE); $s.IconLocation = $env:MLBTS_ICON + ',0'; "
               "$s.Description = 'MLB The Show 26 (PC port)'; $s.Save() }")
     subprocess.run(['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
-                   env=dict(os.environ, MLBTS_EXE=str(exe)), capture_output=True,
+                   env=dict(os.environ, MLBTS_EXE=str(exe), MLBTS_ICON=str(icon)), capture_output=True,
                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
 
 

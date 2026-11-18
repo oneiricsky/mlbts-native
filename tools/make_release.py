@@ -86,7 +86,8 @@ EXE_ALLOWED = ('MLBTS-Setup.exe', 'python/', 'llvm/', 'bin/ninja.exe', 'bin/totk
                'runtime/deps/lib/vulkan-1.lib', 'runtime/libmlbrt.a')
 README = """MLB The Show 26 - PC port setup {version}
 
-Start MLBTS-Setup.exe. It builds the game on this PC from your own game files and installs it in the folder you pick.
+Start MLBTS-Setup.exe. It builds the game on this PC from your own game files, into the MLBTS folder here (or a
+folder you pick). Everything stays in this folder: delete it and the port is gone.
 
 You need:
 - MLB The Show 26 (NSP) and its 1.0.20 update (NSP; the 1.0.15 update works too), dumped from your own Nintendo
@@ -97,9 +98,11 @@ You need:
 No game files, keys or code of the game are in this download, and the setup never uploads anything. The game is
 built on your PC, from your files, for your own use: do not share the installed folder.
 
-After the install, start the game with the "MLB The Show 26" shortcut or mlb.exe in the install folder. Start
-MLBTS-Setup.exe again to update: it checks GitHub for a new version and offers "Download and update" (the game files
-are not needed again). Settings: F1 in the game.
+After the install, MLBTS-Setup.exe starts the game straight away. Hold Shift while starting it (or start it with
+--menu) for its window: Play, Repair, Import Ryujinx save, and "Download and update" when GitHub has a new version
+(it checks once a day; the update replaces this folder's files, and the game files are not needed again).
+Settings: F1 in the game, or flags: MLBTS-Setup.exe --fullscreen --fps-limit 120 (MLBTS\\mlb.exe --help lists them
+all, from a console window).
 
 Source, issues and help: https://github.com/sam110411/mlbts-native
 """
@@ -371,6 +374,10 @@ def smoke(out):
     if r.returncode:
         sys.exit('window selftest failed:\n' + r.stderr)
     print('window selftest: ok')
+    r = subprocess.run([str(py), '-I', '-m', 'installer.update', '--help'], cwd=out, env=env, capture_output=True,
+                       text=True, timeout=60)
+    if r.returncode:
+        sys.exit('updater does not start with the bundled python:\n' + r.stderr[-2000:])
     # a setup run without game files: the folder check passes, then it must ask for the game files
     dest = WORK / 'smoke-dest'
     shutil.rmtree(dest, ignore_errors=True)
