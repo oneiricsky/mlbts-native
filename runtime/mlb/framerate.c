@@ -19,6 +19,15 @@
 // of 0, a frame shorter than 1/60 s would step the game by 0 (the whole vsyncs measured): so in that state the game's
 // own count goes back and the frame rate is the game's own 60 again, until averaging is back on.
 //
+// The switch to whole vsyncs reaches the host one frame late: the game copies the handler's byte into the flag
+// (main+0xd4f6e0) right before it calls the timer, and the host sees the flag only at the next present. So one timer
+// call runs with whole vsyncs and a count of 0, and a frame shorter than 1/60 s steps the game by exactly 0: a frame in
+// which nothing moves, and inf or NaN wherever the game divides by its step (found 2026-11-18 while tracing GitHub #18,
+// no ball in one RTTS batting cage mode above 60 fps; not reproduced, so not confirmed as its cause). The timer's carry (main+0x2cb6150: the frame time left over from the whole vsyncs, at most
+// 1/60 s, read nowhere else) guards that frame: at every unlocked present the host sets it to 1/60 s, so whole vsyncs
+// count at least 1 and the step is at least 1/60 s. With averaging on the carry changes nothing: the step is the
+// average, and the sleep reads only a negative carry (a count above the vsyncs measured, never with a count of 0).
+//
 // The other callers of the timer (loading loops) pass 1 themselves and stay at 60.
 //
 // MLB_FPS_LIMIT=60 (default): nothing here runs; the game and the pacer behave as shipped. Any other limit, read live:
@@ -39,16 +48,18 @@
 
 // The game's data, per version: the GOT slots of the vsync count and of the averaging flag (main+0x6cfc and the
 // timer's own loads), so a wrong address shows as a slot that does not point into main's data.
-// step: the timer's result, the game's frame step in seconds (MLB_TRACE=perf only). The two builds' timers are the same
-// instructions with other addresses (compared 2026-11-16).
-static const struct { const char *build; uint64_t count_slot, avg_slot, step; } k_addrs[] = {
-    {"1.0.15", 0x700227d000ull, 0x7002283ba8ull, 0x70022c70c4ull},
-    {"1.0.20", 0x700227e070ull, 0x7002284c18ull, 0x70022c90c4ull},
+// step: the timer's result, the game's frame step in seconds (MLB_TRACE=perf only). carry: the timer's leftover frame
+// time (float seconds, the timer's own adrp x20 + 0x150). The two builds' timers are the same instructions with other
+// addresses (compared 2026-11-16, the carry 2026-11-18).
+static const struct { const char *build; uint64_t count_slot, avg_slot, step, carry; } k_addrs[] = {
+    {"1.0.15", 0x700227d000ull, 0x7002283ba8ull, 0x70022c70c4ull, 0x7002cb4150ull},
+    {"1.0.20", 0x700227e070ull, 0x7002284c18ull, 0x70022c90c4ull, 0x7002cb6150ull},
 };
 
 static volatile int32_t *g_count;       // the game's vsyncs per frame; NULL: unknown game build
 static volatile const uint8_t *g_avg;   // the timer's averaging flag
 static volatile const float *g_step;    // the game's frame step
+static volatile float *g_carry;         // the timer's leftover frame time (seconds, at most 1/60)
 static int32_t g_game_count = 1;        // the count the game last wrote (what goes back at the limit 60)
 static int g_addrs_read;
 
@@ -72,6 +83,7 @@ static void addrs_init(void) {
         g_count = (volatile int32_t *)(uintptr_t)count;
         g_avg = (volatile const uint8_t *)(uintptr_t)avg;
         g_step = (volatile const float *)(uintptr_t)k_addrs[i].step;
+        g_carry = (volatile float *)(uintptr_t)k_addrs[i].carry;
         return;
     }
     rt_log("frame rate: no frame timer known for game %s; the game's own 60 fps stays", rt_game_build);
@@ -158,4 +170,7 @@ void frame_step_present(uint64_t display_ns, int interval) {
     }
     int32_t set = active ? 0 : g_game_count;
     if (now != set) *g_count = set;
+    // The next timer call may already run with whole vsyncs (the flag is copied right before it): a full carry makes
+    // its step at least 1/60 s, never 0. The timer's own bound: its 1/60 constant is this float (0x3c888889).
+    if (active) *g_carry = 1.0f / 60.0f;
 }

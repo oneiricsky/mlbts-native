@@ -41,6 +41,11 @@ What the port does at a limit other than 60 (no game code is changed):
   event 0x220 turns averaging off; 0x61, 0x11c and 0x213 turn it on). The log says `frame rate: the game's own 60
   fps` when this happens, and the menu row shows "the game holds 60 here". Which game screens use that mode is not
   known yet.
+- The game switches to whole vsyncs right before its timer runs, so the port only sees the switch one frame later. In
+  that one frame the count is still 0, and a frame shorter than 1/60 s would step the game by exactly 0 (nothing
+  moves; anything that divides by the step gets an infinite or invalid number). So at every unlocked present the port
+  also fills the timer's carry (the time left over from the whole vsyncs, 1.0.20 `main+0x2cb6150`) to 1/60 s: that
+  frame then steps by at least 1/60 s. With averaging on the carry changes nothing.
 - The other callers of the timer (loading loops) pass 1 themselves, so loading screens stay at 60 fps.
 - At 60 (the default) nothing of this runs: the game and the pacer behave as before.
 
@@ -61,5 +66,5 @@ appear at 60: the averaged step catching up after long frames).
 ## Supporting another game version
 
 `k_addrs[]` in `framerate.c` lists, per version, the GOT slots of the vsync count and the averaging flag, and the
-address of the step. Find them with `tools/addrmap.py` from the 1.0.20 addresses above and check them in the
+addresses of the step and the carry. Find them with `tools/addrmap.py` from the 1.0.20 addresses above and check them in the
 disassembly of the timer (`tools/disasm.py`). An unknown version keeps the game's own 60 fps and says so in the log.
