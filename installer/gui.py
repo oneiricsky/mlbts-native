@@ -69,7 +69,12 @@ def game_args(argv=None):
 RUN_CLI = ("import sys, runpy; sys.path.insert(0, sys.argv.pop(1)); sys.argv[0] = 'installer'; "
            "runpy.run_module('installer', run_name='__main__', alter_sys=True)")
 
-ACCENT, HEADER_BG, HEADER_FG, OK, BAD, MUTED = '#0b4f9c', '#0d2340', '#ffffff', '#1b7f3b', '#b3261e', '#5f6b7a'
+# The window's colours: a dark theme, a blue accent for the main action, the baseball's stitch red as the brand line
+BG, HEADER_BG, SURFACE, SURFACE_HI, BORDER = '#111923', '#0a1017', '#1a2532', '#243345', '#2c3b4f'
+TEXT, MUTED, DIM, HEADER_FG = '#e6edf5', '#8d9db2', '#5c6b7e', '#ffffff'
+ACCENT, ACCENT_HI, ACCENT_LO, STITCH = '#2f81f7', '#4c95fa', '#1f69d6', '#d6303a'
+OK, BAD, WARN = '#46c068', '#f0645d', '#e3b341'
+SEMI = 'Segoe UI Semibold'
 
 
 def read_json(path):
@@ -208,16 +213,23 @@ class App:
                 pass
         self.root = tk.Tk()
         self.root.title('Fastball - MLB The Show 26 for PC')
-        self.root.minsize(720, 560)
-        self.root.geometry('760x600')
+        # Tk sizes fonts by the display scale but not pixel sizes: px() scales those (1.5 at 150%)
+        self.scale = max(1.0, self.root.winfo_fpixels('1i') / 96)
+        w, h = self.px(820), min(self.px(700), self.root.winfo_screenheight() - self.px(80))
+        self.root.minsize(self.px(720), min(self.px(600), h))
+        self.root.geometry(f'{w}x{h}')
+        self.logo = None
         for icon in (ROOT / 'installer' / 'icon.png', ROOT / 'runtime' / 'mlb' / 'mlb.png'):
             if icon.is_file():
                 try:
-                    self.root.iconphoto(True, tk.PhotoImage(file=str(icon)))
+                    image = tk.PhotoImage(file=str(icon))
+                    self.root.iconphoto(True, image)
+                    self.logo = image.subsample(max(1, round(image.width() / self.px(34))))
                 except tk.TclError:
                     pass
                 break
         self.style()
+        self.title_bar()
         self.settings = {} if selftest else load_settings()
         self.events = queue.Queue()
         self.proc = None
@@ -253,44 +265,194 @@ class App:
 
     # ---- look -------------------------------------------------------------------------------------------------------
 
+    def px(self, n):
+        """n pixels at 100% display scale, in this display's pixels."""
+        return round(n * self.scale)
+
+    @property
+    def wrap(self):
+        """The wrap length of the body's text."""
+        return self.px(760)
+
     def style(self):
+        """A flat dark theme over ttk's clam (standard library only). Labels keep one background everywhere, so the
+        logic's style names (Ok.TLabel, Bad.TLabel, Muted.TLabel) read the same on every screen; cards have their own
+        Card* styles."""
+        px = self.px
+        self.root.configure(bg=BG)
         s = ttk.Style(self.root)
+        s.theme_use('clam')
         base = ('Segoe UI', 10)
-        s.configure('.', font=base)   # not option_add('*Font'): a ttk label's own -font would then override its style
-        s.configure('Title.TLabel', font=('Segoe UI Semibold', 15))
-        s.configure('Section.TLabel', font=('Segoe UI Semibold', 11))
+        # not option_add('*Font'): a ttk label's own -font would then override its style
+        s.configure('.', font=base, background=BG, foreground=TEXT, bordercolor=BORDER, lightcolor=BG, darkcolor=BG,
+                    troughcolor=SURFACE, fieldbackground=SURFACE, selectbackground=ACCENT, selectforeground=HEADER_FG,
+                    insertcolor=TEXT, focuscolor=BG)
+        s.map('.', foreground=[('disabled', DIM)])
+        s.configure('TFrame', background=BG)
+        s.configure('TLabel', background=BG, foreground=TEXT)
+        s.configure('Title.TLabel', font=(SEMI, 18))
+        s.configure('Section.TLabel', font=(SEMI, 9), foreground=MUTED)
         s.configure('Muted.TLabel', foreground=MUTED)
+        s.configure('Small.TLabel', foreground=MUTED, font=('Segoe UI', 9))
         s.configure('Ok.TLabel', foreground=OK)
         s.configure('Bad.TLabel', foreground=BAD)
-        s.configure('Big.TButton', font=('Segoe UI Semibold', 12), padding=(22, 8))
-        s.configure('Step.TLabel', font=('Segoe UI', 10))
-        s.configure('StepNow.TLabel', font=('Segoe UI Semibold', 10))
+        s.configure('Step.TLabel', font=base)
+        s.configure('StepNow.TLabel', font=(SEMI, 10))
+        s.configure('Now.TLabel', foreground=ACCENT)   # the mark of the running step
+        s.configure('Card.TFrame', background=SURFACE)
+        s.configure('Card.TLabel', background=SURFACE, foreground=TEXT)
+        s.configure('CardMuted.TLabel', background=SURFACE, foreground=MUTED)
+        s.configure('CardTitle.TLabel', background=SURFACE, foreground=TEXT, font=(SEMI, 11))
+        s.configure('Row.TLabel', font=(SEMI, 10))
+        s.configure('On.TLabel', foreground=OK, font=(SEMI, 9))
+        s.configure('Off.TLabel', foreground=DIM, font=(SEMI, 9))
+        s.configure('TSeparator', background=BORDER)
+
+        def button(name, bg, hover, press, fg, font, pad, ring):
+            s.configure(name, background=bg, foreground=fg, bordercolor=bg, lightcolor=bg, darkcolor=bg, font=font,
+                        padding=pad, relief='flat', anchor='center', focuscolor=bg)
+            states = [('disabled', SURFACE), ('pressed', press), ('active', hover)]
+            s.map(name, background=states, lightcolor=states, darkcolor=states, focuscolor=states,
+                  bordercolor=[('focus', ring), *states], foreground=[('disabled', DIM)])
+        button('TButton', SURFACE, SURFACE_HI, BORDER, TEXT, base, (px(14), px(6)), ACCENT)
+        button('Accent.TButton', ACCENT, ACCENT_HI, ACCENT_LO, HEADER_FG, (SEMI, 10), (px(14), px(6)), '#a9cbff')
+        button('Big.TButton', ACCENT, ACCENT_HI, ACCENT_LO, HEADER_FG, (SEMI, 12), (px(30), px(10)), '#a9cbff')
+        button('BigAlt.TButton', SURFACE, SURFACE_HI, BORDER, TEXT, (SEMI, 12), (px(26), px(10)), ACCENT)
+
+        s.configure('TEntry', fieldbackground=SURFACE, foreground=TEXT, bordercolor=BORDER, lightcolor=SURFACE,
+                    darkcolor=SURFACE, insertcolor=TEXT, padding=(px(8), px(5)))
+        s.map('TEntry', bordercolor=[('focus', ACCENT)], lightcolor=[('focus', ACCENT)])
+
+        # The box is drawn here (rounded, with a tick) rather than by the theme: clam draws an X on Tk 8.6 and a tick
+        # on Tk 9 (the release's), and this looks the same on both
+        size = px(16)
+        self.boxes = {k: self.check_image(size, *v) for k, v in {
+            'off': (SURFACE, BORDER, False), 'off_hover': (SURFACE_HI, MUTED, False),
+            'on': (ACCENT, ACCENT, True), 'on_hover': (ACCENT_HI, ACCENT_HI, True)}.items()}
+        if 'Fastball.indicator' not in s.element_names():
+            s.element_create('Fastball.indicator', 'image', self.boxes['off'],
+                             ('selected', 'active', self.boxes['on_hover']), ('selected', self.boxes['on']),
+                             ('active', self.boxes['off_hover']), width=size + px(10), sticky='w')
+        s.layout('TCheckbutton', [('Checkbutton.padding', {'sticky': 'nswe', 'children': [
+            ('Fastball.indicator', {'side': 'left', 'sticky': ''}),
+            ('Checkbutton.label', {'side': 'left', 'sticky': 'nswe'})]})])
+        s.configure('TCheckbutton', background=BG, foreground=TEXT, padding=(0, px(3)))
+        s.map('TCheckbutton', background=[('active', BG)], foreground=[('disabled', DIM), ('active', HEADER_FG)])
+
+        s.configure('Horizontal.TProgressbar', troughcolor=SURFACE, background=ACCENT, bordercolor=SURFACE,
+                    lightcolor=ACCENT, darkcolor=ACCENT, thickness=px(8))
+
+    def check_image(self, n, fill, edge, tick):
+        """An n x n checkbox: a rounded square of fill with a 1 px edge, a white tick when tick; smoothed edges."""
+        def rgb(c):
+            return tuple(int(c[i:i + 2], 16) for i in (1, 3, 5))
+
+        def mix(a, b, t):   # a over b, t = how much of a
+            return tuple(round(x * t + y * (1 - t)) for x, y in zip(a, b))
+        bg, fill, edge, white = rgb(BG), rgb(fill), rgb(edge), (255, 255, 255)
+        r = n * 0.22   # corner radius
+        w = max(1.6, n / 8)   # tick stroke
+        pts = [(n * 0.24, n * 0.52), (n * 0.42, n * 0.70), (n * 0.76, n * 0.32)]
+
+        def seg(px_, py, a, b):   # distance from the pixel centre to the segment a-b
+            (ax, ay), (bx, by) = a, b
+            dx, dy = bx - ax, by - ay
+            t = max(0.0, min(1.0, ((px_ - ax) * dx + (py - ay) * dy) / (dx * dx + dy * dy)))
+            return ((px_ - ax - t * dx) ** 2 + (py - ay - t * dy) ** 2) ** 0.5
+        rows = []
+        for y in range(n):
+            row = []
+            for x in range(n):
+                cx, cy = x + 0.5, y + 0.5
+                # distance outside the rounded square (negative inside)
+                qx, qy = max(abs(cx - n / 2) - (n / 2 - r), 0), max(abs(cy - n / 2) - (n / 2 - r), 0)
+                d = (qx * qx + qy * qy) ** 0.5 - r
+                c = mix(edge, fill, max(0.0, min(1.0, d + 1.5)))   # the 1 px edge
+                if tick:
+                    near = min(seg(cx, cy, *pts[:2]), seg(cx, cy, *pts[1:]))
+                    c = mix(white, c, max(0.0, min(1.0, w / 2 + 0.5 - near)))
+                row.append('#%02x%02x%02x' % mix(c, bg, max(0.0, min(1.0, 0.5 - d))))
+            rows.append('{' + ' '.join(row) + '}')
+        image = tk.PhotoImage(master=self.root, width=n, height=n)
+        image.put(' '.join(rows))
+        return image
+
+    def title_bar(self):
+        """A seamless title bar: Windows 11 paints it (and the window's edge) in the header's colour, so the two read
+        as one band; Windows 10 (20H1 and later) draws it dark. Still Windows' own bar: snapping, dragging and the
+        buttons work as in any window."""
+        if os.name != 'nt':
+            return
+
+        def colorref(c):   # '#rrggbb' -> 0x00bbggrr
+            return ctypes.c_uint(int(c[5:7], 16) << 16 | int(c[3:5], 16) << 8 | int(c[1:3], 16))
+        try:
+            self.root.update_idletasks()
+            hwnd = ctypes.windll.user32.GetParent(self.root.winfo_id())
+            set_attr = ctypes.windll.dwmapi.DwmSetWindowAttribute
+            # 20 dark mode, 34 border colour, 35 caption colour, 36 caption text colour (each ignored where unknown)
+            for attr, value in ((20, ctypes.c_int(1)), (34, colorref(HEADER_BG)), (35, colorref(HEADER_BG)),
+                                (36, colorref(MUTED))):
+                set_attr(hwnd, attr, ctypes.byref(value), ctypes.sizeof(value))
+        except (AttributeError, OSError):
+            pass
 
     def header(self):
-        h = tk.Frame(self.root, bg=HEADER_BG, height=64)
+        px = self.px
+        h = tk.Frame(self.root, bg=HEADER_BG)
         h.pack(fill='x')
-        tk.Label(h, text='Fastball', bg=HEADER_BG, fg=HEADER_FG, font=('Segoe UI Semibold', 17)).pack(
-            side='left', padx=(18, 8), pady=12)
-        tk.Label(h, text='MLB The Show 26 for PC', bg=HEADER_BG, fg='#9fb7d6', font=('Segoe UI', 13)).pack(
-            side='left', pady=12)
-        tk.Label(h, text=f'version {LAYOUT.release}', bg=HEADER_BG, fg='#9fb7d6', font=('Segoe UI', 9)).pack(
-            side='right', padx=18)
+        if self.logo:
+            tk.Label(h, image=self.logo, bg=HEADER_BG).pack(side='left', padx=(px(20), px(10)), pady=(px(4), px(14)))
+        else:
+            tk.Frame(h, width=px(10), bg=HEADER_BG).pack(side='left', padx=(px(10), 0), pady=(px(4), px(14)))
+        titles = tk.Frame(h, bg=HEADER_BG)
+        titles.pack(side='left')
+        tk.Label(titles, text='Fastball', bg=HEADER_BG, fg=HEADER_FG, font=(SEMI, 15)).pack(anchor='w')
+        tk.Label(titles, text='MLB The Show 26 for PC', bg=HEADER_BG, fg=MUTED, font=('Segoe UI', 9)).pack(
+            anchor='w')
+        tk.Label(h, text=f'v{LAYOUT.release}', bg=SURFACE, fg=MUTED, font=('Segoe UI', 9), padx=px(10),
+                 pady=px(3)).pack(side='right', padx=px(20))
+        tk.Frame(self.root, bg=STITCH, height=max(2, px(2))).pack(fill='x')   # the baseball's stitches
 
     def screen(self):
         if self.body:
             self.body.destroy()
-        self.body = ttk.Frame(self.root, padding=(22, 16, 22, 16))
+        px = self.px
+        self.body = ttk.Frame(self.root, padding=(px(28), px(20), px(28), px(18)))
         self.body.pack(fill='both', expand=True)
         return self.body
+
+    def section(self, parent, text, top=16):
+        """A small heading over a group of fields or buttons."""
+        ttk.Label(parent, text=text.upper(), style='Section.TLabel').pack(anchor='w', pady=(self.px(top), self.px(6)))
+
+    def card(self, parent, color=ACCENT):
+        """A raised panel with a coloured edge on its left (notices); returns its inside."""
+        outer = tk.Frame(parent, bg=color)
+        outer.pack(fill='x', pady=(0, self.px(10)))
+        inner = ttk.Frame(outer, style='Card.TFrame', padding=(self.px(14), self.px(10)))
+        inner.pack(fill='x', padx=(self.px(3), 0))
+        return inner
+
+    def footer(self, parent):
+        """The bottom bar of a screen, under a line."""
+        foot = ttk.Frame(parent)
+        foot.pack(side='bottom', fill='x', pady=(self.px(12), 0))
+        ttk.Separator(parent).pack(side='bottom', fill='x')
+        return foot
 
     # ---- install form -----------------------------------------------------------------------------------------------
 
     def show_form(self):
         b = self.screen()
-        ttk.Label(b, text='This setup builds the game on your PC from your own game files. No game files are included '
-                          'in this download: you need MLB The Show 26 and its 1.0.20 (or 1.0.15) update as NSP files dumped from '
-                          'your Switch, and your Switch\'s prod.keys.', wraplength=700, style='Muted.TLabel').pack(
-            anchor='w', pady=(0, 12))
+        px = self.px
+        foot = self.footer(b)
+        ttk.Label(b, text='Set up the game', style='Title.TLabel').pack(anchor='w')
+        ttk.Label(b, text='No game files are included in this download: the setup builds the game on your PC from your '
+                          'own MLB The Show 26 and its 1.0.20 (or 1.0.15) update as NSP files dumped from your Switch, '
+                          'and your Switch\'s prod.keys.', wraplength=self.wrap, style='Muted.TLabel',
+                  justify='left').pack(anchor='w', pady=(px(2), 0))
+        self.section(b, 'Your files', top=14)
         grid = ttk.Frame(b)
         grid.pack(fill='x')
         grid.columnconfigure(1, weight=1)
@@ -303,32 +465,33 @@ class App:
                 ('dest', 'Install folder', None)]
         for i, (key, label, types) in enumerate(rows):
             r = i * 2
-            ttk.Label(grid, text=label).grid(row=r, column=0, sticky='w', padx=(0, 10), pady=(6, 0))
-            ttk.Entry(grid, textvariable=self.vars[key]).grid(row=r, column=1, sticky='ew', pady=(6, 0))
-            ttk.Button(grid, text='Browse...', command=lambda k=key, t=types: self.browse(k, t)).grid(
-                row=r, column=2, padx=(8, 0), pady=(6, 0))
+            top = 0 if i == 0 else px(6)
+            ttk.Label(grid, text=label).grid(row=r, column=0, sticky='w', padx=(0, px(14)), pady=(top, 0))
+            ttk.Entry(grid, textvariable=self.vars[key]).grid(row=r, column=1, sticky='ew', pady=(top, 0))
+            ttk.Button(grid, text='Browse', command=lambda k=key, t=types: self.browse(k, t)).grid(
+                row=r, column=2, sticky='ns', padx=(px(8), 0), pady=(top, 0))
             note = ttk.Label(grid, text='', style='Muted.TLabel')
-            note.grid(row=r + 1, column=1, sticky='w')
+            note.grid(row=r + 1, column=1, columnspan=2, sticky='w', pady=(px(2), 0))
             self.notes[key] = note
             self.vars[key].trace_add('write', lambda *_a, k=key: self.validate(k))
-        ttk.Label(b, text='Options', style='Section.TLabel').pack(anchor='w', pady=(14, 4))
+        self.section(b, 'Options')
+        opts = ttk.Frame(b)   # the DLSS and save boxes join it once detect() has looked (detected)
+        opts.pack(fill='x')
         # shortcuts off by default: the port lives in its folder, and deleting the folder removes all of it
         self.opt = {'shortcut': tk.BooleanVar(value=False), 'dlss': tk.BooleanVar(value=False),
                     'import_save': tk.BooleanVar(value=False), 'equipment': tk.BooleanVar(value=False),
                     'packages': tk.BooleanVar(value=False)}
-        ttk.Checkbutton(b, text='Shortcuts on the desktop and in the Start menu', variable=self.opt['shortcut']).pack(
-            anchor='w')
-        ttk.Checkbutton(b, text='Unlock all Road to the Show equipment for offline play (adds a few minutes)',
+        ttk.Checkbutton(opts, text='Shortcuts on the desktop and in the Start menu',
+                        variable=self.opt['shortcut']).pack(anchor='w')
+        ttk.Checkbutton(opts, text='Unlock all Road to the Show equipment for offline play (adds a few minutes)',
                         variable=self.opt['equipment']).pack(anchor='w')
-        ttk.Checkbutton(b, text='Add Road to the Show packages: earn equipment from packs like the online game (items '
-                                'start locked)', variable=self.opt['packages']).pack(anchor='w')
-        self.dlss_box = ttk.Checkbutton(b, text='Download NVIDIA DLSS (sharper picture on RTX graphics cards; from '
-                                                'NVIDIA, about 56 MB)', variable=self.opt['dlss'])
-        self.save_box = ttk.Checkbutton(b, text='Copy my MLB The Show 26 save from Ryujinx',
+        ttk.Checkbutton(opts, text='Add Road to the Show packages: earn equipment from packs like the online game '
+                                   '(items start locked)', variable=self.opt['packages']).pack(anchor='w')
+        self.dlss_box = ttk.Checkbutton(opts, text='Download NVIDIA DLSS (sharper picture on RTX graphics cards; from '
+                                                   'NVIDIA, about 56 MB)', variable=self.opt['dlss'])
+        self.save_box = ttk.Checkbutton(opts, text='Copy my MLB The Show 26 save from Ryujinx',
                                         variable=self.opt['import_save'])
-        foot = ttk.Frame(b)
-        foot.pack(side='bottom', fill='x', pady=(10, 0))
-        self.form_error = ttk.Label(foot, text='', style='Bad.TLabel', wraplength=520)
+        self.form_error = ttk.Label(foot, text='', style='Bad.TLabel', wraplength=self.px(540), justify='left')
         self.form_error.pack(side='left')
         self.install_btn = ttk.Button(foot, text='Install', style='Big.TButton', command=self.start_install)
         self.install_btn.pack(side='right')
@@ -461,21 +624,22 @@ class App:
 
     def run_setup(self, args, dest):
         b = self.screen()
+        px = self.px
+        foot = self.footer(b)
         self.dest = dest
         ttk.Label(b, text='Installing', style='Title.TLabel').pack(anchor='w')
-        ttk.Label(b, text=f'into {dest}', style='Muted.TLabel').pack(anchor='w', pady=(0, 10))
+        ttk.Label(b, text=f'into {dest}', style='Muted.TLabel').pack(anchor='w')
+        self.section(b, 'Steps')
         self.step_box = ttk.Frame(b)
         self.step_box.pack(fill='x')
         self.step_rows = {}
-        self.now_text = ttk.Label(b, text='Starting...', wraplength=700)
-        self.now_text.pack(anchor='w', pady=(14, 4))
+        self.now_text = ttk.Label(b, text='Starting...', wraplength=self.wrap, justify='left')
+        self.now_text.pack(anchor='w', pady=(px(18), px(8)))
         self.bar = ttk.Progressbar(b, mode='indeterminate')
         self.bar.pack(fill='x')
         self.bar.start(12)
-        self.messages = ttk.Label(b, text='', wraplength=700, style='Muted.TLabel', justify='left')
-        self.messages.pack(anchor='w', pady=(10, 0), fill='x')
-        foot = ttk.Frame(b)
-        foot.pack(side='bottom', fill='x')
+        self.messages = ttk.Label(b, text='', wraplength=self.wrap, style='Muted.TLabel', justify='left')
+        self.messages.pack(anchor='w', pady=(px(12), 0), fill='x')
         self.cancel_btn = ttk.Button(foot, text='Cancel', command=self.cancel)
         self.cancel_btn.pack(side='right')
         ttk.Label(foot, text='You can cancel and continue later: finished work is kept.', style='Muted.TLabel').pack(
@@ -521,7 +685,7 @@ class App:
             self.log_path = e.get('log')
             for s in e.get('steps', []):
                 row = ttk.Frame(self.step_box)
-                row.pack(fill='x', pady=1)
+                row.pack(fill='x', pady=max(1, self.px(2)))
                 mark = ttk.Label(row, text='○', width=3, style='Muted.TLabel')
                 mark.pack(side='left')
                 name = ttk.Label(row, text=s['title'], style='Step.TLabel')
@@ -531,7 +695,7 @@ class App:
             mark, name = self.step_rows[e['step']]
             state = e.get('state')
             if state == 'started':
-                mark.configure(text='▶', style='TLabel')
+                mark.configure(text='●', style='Now.TLabel')
                 name.configure(style='StepNow.TLabel')
                 self.now_text.configure(text=name.cget('text') + '...')
                 self.bar.configure(mode='indeterminate')
@@ -573,10 +737,10 @@ class App:
         else:
             self.now_text.configure(text=self.error or f'The setup stopped (exit code {code}).', style='Bad.TLabel')
         self.bar.configure(mode='determinate', value=0)
-        ttk.Button(foot, text='Back', command=self.show_form).pack(side='right')
+        ttk.Button(foot, text='Back', style='Accent.TButton', command=self.show_form).pack(side='right')
         if self.log_path:
             ttk.Button(foot, text='Open setup log', command=lambda: os.startfile(self.log_path)).pack(
-                side='right', padx=8)
+                side='right', padx=self.px(8))
 
     def cancel(self):
         if self.proc and messagebox.askyesno('Cancel', 'Stop the setup? Finished work is kept, and the next start '
@@ -590,68 +754,78 @@ class App:
 
     def show_launcher(self, dest, just_installed=False):
         b = self.screen()
+        px = self.px
         self.launcher_dest = Path(dest)
         state = install_state(dest) or {}
         installed = state.get('release') or 'unknown'
         outdated = setup_newer_than(installed)
-        ttk.Label(b, text='Installed! Ready to play.' if just_installed else 'Ready to play',
-                  style='Title.TLabel').pack(anchor='w')
-        ttk.Label(b, text=f'{dest}', style='Muted.TLabel').pack(anchor='w')
-        ttk.Label(b, text=f'Port version {installed}', style='Muted.TLabel').pack(anchor='w', pady=(0, 14))
-        if outdated:
-            ttk.Label(b, text=f'This setup is version {LAYOUT.release}. Update rebuilds the game with it in a few '
-                              'minutes; your game files, saves and settings stay.', wraplength=700).pack(
-                anchor='w', pady=(0, 10))
-        elif update.newer(installed, LAYOUT.release):
-            ttk.Label(b, text=f'This setup (version {LAYOUT.release}) is older than the installed port: use the newer '
-                              'setup to repair it.', wraplength=700, style='Muted.TLabel').pack(anchor='w', pady=(0, 10))
-        self.update_box = ttk.Frame(b)   # filled by offer_update when GitHub has a newer release
-        self.update_box.pack(anchor='w', fill='x')
-        if just_installed and getattr(self, 'warnings', None):
-            ttk.Label(b, text='\n'.join('⚠ ' + w for w in self.warnings), wraplength=700,
-                      style='Muted.TLabel', justify='left').pack(anchor='w', pady=(0, 10))
-        main = ttk.Frame(b)
-        main.pack(anchor='w', pady=(6, 16))
-        ttk.Button(main, text='▶  Play', style='Big.TButton', command=lambda: self.play(dest)).pack(side='left')
-        if outdated:
-            ttk.Button(main, text='Update', style='Big.TButton',
-                       command=lambda: self.run_setup(['--dest', str(dest)], dest)).pack(side='left', padx=10)
-        more = ttk.Frame(b)
-        more.pack(anchor='w')
-        if detect.ryujinx_save():
-            ttk.Button(more, text='Import Ryujinx save', command=lambda: self.import_save(dest)).pack(side='left')
-        ttk.Button(more, text='Open install folder', command=lambda: os.startfile(dest)).pack(side='left', padx=8)
-        if not outdated:
-            ttk.Button(more, text='Repair', command=lambda: self.run_setup(['--dest', str(dest)], dest)).pack(
-                side='left')
-        ttk.Button(more, text='Install somewhere else', command=self.show_form).pack(side='left', padx=8)
-        extra = ttk.Frame(b)
-        extra.pack(anchor='w', pady=(8, 0))
-        if ((state.get('steps') or {}).get('equipment') or {}).get('installed'):
-            ttk.Button(extra, text='Remove Road to the Show equipment',
-                       command=lambda: self.run_setup(['--dest', str(dest), '--no-equipment'], dest)).pack(side='left')
-        else:
-            ttk.Button(extra, text='Add Road to the Show equipment',
-                       command=lambda: self.run_setup(['--dest', str(dest), '--equipment'], dest)).pack(side='left')
-            ttk.Label(extra, text='adding equipment will unlock all equipment items in every Road to the Show save',
-                      style='Muted.TLabel').pack(side='left', padx=8)
-        extra = ttk.Frame(b)
-        extra.pack(anchor='w', pady=(8, 0))
-        if ((state.get('steps') or {}).get('packages') or {}).get('installed'):
-            ttk.Button(extra, text='Remove Road to the Show packages',
-                       command=lambda: self.run_setup(['--dest', str(dest), '--no-packages'], dest)).pack(side='left')
-            ttk.Label(extra, text='removing packages will unlock all equipment items in every Road to the Show save',
-                      style='Muted.TLabel').pack(side='left', padx=8)
-        else:
-            ttk.Button(extra, text='Add Road to the Show packages',
-                       command=lambda: self.run_setup(['--dest', str(dest), '--packages'], dest)).pack(side='left')
-            ttk.Label(extra, text='adding packages will lock all equipment items until you earn them from packs',
-                      style='Muted.TLabel').pack(side='left', padx=8)
         tips = ('In the game: F1 opens the settings menu, F11 switches full screen. Controllers: Xbox and '
                 'PlayStation pads work; the keyboard works too.\nFrom now on Fastball.exe starts the game '
                 'straight away; hold Shift while starting it (or pass --menu) to open this window. It checks for new '
                 'versions of the port once a day; an update keeps your game files, saves and settings.')
-        ttk.Label(b, text=tips, wraplength=700, style='Muted.TLabel', justify='left').pack(side='bottom', anchor='w')
+        ttk.Label(self.footer(b), text=tips, wraplength=self.wrap, style='Small.TLabel', justify='left').pack(
+            anchor='w')
+        ttk.Label(b, text='Installed! Ready to play.' if just_installed else 'Ready to play',
+                  style='Title.TLabel').pack(anchor='w')
+        ttk.Label(b, text=f'Port version {installed}   ·   {dest}', style='Muted.TLabel').pack(
+            anchor='w', pady=(0, px(14)))
+        if outdated:
+            ttk.Label(self.card(b), text=f'This setup is version {LAYOUT.release}. Update rebuilds the game with it in '
+                                         'a few minutes; your game files, saves and settings stay.',
+                      wraplength=self.wrap - px(40), style='Card.TLabel', justify='left').pack(anchor='w')
+        elif update.newer(installed, LAYOUT.release):
+            ttk.Label(self.card(b, WARN), text=f'This setup (version {LAYOUT.release}) is older than the installed '
+                                               'port: use the newer setup to repair it.',
+                      wraplength=self.wrap - px(40), style='CardMuted.TLabel', justify='left').pack(anchor='w')
+        self.update_box = ttk.Frame(b)   # filled by offer_update when GitHub has a newer release
+        self.update_box.pack(anchor='w', fill='x')
+        if just_installed and getattr(self, 'warnings', None):
+            ttk.Label(self.card(b, WARN), text='\n'.join('⚠ ' + w for w in self.warnings),
+                      wraplength=self.wrap - px(40), style='CardMuted.TLabel', justify='left').pack(anchor='w')
+        main = ttk.Frame(b)
+        main.pack(anchor='w', pady=(px(4), 0))
+        ttk.Button(main, text='▶   Play', style='Big.TButton', command=lambda: self.play(dest)).pack(side='left')
+        if outdated:
+            ttk.Button(main, text='Update', style='BigAlt.TButton',
+                       command=lambda: self.run_setup(['--dest', str(dest)], dest)).pack(side='left', padx=px(10))
+        self.section(b, 'Manage', top=20)
+        more = ttk.Frame(b)
+        more.pack(anchor='w')
+        gap = (0, px(8))
+        if detect.ryujinx_save():
+            ttk.Button(more, text='Import Ryujinx save', command=lambda: self.import_save(dest)).pack(
+                side='left', padx=gap)
+        ttk.Button(more, text='Open install folder', command=lambda: os.startfile(dest)).pack(side='left', padx=gap)
+        if not outdated:
+            ttk.Button(more, text='Repair', command=lambda: self.run_setup(['--dest', str(dest)], dest)).pack(
+                side='left', padx=gap)
+        ttk.Button(more, text='Install somewhere else', command=self.show_form).pack(side='left', padx=gap)
+        self.section(b, 'Road to the Show', top=20)
+        steps = state.get('steps') or {}
+
+        def option(name, on, flag, note):
+            """One add-on: its name and whether it is in, what the button does, Add or Remove."""
+            row = ttk.Frame(b)
+            row.pack(fill='x', pady=(0, px(8)))
+            ttk.Button(row, text='Remove' if on else 'Add', width=8,
+                       command=lambda: self.run_setup(['--dest', str(dest), flag], dest)).pack(side='right')
+            text = ttk.Frame(row)   # centred beside the button
+            text.pack(side='left', fill='x')
+            head = ttk.Frame(text)
+            head.pack(anchor='w')
+            ttk.Label(head, text=name, style='Row.TLabel').pack(side='left')
+            ttk.Label(head, text='ON' if on else 'OFF', style='On.TLabel' if on else 'Off.TLabel').pack(
+                side='left', padx=px(8))
+            if note:
+                ttk.Label(text, text=note, style='Muted.TLabel', wraplength=self.wrap - px(120),
+                          justify='left').pack(anchor='w')
+        on = bool((steps.get('equipment') or {}).get('installed'))
+        option('Equipment', on, '--no-equipment' if on else '--equipment',
+               None if on else 'Adding equipment will unlock all equipment items in every Road to the Show save')
+        on = bool((steps.get('packages') or {}).get('installed'))
+        option('Packages', on, '--no-packages' if on else '--packages',
+               'Removing packages will unlock all equipment items in every Road to the Show save' if on else
+               'Adding packages will lock all equipment items until you earn them from packs')
         self.settings['dest'] = str(dest)
         save_settings(self.settings)
         if not self.selftest and not self.update_checked:
@@ -676,27 +850,31 @@ class App:
         box = getattr(self, 'update_box', None)
         if not box or not box.winfo_exists() or box.winfo_children():
             return
-        ttk.Label(box, text=f'Version {info["version"]} of the port is available.', style='Section.TLabel').pack(
-            anchor='w')
-        row = ttk.Frame(box)
-        row.pack(anchor='w', pady=(4, 6))
-        ttk.Button(row, text='Download and update', command=lambda: self.start_download(info)).pack(side='left')
-        ttk.Button(row, text="What's new", command=lambda: os.startfile(info['page'])).pack(side='left', padx=8)
+        px = self.px
+        card = self.card(box, OK)
+        row = ttk.Frame(card, style='Card.TFrame')
+        row.pack(fill='x')
+        ttk.Button(row, text="What's new", command=lambda: os.startfile(info['page'])).pack(side='right')
+        ttk.Button(row, text='Download and update', style='Accent.TButton',
+                   command=lambda: self.start_download(info)).pack(side='right', padx=px(8))
+        ttk.Label(row, text=f'Version {info["version"]} of the port is available', style='CardTitle.TLabel').pack(
+            side='left')
         size = f'about {info["size"] >> 20} MB, ' if info.get('size') else ''
-        ttk.Label(box, text=f'Downloads the new version ({size}from GitHub) into this folder, then rebuilds the '
-                            'game with it in a few minutes.', style='Muted.TLabel', wraplength=700).pack(anchor='w')
+        ttk.Label(card, text=f'Downloads the new version ({size}from GitHub) into this folder, then rebuilds the '
+                             'game with it in a few minutes.', style='CardMuted.TLabel', wraplength=self.wrap - px(40),
+                  justify='left').pack(anchor='w', pady=(px(4), 0))
 
     def start_download(self, info):
         dest = self.launcher_dest
         b = self.screen()
+        px = self.px
+        foot = self.footer(b)
         ttk.Label(b, text=f'Updating to version {info["version"]}', style='Title.TLabel').pack(anchor='w')
-        ttk.Label(b, text=f'for {dest}', style='Muted.TLabel').pack(anchor='w', pady=(0, 10))
-        self.now_text = ttk.Label(b, text='Connecting to GitHub...', wraplength=700)
-        self.now_text.pack(anchor='w', pady=(14, 4))
+        ttk.Label(b, text=f'for {dest}', style='Muted.TLabel').pack(anchor='w')
+        self.now_text = ttk.Label(b, text='Connecting to GitHub...', wraplength=self.wrap, justify='left')
+        self.now_text.pack(anchor='w', pady=(px(24), px(8)))
         self.bar = ttk.Progressbar(b, mode='determinate', maximum=1000)
         self.bar.pack(fill='x')
-        foot = ttk.Frame(b)
-        foot.pack(side='bottom', fill='x')
         ttk.Button(foot, text='Cancel', command=lambda: self.download_cancel and self.download_cancel.set()).pack(
             side='right')
         ttk.Label(foot, text='After the download, the new version replaces this one and rebuilds the game.',
