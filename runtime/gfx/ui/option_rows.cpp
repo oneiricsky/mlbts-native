@@ -36,18 +36,22 @@ static float g_bottom;                   // opt_reserve_bottom: kept free under 
 static char g_focus_key[64];             // opt_focus_key: the row that takes the cursor when it is next drawn
 
 // The description pane: this frame's hovered and selected rows, the page's first row, and the last one shown.
-struct Desc { char text[1024]; };
+// fastball: na, an unavailable row's reason, is drawn in red under the text.
+struct Desc { char text[1024]; char na[192]; };
 static Desc g_hover, g_focus, g_first, g_shown;
 
 static const char *g_na;   // fastball: opt_unavailable, for the next row
+static const ImU32 kNa = IM_COL32(235, 95, 85, 255);   // fastball: an unavailable row's reason
 
 void opt_unavailable(const char *why) { g_na = why; }
 
 static void desc_set(Desc &d, const char *desc, const char *key, const CfgMeta *m, const char *na) {
+    d.na[0] = 0;
+    if (na) snprintf(d.na, sizeof d.na, "Not available now: %s.", na);
     int n = snprintf(d.text, sizeof d.text, "%s", desc);
     if (n < 0 || n >= (int)sizeof d.text) return;
     if (na)
-        snprintf(d.text + n, sizeof d.text - n, "\n\nNot available now: %s.", na);
+        ;   // (the reason in red, opt_end)
     else if (cfg_from_env(key))
         snprintf(d.text + n, sizeof d.text - n, "\n\n%s MLB_%s", kSetByEnv, key);
     else if (m && !m->live)
@@ -90,6 +94,12 @@ void opt_end(void) {
     ImGui::PopStyleVar();
     ImGui::PushTextWrapPos(0);
     ImGui::TextUnformatted(g_shown.text);
+    if (g_shown.na[0]) {
+        ImGui::Dummy(ImVec2(0, ImGui::GetFontSize() * 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_Text, kNa);
+        ImGui::TextUnformatted(g_shown.na);
+        ImGui::PopStyleColor();
+    }
     ImGui::PopTextWrapPos();
     ImGui::EndChild();
     ImGui::PopID();
@@ -191,7 +201,7 @@ static int row(const char *key, const char *label, const char *desc, const RowVi
         float nr = v.note || v.is_default ? right - font->CalcTextSizeA(small, FLT_MAX, 0, v.note ? v.note : "default").x
                                           : right;
         ImVec4 nclip(p.x, p.y, nr - fs * 0.6f, p.y + h);
-        dl->AddText(font, small, ImVec2(p.x + pad, ny), env ? IM_COL32(200, 150, 90, 255) : na ? kGrey : kDim, note,
+        dl->AddText(font, small, ImVec2(p.x + pad, ny), env ? IM_COL32(200, 150, 90, 255) : na ? kNa : kDim, note,
                     NULL, 0, &nclip);
     }
     ImGui::PopID();
