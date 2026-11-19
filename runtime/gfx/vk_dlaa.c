@@ -218,6 +218,25 @@ void vk_dlaa_init(void) {
 
 int vk_dlaa_available(void) { return vk_dlaa_wanted() && N.available; }
 
+// fastball: why DLSS cannot run on this PC, whatever MLB_DLSS says (the settings menu greys its rows): NULL when it can
+// (an NVIDIA RTX card, the driver's NGX core, nvngx_dlss.dll next to mlb.exe). Looked at once.
+const char *vk_dlaa_missing(void) {
+    static const char *why = "";
+    if (why && !*why) {
+        const VkCtx *c = vk_ctx();
+        if (!c || !c->device) return "The graphics device is not up yet";   // (not kept: looked at again)
+        char core[PLAT_PATH_MAX], exe[PLAT_PATH_MAX], dll[PLAT_PATH_MAX + 32];
+        const char *sep = plat_exe_path(exe, sizeof exe) ? plat_last_sep(exe) : NULL;
+        if (sep) snprintf(dll, sizeof dll, "%.*s/nvngx_dlss.dll", (int)(sep - exe), exe);
+        if (!c || c->props.vendorID != 0x10de || !strstr(c->props.deviceName, "RTX"))
+            why = "Needs an NVIDIA GeForce RTX graphics card";
+        else if (!plat_ngx_core_path(core, sizeof core)) why = "Needs a newer NVIDIA driver (no NGX)";
+        else if (!sep || !plat_file_exists(dll)) why = "nvngx_dlss.dll is missing (run the setup again)";
+        else why = NULL;
+    }
+    return why;
+}
+
 // ---------------------------------------------------------------- where DLSS runs in MLB's frame (fastball)
 // Measured in the drawlogs and RenderDoc captures of 2026-11-10/11 (play, menus, RTTS, celebrations): MLB is a forward
 // renderer. Its 3D scene is drawn in one pass into a B10G11R11 float colour target (0x154ea0000, linear HDR before the

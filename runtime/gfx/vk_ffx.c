@@ -70,6 +70,25 @@ int vk_ffx_ml_wanted(void) { return F.id4 && !F.failed4 && !strcmp(cfg_value("FS
 
 void vk_ffx_ran(void) { F.last_ns = plat_now_ns(); }
 
+const char *vk_ffx_missing(void) {
+    static int have = -1;
+    if (have < 0) {
+        char exe[PLAT_PATH_MAX], path[PLAT_PATH_MAX + 64];
+        const char *sep = plat_exe_path(exe, sizeof exe) ? plat_last_sep(exe) : NULL;
+        have = sep != NULL;
+        static const char *const libs[] = {FFX_LOADER_DLL, FFX_UPSCALER_DLL};
+        for (int i = 0; i < 2 && have; i++) {
+            snprintf(path, sizeof path, "%.*s/%s", (int)(sep - exe), exe, libs[i]);
+            have = plat_file_exists(path);
+        }
+    }
+    if (!have) return "AMD's FSR files are missing (run the setup again)";
+    if (F.loaded && !F.id31 && !F.id4) return "AMD's FSR does not run on this graphics card";
+    return NULL;
+}
+
+int vk_ffx_has4(void) { return F.loaded ? F.id4 != 0 && !F.failed4 : -1; }
+
 const char *vk_ffx_status(void) {
     if (!vk_ffx_wanted()) return NULL;
     if (!F.tried) return "starting";

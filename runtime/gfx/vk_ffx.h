@@ -15,7 +15,11 @@ void vk_ffx_init(void);
 int vk_ffx_available(void);   // an FSR 3.1 or FSR 4 provider is there
 int vk_ffx_ml_wanted(void);   // FSR 4 will be used for the next context made (MLB_FSR_VERSION=4 and the GPU has it)
 const char *vk_ffx_status(void);   // the menu's note: NULL when MLB_FSR was off at start
-void vk_ffx_ran(void);        // vk_dlaa.c, after each FSR frame (the status's "active")
+// The settings menu: why FSR cannot run on this PC (AMD's two DLLs missing), NULL when it can; whether this run's GPU
+// has FSR 4 (1, 0; -1 not known: AMD's runtime was not started, MLB_FSR off at start).
+const char *vk_ffx_missing(void);
+int vk_ffx_has4(void);
+void vk_ffx_ran(void);       // vk_dlaa.c, after each FSR frame (the status's "active")
 
 // One upscaling of the scene. Every image is in VK_IMAGE_LAYOUT_GENERAL, as every image of the back end; the inputs
 // are moved to shader-read for FSR (AMD's Vulkan integration guide) and back. jx, jy: the jitter the scene was drawn
