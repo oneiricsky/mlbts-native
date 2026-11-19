@@ -1,5 +1,5 @@
 """Command line: python -m installer --dest DIR [--base NSP --update NSP --keys prod.keys] [--titlekeys FILE]
-                                     [--root DIR] [--dlss] [--shortcut] [--import-save] [--launcher]
+                                     [--root DIR] [--dlss|--no-dlss] [--fsr|--no-fsr] [--shortcut] [--import-save] [--launcher]
 
 A first install needs the game files and the keys. On a folder with fastball-install.json (resume after a cancel or a
 failure, or update with a newer release) only --dest is needed, unless the extraction must run again. Prints JSON
@@ -92,7 +92,14 @@ def main(argv=None):
     ap.add_argument('--titlekeys', type=Path, help='title.keys (only when the NSPs lack their tickets)')
     ap.add_argument('--root', type=Path, help='the setup folder or a repository (default: the folder above installer/)')
     ap.add_argument('--temp', type=Path, help="the build's temporary folder (default: temp in the setup folder)")
-    ap.add_argument('--dlss', action='store_true', help="download NVIDIA's nvngx_dlss.dll next to the game")
+    ap.add_argument('--dlss', action='store_true',
+                    help="download NVIDIA's nvngx_dlss.dll next to the game on any graphics card (by default: on an "
+                         'NVIDIA GeForce RTX, found by itself)')
+    ap.add_argument('--no-dlss', action='store_true', help="never download NVIDIA's DLSS library")
+    ap.add_argument('--fsr', action='store_true',
+                    help="download AMD's FSR 3.1 / 4 runtime next to the game on any graphics card (by default: on "
+                         'an AMD, NVIDIA or Intel card, found by itself)')
+    ap.add_argument('--no-fsr', action='store_true', help="never download AMD's FSR runtime")
     ap.add_argument('--shortcut', action='store_true', help='desktop and Start menu shortcuts (off by default)')
     ap.add_argument('--import-save', action='store_true', help="copy the game's Ryujinx save (mlb.exe --import-save)")
     ap.add_argument('--equipment', action='store_true',

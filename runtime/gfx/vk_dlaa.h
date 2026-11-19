@@ -53,5 +53,6 @@ int vk_dlaa_skip_draw(VkExec *ex, const GfxShader *fs);
 // im is the scene armed this frame, DLSS's picture of it at pw x ph (the composite's pass; the scene's own size when
 // that is not smaller) into *out, 1; the composite samples it in the scene's place. 0: not run (FXAA and FSR as set).
 int vk_dlaa_scene(VkExec *ex, const VkTexImage *im, uint32_t pw, uint32_t ph, VkImageView *out);
-int vk_dlaa_on(void);                 // NGX came up with DLSS and nothing failed since
+int vk_dlaa_on(void);                 // NGX came up with DLSS (or AMD's runtime with FSR) and nothing failed since
+const char *vk_dlaa_name(void);       // "DLSS", or "FSR" when FSR (vk_ffx.c) is the backend
 const char *vk_dlaa_status(void);     // the menu's note: NULL when MLB_DLSS was off at start

@@ -45,6 +45,10 @@ static const CfgMeta metas[] = {
     // start; TotK's DLAA switch and its characters' mask (TotK's G-buffer classes) are not used. The preset is live.
     {"DLSS", "off", "off|dlaa|quality|balanced|performance|ultra_performance", RESTART},
     {"DLSS_PRESET", "default", "default|k|j|m|l|e", LIVE}, {"FXAA", "1", "0|1", LIVE},
+    // fastball: AMD FSR 3.1 / 4 (vk_ffx.c), off by default like DLSS: the mode, read at start (the scene's size follows
+    // it, resolution.c); the version (4: FSR 4 where the GPU runs it, else 3.1) and FSR's own sharpening are live
+    {"FSR", "off", "off|native|quality|balanced|performance|ultra_performance", RESTART},
+    {"FSR_VERSION", "4", "4|3.1", LIVE}, {"FSR_SHARPNESS", "50", "0..100", LIVE},
     {"ASPECT", "fit", "fit|stretch", LIVE}, {"MOVIE_ASPECT", "keep", "keep|stretch", LIVE}, {"FOV", "100", "70..140", LIVE},
     {"ANISO", "game", "game|2|4|8|16", RESTART},   // vk_texture.c sampler_features
     // colour adjustment (vk_color.c); the preset is the menu's, the four values are what the present uses

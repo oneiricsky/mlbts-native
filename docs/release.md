@@ -13,7 +13,8 @@ data or assets, and no file built from them**: no `mlb.exe`, no generated C or i
    game and update NSPs (1.0.20 preferred, else 1.0.15) from the emulators' game folders, Downloads, Desktop, Documents, `~/Games` or the folder
    around the setup (`installer/detect.py`), and the install folder `MLBTS\` inside the setup folder (on the disk
    with the most free space instead when the setup's disk lacks the room). They check it, change what is wrong and
-   press **Install**. Options: shortcuts (off), NVIDIA DLSS (on with an RTX card),
+   press **Install**. Options: shortcuts (off); NVIDIA DLSS (on a GeForce RTX) and AMD FSR (on any AMD, NVIDIA or Intel card) are
+   downloaded without asking for the graphics card the setup finds,
    copy the Ryujinx save (on when Ryujinx has one and the install has none), Road to the Show equipment offline
    and Road to the Show packages offline (both off; the launcher screen can add or remove them later).
 3. Waits about 10 minutes (on the dev PC: 4 for the 37 GB of game data, 1 to lift, 3 to compile).
@@ -80,7 +81,9 @@ Every choice is a flag, so launchers and scripts need no window:
 <install folder>/                default MLBTS\ in the setup folder
   mlb.exe, SDL3.dll              the game, built on this PC (tools/build.py --portable: paths beside the exe)
   totk_xlate.exe, totk_xlate.id  the shader translator
-  nvngx_dlss.dll                 NVIDIA DLSS, downloaded from NVIDIA's DLSS repository when the box is ticked
+  nvngx_dlss.dll                 NVIDIA DLSS, downloaded from NVIDIA's DLSS repository on a GeForce RTX
+  amd_fidelityfx_*_vk.dll        AMD FSR 3.1 / 4 (loader and upscalers), from AMD's FSR SDK 2.4.0 on any AMD, NVIDIA or
+                                 Intel card (installer/steps.py FFX_DLLS); --no-dlss / --no-fsr skip, --dlss / --fsr force
   mlb.cfg                        settings; the setup writes MLB_SAMPLER=off (the profiler is off by default since 0.1.4 anyway)
   game/exefs/, game/romfs/       extracted from the player's NSPs (+ romfs_list.tsv, romfs_info.json, romfs.complete)
   profile/                       saves, account
@@ -120,7 +123,7 @@ update only rebuilds.
    certificate) and writes `MLB_OFFLINE_PACKAGES=1` into `mlb.cfg`
    ([tools/packages](../tools/packages/README.md)). It brings the equipment step with it, with the equipment not
    owned at the start. `--no-packages` removes the folder and the setting; the equipment then goes back to owned.
-7. **Finish**: `mlb.cfg` (when missing), DLSS, shortcuts (PowerShell's `WScript.Shell`; to `Fastball.exe`, only when asked), `mlb.exe --import-save`,
+7. **Finish**: `mlb.cfg` (when missing), DLSS and FSR for the graphics card (every setup and update looks again), shortcuts (PowerShell's `WScript.Shell`; to `Fastball.exe`, only when asked), `mlb.exe --import-save`,
    and `temp/` deleted.
 
 Logs: `logs/setup-<time>.log` in the setup folder. The keys file's path is passed to the tools; its contents are never

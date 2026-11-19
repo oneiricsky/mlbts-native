@@ -284,7 +284,7 @@ static bool g_modal;            // a confirmation is open: B and Esc close it, n
 
 // Every setting the pages show, for "Reset all settings" (cfg_reset) and "Restart now".
 static const char *const kMenuKeys[] = {
-    "RENDER_SCALE", "UPSCALER", "SHARPNESS", "DLSS", "DLSS_PRESET", "AA", "AA_STRENGTH", "ANISO", "COLOR_PRESET", "COLOR_BRIGHTNESS", "COLOR_CONTRAST", "COLOR_SATURATION",
+    "RENDER_SCALE", "UPSCALER", "SHARPNESS", "DLSS", "DLSS_PRESET", "FSR", "FSR_VERSION", "FSR_SHARPNESS", "AA", "AA_STRENGTH", "ANISO", "COLOR_PRESET", "COLOR_BRIGHTNESS", "COLOR_CONTRAST", "COLOR_SATURATION",
     "COLOR_GAMMA", "FULLSCREEN", "WINDOW_SIZE", "VK_PRESENT", "FPS_LIMIT", "ASPECT", "GPU_INDEX", "PERF_OVERLAY", "FRAME_QUEUE",
     "ASSUME_FOCUS", "VOLUME", "PAD_MAP", "PROMPTS", "RUMBLE", "RUMBLE_STRENGTH", "STICK_DEADZONE", "LSTICK_DEADZONE",
     "RSTICK_DEADZONE", "ASYNC_PREEMPT", "REPLAY_ASYNC", "PIPE_WAIT", "PIPE_SKIP", "LIB_PREBUILD",
@@ -319,11 +319,19 @@ static bool restart_pending(void) {
 // replaces while it runs say so.
 extern "C" const char *vk_dlaa_status(void);
 extern "C" int vk_dlaa_on(void);
+extern "C" const char *vk_dlaa_name(void);
 static bool dlss_in_use(void) { return vk_dlaa_on() != 0; }
+// fastball: AMD FSR 3.1 / 4 (vk_ffx.c) runs through the same machinery as DLSS: the rows it replaces name the one
+// running.
+extern "C" const char *vk_ffx_status(void);
+static const char *replaced_note(void) {
+    if (!dlss_in_use()) return nullptr;
+    return strcmp(vk_dlaa_name(), "FSR") ? "replaced by DLSS" : "replaced by FSR";
+}
 
 // What the antialiasing pass did lately (vk_aa_status), under its value.
 static const char *aa_note(void) {
-    if (dlss_in_use()) return "replaced by DLSS";
+    if (dlss_in_use()) return replaced_note();
     switch (vk_aa_status()) {
     case 1: return "active";
     case 2: return "waiting for a 3D scene";
@@ -362,7 +370,7 @@ static void rows_color(void) {
 
 // "in use: ..." under the upscaler while FSR has nothing to do (the scene is as large as the picture or larger).
 static const char *upscaler_note(void) {
-    if (dlss_in_use()) return "replaced by DLSS";
+    if (dlss_in_use()) return replaced_note();
     if (strcmp(cfg_value("UPSCALER"), "fsr") || !strcmp(cfg_value("RENDER_SCALE"), "game")) return nullptr;
     return "not used at this resolution";
 }
@@ -379,7 +387,7 @@ static void tab_graphics(float scale) {
                     "shrink it, which also smooths edges (supersampling). The HUD and menus are always 1080p.\n\n"
                     "Costs GPU time and video memory: 150 % draws about four times the pixels of the game's size. "
                     "200 % runs the game out of its own graphics memory and crashes, so it is not offered.",
-                    -1, dlss_in_use() ? "replaced by DLSS" : nullptr);
+                    -1, replaced_note());
     static const char *const up[] = {"FSR 1", "Bilinear"};
     opt_choice("UPSCALER", "Upscaling", up, 2,
                "How the 3D scene is stretched to 1080p when the internal resolution is the game's.\n\n"
@@ -387,14 +395,14 @@ static void tab_graphics(float scale) {
                "It runs before the game draws its HUD, so text is not touched. It also scales the picture up when "
                "the window is larger than 1080p. Costs a fraction of a millisecond.",
                upscaler_note());
-    opt_slider("SHARPNESS", "FSR sharpness", 0, 100,
-               "How much FSR sharpens after scaling up; 0 turns the sharpening off.", 5, "%.0f %%");
+    opt_slider("SHARPNESS", "FSR 1 sharpness", 0, 100,
+               "How much FSR 1 sharpens after scaling up; 0 turns the sharpening off.", 5, "%.0f %%");
     opt_group("NVIDIA DLSS");
     static const char *const dlss[] = {"off", "dlaa", "quality", "balanced", "performance", "ultra_performance"};
     static const char *const dlss_names[] = {"Off", "DLAA (1920 \xc3\x97 1080)", "Quality (1440 \xc3\x97 810)",
                                              "Balanced (1114 \xc3\x97 626)", "Performance (960 \xc3\x97 540)",
                                              "Ultra Performance (640 \xc3\x97 360)"};
-    opt_choice_list("DLSS", "DLSS", dlss, dlss_names, 6,
+    bool dlss_set = opt_choice_list("DLSS", "DLSS", dlss, dlss_names, 6,
                     "NVIDIA DLSS on the 3D scene, for GeForce RTX graphics cards. It draws the scene at the size shown "
                     "and uses AI to rebuild a sharp, smooth 1080p picture from it and from the frames before. It "
                     "replaces the internal resolution, the upscaling and the antialiasing above. The HUD and menus are "
@@ -403,8 +411,10 @@ static void tab_graphics(float scale) {
                     "Quality draws it at the game's own 1440 x 810, as on the TV, and DLSS turns that into a sharp "
                     "1080p picture in place of the game's plain stretch. Balanced, Performance and Ultra Performance "
                     "draw less for more frame rate.\n\n"
-                    "Needs nvngx_dlss.dll (NVIDIA's DLSS library) next to mlb.exe. Applies after a restart.",
+                    "Needs nvngx_dlss.dll (NVIDIA's DLSS library) next to mlb.exe; the setup downloads it on "
+                    "GeForce RTX cards. Applies after a restart. Turning DLSS on turns AMD FSR off.",
                     -1, vk_dlaa_status());
+    if (dlss_set && strcmp(cfg_value("DLSS"), "off")) cfg_set_saved("FSR", "off");   // one temporal upscaler
     static const char *const preset[] = {"default", "k", "j", "m", "l", "e"};
     static const char *const preset_names[] = {"Default", "K (transformer)", "J (transformer)",
                                                "M (transformer 2)", "L (transformer 2)", "E (older CNN)"};
@@ -417,6 +427,31 @@ static void tab_graphics(float scale) {
                     "the FP8 maths they are built for. E is the older CNN model: the cheapest, softer and with more "
                     "ghosting.\n\n"
                     "Applies at once.");
+    opt_group("AMD FSR");
+    static const char *const fsr[] = {"off", "native", "quality", "balanced", "performance", "ultra_performance"};
+    static const char *const fsr_names[] = {"Off", "Native AA (1920 \xc3\x97 1080)", "Quality (1440 \xc3\x97 810)",
+                                            "Balanced (1114 \xc3\x97 626)", "Performance (960 \xc3\x97 540)",
+                                            "Ultra Performance (640 \xc3\x97 360)"};
+    bool fsr_set = opt_choice_list("FSR", "FSR", fsr, fsr_names, 6,
+                    "AMD FidelityFX Super Resolution (FSR 3.1 or FSR 4) on the 3D scene, for any graphics card. Like "
+                    "DLSS, it draws the scene at the size shown and rebuilds a sharp, smooth 1080p picture from it and "
+                    "from the frames before. It replaces the internal resolution, the upscaling and the antialiasing "
+                    "above. The HUD and menus are not touched.\n\n"
+                    "Native AA draws the scene at full 1080p and only smooths it. Quality draws it at the game's own "
+                    "1440 x 810. Balanced, Performance and Ultra Performance draw less for more frame rate.\n\n"
+                    "Needs AMD's FSR libraries (amd_fidelityfx_loader_vk.dll and amd_fidelityfx_upscaler_vk.dll) next "
+                    "to mlb.exe; the setup downloads them. Applies after a restart. Turning FSR on turns DLSS off.",
+                    -1, vk_ffx_status());
+    if (fsr_set && strcmp(cfg_value("FSR"), "off")) cfg_set_saved("DLSS", "off");   // one temporal upscaler
+    static const char *const fsr_ver[] = {"4", "3.1"};
+    static const char *const fsr_ver_names[] = {"FSR 4 where supported", "FSR 3.1"};
+    opt_choice_list("FSR_VERSION", "FSR version", fsr_ver, fsr_ver_names, 2,
+                    "FSR 4 uses AI to rebuild the picture: the sharpest and steadiest, on the AMD Radeon cards AMD made "
+                    "it for (RX 9000, and RX 6000 / 7000 with AMD's newer drivers) with AMD's own driver. Everywhere "
+                    "else FSR 3.1 runs instead, which works on every graphics card (NVIDIA and Intel too).\n\n"
+                    "FSR 3.1 always uses FSR 3.1. The note under FSR says which one runs. Applies at once.");
+    opt_slider("FSR_SHARPNESS", "FSR 3.1 / 4 sharpness", 0, 100,
+               "How much FSR sharpens its picture; 0 turns the sharpening off. Applies at once.", 5, "%.0f %%");
     opt_group("Antialiasing");
     static const char *const aa[] = {"Off", "FXAA"};
     opt_choice("AA", "Antialiasing", aa, 2,

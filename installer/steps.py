@@ -6,7 +6,7 @@
     build    lift the code to C (recomp/gen.py) and compile it with the prebuilt runtime (tools/build.py) into mlb.exe
     equipment  optional: every Road to the Show equipment item, offline (tools/equipment); only shown when in play
     packages   optional: Road to the Show's Packages, offline (tools/packages, runtime/mlb/packages.c); the same
-    finish   always: mlb.cfg, the shader translator, DLSS (optional), shortcuts, a Ryujinx save (optional), clean up
+    finish   always: mlb.cfg, the shader translator, DLSS and FSR for the graphics card, shortcuts, a Ryujinx save (optional), clean up
 
 fastball-install.json in the install folder records each finished step with a key: a fingerprint of what its output
 depends on. A step whose recorded key matches and whose output is still there is skipped. So a cancelled setup resumes
@@ -55,6 +55,16 @@ DLSS_VERSION = '310.9.1'
 DLSS_URL = f'https://raw.githubusercontent.com/NVIDIA/DLSS/v{DLSS_VERSION}/lib/Windows_x86_64/rel/{DLSS_DLL}'
 DLSS_SIZE = 58956912
 DLSS_SHA256 = '3975567b8943c53acce397f2b72380092f84f162d00b0d2c7d08a1025c563983'
+# AMD FSR 3.1 / 4 (runtime/gfx/vk_ffx.c): AMD's signed Vulkan runtime from the FSR SDK 2.4.0 (its licence allows
+# redistribution, but like DLSS it is downloaded from AMD's repository, never shipped). The same revision as the API
+# headers in runtime/third_party/ffx.
+FFX_REVISION = '7539ae8b6568ad29ed78a753404351daf3b5cca7'
+FFX_URL = (f'https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/{FFX_REVISION}'
+           '/Kits/FidelityFX/signedbin/')
+FFX_DLLS = (('amd_fidelityfx_loader_vk.dll', 39184,
+             '38a56a01fb3565c0757d9f5c1e4e69de4b65e5f2e5769b323b200dc1f142bab9'),
+            ('amd_fidelityfx_upscaler_vk.dll', 36135696,
+             '4a7e895af6e0b615d40a84d59eb8c2b1054ad91cdd0c739567940270d51bdab7'))
 
 PLAYER_CFG = """# mlb.cfg - settings of MLB The Show 26 (PC port), one KEY=VALUE per line. A line starting with # is ignored.
 # Most settings are in the in-game menu (F1), which writes its changes into this file.
@@ -601,8 +611,7 @@ class Finish(Step):
         cfg = dest / 'mlb.cfg'
         if not cfg.is_file():
             cfg.write_text(PLAYER_CFG, encoding='utf-8')
-        if opt.dlss:
-            self.dlss(ctx)
+        self.upscalers(ctx)
         if opt.shortcut:
             rep.progress(self.id, 'Making shortcuts', force=True)
             # the launcher when there is one: it starts the game at once and checks for updates once a day
@@ -621,30 +630,50 @@ class Finish(Step):
         shutil.rmtree(ctx.temp, ignore_errors=True)
         return {}
 
-    def dlss(self, ctx):
-        rep, target = ctx.reporter, ctx.dest / DLSS_DLL
+    def upscalers(self, ctx):
+        """The upscalers' libraries for this PC's graphics card, without asking: NVIDIA DLSS on a GeForce RTX, AMD FSR
+        (3.1 everywhere, 4 on the Radeons that run it) on any AMD, NVIDIA or Intel card. Each runs only once it is
+        turned on in the game's settings (F1, Graphics), so a library on a PC that never uses it costs only disk space.
+        Every setup and update looks again, so a new graphics card gets its library at the next update. --dlss / --fsr
+        download one whatever the card; --no-dlss / --no-fsr never."""
+        rep, opt = ctx.reporter, ctx.options
+        names = detect.gpus()
+        rep.log('graphics cards: ' + (', '.join(names) if names else 'none found in the registry'))
+        if opt.dlss or (detect.nvidia_rtx(names) and not opt.no_dlss):
+            self.download(ctx, DLSS_DLL, DLSS_URL, DLSS_SIZE, DLSS_SHA256, 'NVIDIA DLSS', 'NVIDIA RTX SDK license')
+        if opt.fsr or (detect.fsr_gpu(names) and not opt.no_fsr):
+            for name, size, sha in FFX_DLLS:
+                if not self.download(ctx, name, FFX_URL + name, size, sha, 'AMD FSR', 'AMD FSR SDK license'):
+                    break
+
+    def download(self, ctx, name, url, size, sha256, label, licence):
+        """url into the install folder as name, checked by size and SHA-256. False when it could not be had (a
+        warning: the game runs without that upscaler)."""
+        rep, target = ctx.reporter, ctx.dest / name
         if target.is_file():
-            return   # this setup's copy, or a newer one the player put there
-        part = ctx.temp / (DLSS_DLL + '.part')
-        rep.log(f'dlss: {DLSS_URL} (NVIDIA RTX SDK license)')
+            return True   # this setup's copy, or a newer one the player put there
+        part = ctx.temp / (name + '.part')
+        rep.log(f'{label}: {url} ({licence})')
         try:
             part.parent.mkdir(parents=True, exist_ok=True)
             h, done = hashlib.sha256(), 0
-            with urllib.request.urlopen(DLSS_URL, timeout=60) as r, open(part, 'wb') as f:
+            with urllib.request.urlopen(url, timeout=60) as r, open(part, 'wb') as f:
                 while block := r.read(1 << 20):
                     f.write(block)
                     h.update(block)
                     done += len(block)
-                    rep.progress(self.id, "Downloading NVIDIA DLSS", min(done, DLSS_SIZE), DLSS_SIZE, 'bytes')
-            if done != DLSS_SIZE or h.hexdigest() != DLSS_SHA256:
+                    rep.progress(self.id, f'Downloading {label}', min(done, size), size, 'bytes')
+            if done != size or h.hexdigest() != sha256:
                 raise OSError(f'{done} bytes, not the expected file')
             os.replace(part, target)
-        except Exception as e:   # urllib's errors, a cut connection, a bad file: the game runs without DLSS
+            return True
+        except Exception as e:   # urllib's errors, a cut connection, a bad file: the game runs without it
             if isinstance(e, KeyboardInterrupt):
                 raise
             part.unlink(missing_ok=True)
-            rep.warning(f'NVIDIA DLSS could not be downloaded ({str(e)[:200]}). The game runs without it; run the '
+            rep.warning(f'{label} could not be downloaded ({str(e)[:200]}). The game runs without it; run the '
                         'setup again to retry.')
+            return False
 
 
 def shortcuts(exe, icon):

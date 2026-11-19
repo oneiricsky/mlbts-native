@@ -12,6 +12,11 @@
 // The core's parameter object is a C++ class whose virtual functions are called through its vtable: the Set overloads
 // in slots 0-7 and the Get overloads in 8-15. MSVC (the Windows core) lays out each group of overloads in reverse
 // declaration order. vtable_ok checks the layout with a set-then-get round trip before anything relies on it.
+//
+// fastball: AMD FSR 3.1 and FSR 4 (MLB_FSR, vk_ffx.c) are a second backend of the same machinery. When DLSS did not
+// come up and AMD's runtime did, everything below (the scene found at its pass, the jitter, the camera, the motion
+// vectors, the work images per size, the texture LOD bias) runs as for DLSS, and the one evaluation is FSR's
+// (fsr_eval) instead of NGX's. DLSS wins when both are set; the settings menu sets only one.
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,6 +31,7 @@
 #include "vk.h"
 #include "vk_dlaa.h"
 #include "vk_exec.h"
+#include "vk_ffx.h"
 #include "vk_rec.h"
 #include "dlss_mv_spv.h"
 
@@ -246,6 +252,7 @@ static struct {
         VmaAllocation out_mem, mv_mem;
         VkImageView out_view, mv_view;
         NgxHandle *feat;
+        void *ffx;               // fastball: the FSR context of this size (vk_ffx.c), with FSR
         uint64_t used;           // evals count when it last ran
     } sizes[3], *last;           // last: the one the previous DLSS frame ran with
     VkImage last_color;          // the target DLSS ran on last frame: another one means a new history
@@ -280,11 +287,14 @@ static struct {
 const VkTexImage *vk_dlaa_swap_img;
 VkImageView vk_dlaa_swap_view;
 
-static int dl_active(void) { return N.available && !D.failed; }
+// fastball: FSR is the backend when DLSS is not there and AMD's runtime is (vk_ffx_init runs only without DLSS)
+static int use_fsr(void) { return !N.available && vk_ffx_available(); }
+static const char *tag(void) { return use_fsr() ? "fsr" : "dlss"; }
+static int dl_active(void) { return (N.available || vk_ffx_available()) && !D.failed; }
 
 static void dl_fail(const char *what, NgxResult r) {
-    rt_log("dlss: %s failed (%08x): DLSS off for this run (the game's own scaling, or FSR, takes over)", what,
-           (unsigned)r);
+    rt_log("%s: %s failed (%08x): %s off for this run (the game's own scaling, or FSR 1, takes over)", tag(), what,
+           (unsigned)r, use_fsr() ? "FSR" : "DLSS");
     D.failed = 1;
 }
 
@@ -323,6 +333,7 @@ static void free_size(struct Size *e) {
     if (e->out) vmaDestroyImage(c->vma, e->out, e->out_mem);
     if (e->mv) vmaDestroyImage(c->vma, e->mv, e->mv_mem);
     if (e->feat) N.release(e->feat);
+    if (e->ffx) vk_ffx_destroy(e->ffx);
     memset(e, 0, sizeof *e);
 }
 
@@ -418,8 +429,8 @@ static void times_mark(VkCommandBuffer cb, int which) {
             double ms = vk_ctx()->props.limits.timestampPeriod / 1e6;
             T.gpu[0] += (double)(q[T_MV1] - q[T_MV0]) * ms, T.gpu[1] += (double)(q[T_DL1] - q[T_MV1]) * ms;
             if (++T.frames % TIMES_SUMMARY == 0) {
-                rt_log("dlss times: gpu motion vectors %.3f ms, DLSS %.3f ms (averages of %d frames)",
-                       T.gpu[0] / TIMES_SUMMARY, T.gpu[1] / TIMES_SUMMARY, TIMES_SUMMARY);
+                rt_log("%s times: gpu motion vectors %.3f ms, %s %.3f ms (averages of %d frames)", tag(),
+                       T.gpu[0] / TIMES_SUMMARY, use_fsr() ? "FSR" : "DLSS", T.gpu[1] / TIMES_SUMMARY, TIMES_SUMMARY);
                 T.gpu[0] = T.gpu[1] = 0;
             }
         }
@@ -466,7 +477,7 @@ static int mv_init(void) {
     if (r != VK_SUCCESS) goto fail;
     return D.mv_ok = 1;
 fail:
-    rt_log("dlss: the motion-vector pass could not be set up: DLSS runs with zero motion");
+    rt_log("%s: the motion-vector pass could not be set up: it runs with zero motion", tag());
     return 0;
 }
 
@@ -668,7 +679,10 @@ static int perf_quality(uint32_t w, uint32_t ow) {
     return k >= 0.66 ? 2 : k >= 0.57 ? 1 : k >= 0.49 ? 0 : 3;
 }
 
-// DLSS on the armed scene into an image of ow x oh; its view, VK_NULL_HANDLE when it did not run.
+static int dlss_eval(VkExec *ex, struct Size *e, VkImageView zv, float jx, float jy, float dtms);
+static int fsr_eval(VkExec *ex, struct Size *e, float jx, float jy, float dtms);
+
+// DLSS (or FSR) on the armed scene into an image of ow x oh; its view, VK_NULL_HANDLE when it did not run.
 static VkImageView evaluate(VkExec *ex, uint32_t ow, uint32_t oh) {
     const VkExecTarget *t = &D.color, *z = &D.depth;
     uint32_t w = t->width, h = t->height;
@@ -682,8 +696,6 @@ static VkImageView evaluate(VkExec *ex, uint32_t ow, uint32_t oh) {
     struct Size *e = size_for(cb, w, h, ow, oh);
     if (!e) return dl_fail("work image creation", 0), VK_NULL_HANDLE;
     if (e != D.last) D.reset = 1, D.why[0]++;   // another size's history is from another moment
-    if (!D.params && !NGX_OK(N.alloc_params(&D.params))) return dl_fail("parameter allocation", 0), VK_NULL_HANDLE;
-    NgxParam *p = D.params;
     VkImageView zv = vk_exec_target_view(z->img, z->format, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_DEPTH_BIT, z->level,
                                          z->base_layer, 1, 0);
     float jx = D.jit_used ? D.ux : 0.0f, jy = D.jit_used ? D.uy : 0.0f;
@@ -698,6 +710,53 @@ static VkImageView evaluate(VkExec *ex, uint32_t ow, uint32_t oh) {
         if (!no_mv) D.reset = 1, D.why[1]++;   // no camera or a cut: the history cannot be moved along
     }
     times_mark(cb, T_MV1);
+    if (D.last_color != t->image) D.reset = 1, D.why[2]++, D.last_color = t->image;
+    // The time since the previous evaluation, which DLSS and FSR weigh their history by. After a gap (a pause, a load,
+    // a screen without a 3D scene) the history is stale: a new one.
+    uint64_t now = plat_now_ns();
+    double dt = D.last_eval_ns ? (now - D.last_eval_ns) / 1e6 : 0;
+    D.last_eval_ns = now;
+    if (dt > 250) D.reset = 1;
+    float dtms = dt > 0 && dt < 100 ? (float)dt : 16.67f;
+    if (use_fsr() ? !fsr_eval(ex, e, jx, jy, dtms) : !dlss_eval(ex, e, zv, jx, jy, dtms)) return VK_NULL_HANDLE;
+    times_mark(cb, T_DL1);   // through the recorder, after NGX's or AMD's own commands
+    D.reset = 0;
+    D.last = e, e->used = D.evals + 1;
+    full_barrier(cb);
+    // MLB_DLSS_MVDEBUG=1 (test): the motion vectors in place of the picture, x in red and y in green, render pixels
+    // as scene light (the game's exposure and tone curve still run over them)
+    static int mvdebug = -1;
+    if (mvdebug < 0) mvdebug = rt_knob("DLSS_MVDEBUG", "0");
+    if (mvdebug) {
+        VkImageBlit bl = {.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                          .srcOffsets = {{0, 0, 0}, {(int32_t)w, (int32_t)h, 1}},
+                          .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                          .dstOffsets = {{0, 0, 0}, {(int32_t)ow, (int32_t)oh, 1}}};
+        vkCmdBlitImage(cb, e->mv, VK_IMAGE_LAYOUT_GENERAL, e->out, VK_IMAGE_LAYOUT_GENERAL, 1, &bl, VK_FILTER_NEAREST);
+        full_barrier(cb);
+    }
+    ex->recorded += 4;
+    vk_exec_draw_new_cb();   // NGX / AMD bound pipelines and descriptor sets of their own: the next draw binds all again
+    D.jdepth = z->image;
+    next_jitter(w, ow);
+    if (++D.evals == 1 || D.evals == 300 || D.evals % 3600 == 0)
+        rt_log("%s: %llu frames (scene %ux%u, output %ux%u; %llu frames without the composite, %llu with camera "
+               "motion, %llu without a camera, %llu camera cuts, %llu jitter holds; resets: %llu size, %llu camera, "
+               "%llu target)",
+               tag(), (unsigned long long)D.evals, w, h, ow, oh, (unsigned long long)D.frames_missed,
+               (unsigned long long)D.mv_frames, (unsigned long long)D.mv_none, (unsigned long long)D.cuts,
+               (unsigned long long)D.holds, (unsigned long long)D.why[0], (unsigned long long)D.why[1],
+               (unsigned long long)D.why[2]);
+    return e->out_view;
+}
+
+// NGX's DLSS on the armed scene into e->out. 0: it failed (DLSS off for the run).
+static int dlss_eval(VkExec *ex, struct Size *e, VkImageView zv, float jx, float jy, float dtms) {
+    const VkExecTarget *t = &D.color, *z = &D.depth;
+    uint32_t w = e->w, h = e->h, ow = e->ow, oh = e->oh;
+    VkCommandBuffer cb = ex->cb;
+    if (!D.params && !NGX_OK(N.alloc_params(&D.params))) return dl_fail("parameter allocation", 0), 0;
+    NgxParam *p = D.params;
     rec_drain();   // NGX records into the command buffer itself: the recorder thread must have made every call so far
     if (!e->feat) {
         p_setu(p, "CreationNodeMask", 1);
@@ -722,13 +781,12 @@ static VkImageView evaluate(VkExec *ex, uint32_t ow, uint32_t oh) {
         p_setu(p, "DLSS.Hint.Render.Preset.Performance", (unsigned)pm);
         p_setu(p, "DLSS.Hint.Render.Preset.UltraPerformance", (unsigned)pl);
         NgxResult r = N.create(cb, NGX_FEATURE_SUPERSAMPLING, p, &e->feat);
-        if (!NGX_OK(r) || !e->feat) return dl_fail("DLSS feature creation", r), VK_NULL_HANDLE;
+        if (!NGX_OK(r) || !e->feat) return dl_fail("DLSS feature creation", r), 0;
         D.reset = 1;
         int q = perf_quality(w, ow), pr = q == 0 ? pm : q == 3 ? pl : pk;
         rt_log("dlss: feature created at %ux%u -> %ux%u, quality value %d, preset %c (scene format %d, depth format %d)",
                w, h, ow, oh, q, 'A' + pr - 1, (int)t->format, (int)z->format);
     }
-    if (D.last_color != t->image) D.reset = 1, D.why[2]++, D.last_color = t->image;
     VkImageView cv = vk_exec_target_view(t->img, t->format, VK_IMAGE_VIEW_TYPE_2D, VK_IMAGE_ASPECT_COLOR_BIT, t->level,
                                          t->base_layer, 1, 0);
     NgxResourceVK rc = res_image(cv, t->image, t->format, w, h, VK_IMAGE_ASPECT_COLOR_BIT, 0);
@@ -749,45 +807,58 @@ static VkImageView evaluate(VkExec *ex, uint32_t ow, uint32_t oh) {
     p_setu(p, "DLSS.Render.Subrect.Dimensions.Height", h);
     p_setf(p, "DLSS.Pre.Exposure", 1.0f);
     p_setf(p, "DLSS.Exposure.Scale", 1.0f);
-    // The time since the previous evaluation, which DLSS weighs its history by. After a gap (a pause, a load, a screen
-    // without a 3D scene) the history is stale: a new one.
-    uint64_t now = plat_now_ns();
-    double dt = D.last_eval_ns ? (now - D.last_eval_ns) / 1e6 : 0;
-    D.last_eval_ns = now;
-    if (dt > 250) D.reset = 1;
-    p_setf(p, "FrameTimeDeltaInMsec", dt > 0 && dt < 100 ? (float)dt : 16.67f);
+    p_setf(p, "FrameTimeDeltaInMsec", dtms);
     p_seti(p, "Reset", D.reset);
     NgxResult r = N.evaluate(cb, e->feat, p, NULL);
-    if (!NGX_OK(r)) return dl_fail("DLSS evaluation", r), VK_NULL_HANDLE;
-    times_mark(cb, T_DL1);   // through the recorder, after NGX's own commands
-    D.reset = 0;
-    D.last = e, e->used = D.evals + 1;
-    full_barrier(cb);
-    // MLB_DLSS_MVDEBUG=1 (test): the motion vectors in place of the picture, x in red and y in green, render pixels
-    // as scene light (the game's exposure and tone curve still run over them)
-    static int mvdebug = -1;
-    if (mvdebug < 0) mvdebug = rt_knob("DLSS_MVDEBUG", "0");
-    if (mvdebug) {
-        VkImageBlit bl = {.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-                          .srcOffsets = {{0, 0, 0}, {(int32_t)w, (int32_t)h, 1}},
-                          .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
-                          .dstOffsets = {{0, 0, 0}, {(int32_t)ow, (int32_t)oh, 1}}};
-        vkCmdBlitImage(cb, e->mv, VK_IMAGE_LAYOUT_GENERAL, e->out, VK_IMAGE_LAYOUT_GENERAL, 1, &bl, VK_FILTER_NEAREST);
-        full_barrier(cb);
+    if (!NGX_OK(r)) return dl_fail("DLSS evaluation", r), 0;
+    return 1;
+}
+
+// fastball: the camera's near and far distances and vertical field of view, which FSR weighs disocclusion with, from
+// this frame's view-projection (mv_pass left it in prev_vp). With w = row 3 . x (the view depth, rows normalised so
+// row 3's direction is a unit vector) and row 2 = a * row 3 + b * (0,0,0,1) for any perspective projection, ndc z is
+// a + b / w, so the depth at ndc z is b / (z - a): the near plane at NVN's near z (0, or -1 with -w..w depth), the far
+// one at 1. Row 1's length over row 3's is the vertical focal length (camera_cut). Without a camera: 0.1, 1000, 1 rad.
+// Measured 2026-11-18 on the main menu's 3D scene: rows z (0 -1.0001 0 0), w (0 -1 0 1), so near 1, far 9999, 35
+// degrees, depth 0 at the near plane (not inverted). The view's unit is not known: FSR is told 1 unit is 1 metre.
+static void camera_planes(float *nz, float *fz, float *fov) {
+    *nz = 0.1f, *fz = 1000.0f, *fov = 1.0f;
+    if (!D.prev_ok) return;
+    const double *m = D.prev_vp;
+    double l = len3(m + 12);
+    if (l < 1e-12) return;
+    double r2[4], r3[4];
+    for (int i = 0; i < 4; i++) r2[i] = m[8 + i] / l, r3[i] = m[12 + i] / l;
+    double a = r2[0] * r3[0] + r2[1] * r3[1] + r2[2] * r3[2], b = r2[3] - a * r3[3];
+    double z0 = nvn_depth_minus_w() ? -1.0 : 0.0;
+    double dn = b / (z0 - a), df = b / (1.0 - a);
+    if (!(dn > 0) || !isfinite(dn)) return;
+    if (!(df > 0) || !isfinite(df) || df > 1e7) df = 1e7;   // (an infinite far plane)
+    if (dn > df) { double s = dn; dn = df; df = s; }
+    double f1 = len3(m + 4) / l;
+    *nz = (float)dn, *fz = (float)df;
+    if (f1 > 1e-6) *fov = (float)(2.0 * atan(1.0 / f1));
+}
+
+// fastball: AMD FSR 3.1 / 4 (vk_ffx.c) on the armed scene into e->out. 0: not run (FSR off for the run when AMD's
+// runtime failed; a scene it cannot take is only skipped).
+static int fsr_eval(VkExec *ex, struct Size *e, float jx, float jy, float dtms) {
+    const VkExecTarget *t = &D.color, *z = &D.depth;
+    VkFfxFrame f = {.color = t->image, .depth = z->image, .mv = e->mv, .out = e->out, .color_fmt = t->format,
+                    .depth_fmt = z->format, .color_level = t->level, .color_layer = t->base_layer,
+                    .depth_level = z->level, .depth_layer = z->base_layer, .w = e->w, .h = e->h, .ow = e->ow,
+                    .oh = e->oh, .jx = jx, .jy = jy, .dt_ms = dtms, .reset = D.reset || !e->ffx};
+    camera_planes(&f.near_z, &f.far_z, &f.fov_y);
+    static int planes_logged;
+    if (D.prev_ok && !planes_logged++)
+        rt_log("fsr: the game's camera: near %.4g, far %.4g, vertical field of view %.1f degrees", (double)f.near_z,
+               (double)f.far_z, (double)f.fov_y * 57.29578);
+    if (!vk_ffx_dispatch(ex->cb, &e->ffx, &f)) {
+        if (!vk_ffx_available()) D.failed = 1;   // (vk_ffx.c said why)
+        return 0;
     }
-    ex->recorded += 4;
-    vk_exec_draw_new_cb();   // NGX bound pipelines and descriptor sets of its own: the next draw binds everything again
-    D.jdepth = z->image;
-    next_jitter(w, ow);
-    if (++D.evals == 1 || D.evals == 300 || D.evals % 3600 == 0)
-        rt_log("dlss: %llu frames (scene %ux%u, output %ux%u; %llu frames without the composite, %llu with camera "
-               "motion, %llu without a camera, %llu camera cuts, %llu jitter holds; resets: %llu size, %llu camera, "
-               "%llu target)",
-               (unsigned long long)D.evals, w, h, ow, oh, (unsigned long long)D.frames_missed,
-               (unsigned long long)D.mv_frames, (unsigned long long)D.mv_none, (unsigned long long)D.cuts,
-               (unsigned long long)D.holds, (unsigned long long)D.why[0], (unsigned long long)D.why[1],
-               (unsigned long long)D.why[2]);
-    return e->out_view;
+    vk_ffx_ran();
+    return 1;
 }
 
 int vk_dlaa_on(void) { return dl_active(); }
@@ -804,20 +875,27 @@ int vk_dlaa_scene(VkExec *ex, const VkTexImage *im, uint32_t pw, uint32_t ph, Vk
     // the output at the composite's size; where the scene is as large or larger (DLAA), at the scene's own
     uint32_t ow = pw > w && ph > h ? pw : w, oh = pw > w && ph > h ? ph : h;
     VkImageView v = evaluate(ex, ow, oh);
-    if (!v) return 0;
+    if (!v) {
+        D.jit_ok = 0;   // fastball: nothing resolved this frame's jitter: the next scene is drawn without it
+        return 0;
+    }
     *out = D.out_now = v;
     return 1;
 }
 
+const char *vk_dlaa_name(void) { return use_fsr() ? "FSR" : "DLSS"; }
+
 // The preset, read again when a setting changed (the menu); a different one recreates the features at the next run.
+// fastball: with FSR, the version instead (MLB_FSR_VERSION: 2 FSR 4, 1 FSR 3.1); a change makes the contexts again.
 static void preset_check(void) {
     unsigned v = cfg_version();
     if (v == D.cfg_seen) return;
     D.cfg_seen = v;
-    int p = preset_value();
+    int fsr = use_fsr(), p = fsr ? (vk_ffx_ml_wanted() ? 2 : 1) : preset_value();
     if (p == D.preset) return;
     if (D.evals) {
-        if (p) rt_log("dlss: preset %c in every mode; the features are created again", 'A' + p - 1);
+        if (fsr) rt_log("fsr: FSR %s from now on; the contexts are made again", p == 2 ? "4" : "3.1");
+        else if (p) rt_log("dlss: preset %c in every mode; the features are created again", 'A' + p - 1);
         else rt_log("dlss: presets per mode; the features are created again");
     }
     D.preset = p, D.preset_dirty = 1, D.reset = 1;
@@ -825,14 +903,19 @@ static void preset_check(void) {
 
 // Each present: the preset, and the texture LOD bias for the scene DLSS scales up (NVIDIA's guide: log2 of the scene's
 // share of the output), so the scene's material textures are sampled for the output's resolution.
+// fastball: FSR's guide asks for one step more, log2(render / output) - 1 (-1.58 in Quality at 1.5x). Off or failed:
+// no bias.
 void vk_dlaa_frame(void) {
-    if (!dl_active()) return;
-    preset_check();
-    float b = D.last && D.last->w < D.last->ow ? (float)log2((double)D.last->w / D.last->ow) : 0.0f;
+    float b = 0.0f;
+    if (dl_active()) {
+        preset_check();
+        if (D.last && use_fsr()) b = (float)(log2((double)D.last->w / D.last->ow) - 1.0);
+        else if (D.last && D.last->w < D.last->ow) b = (float)log2((double)D.last->w / D.last->ow);
+    }
     if (b != D.bias) {
         D.bias = b;
         vk_sampler_dlss_bias(b);
-        rt_log("dlss: texture LOD bias %.2f", (double)b);
+        rt_log("%s: texture LOD bias %.2f", tag(), (double)b);
     }
 }
 

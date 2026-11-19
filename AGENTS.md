@@ -58,6 +58,8 @@ work/build/mlb.exe                               # paths default to work/update/
 First-time setup (only for a fresh checkout): see `docs/runtime-port.md`. In short: extract the ExeFS and RomFS with
 `tools/romfs_dump.py` and the keys, then `recomp/gen.py`, `tools/fetch_deps.py` and `tools/build_xlate.py`.
 `mlb.exe` is locked while the game runs: the link fails then, so check `tasklist` first.
+Upscalers: `MLB_DLSS` needs `nvngx_dlss.dll` and `MLB_FSR` (FSR 3.1 / 4, `vk_ffx.c`) AMD's two DLLs next to `mlb.exe`;
+`tools/fetch_ffx.py` puts AMD's into `work/build`. Both are off by default and turned on in the F1 menu (Graphics).
 
 Settings: `work/build/mlb.cfg`, one `KEY=VALUE` per line. Environment variables `MLB_<KEY>` (or `TOTK_<KEY>`) override
 it. The full list is the table in `runtime/mlb/cfg.c`; `main.c` turns `FRAME_QUEUE` and `REPLAY_ASYNC` on by default.

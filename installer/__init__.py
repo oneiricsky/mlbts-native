@@ -1,6 +1,6 @@
 """Fastball, the MLB The Show 26 PC port: the setup and launcher; builds a playable folder from the player's own game files (docs/release.md).
 
-    python -m installer --dest DIR --base NSP --update NSP --keys prod.keys [--dlss] [--shortcut] [--import-save]
+    python -m installer --dest DIR --base NSP --update NSP --keys prod.keys [--no-dlss] [--no-fsr] [--shortcut] [--import-save]
     python -m installer.gui            the window (Fastball.exe starts it)
 
 Modules: layout (where the bundled tools are: release folder or repository), detect (finding the keys, game files, a

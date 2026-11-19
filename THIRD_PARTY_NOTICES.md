@@ -27,6 +27,7 @@ rows are in TotK Recomp's own `THIRD_PARTY_NOTICES.md` at the commit below, and 
 | TotK Recomp FSR 1 pass (`vk_fsr.c`) and its shaders `fsr_easu.comp`, `fsr_rcas.comp` with their committed SPIR-V headers | same TotK commit | MIT | `runtime/gfx/vk_fsr.c` (MLB's scene upscale added, marked `fastball`), `runtime/shaders/fsr_*.comp`, `runtime/gfx/fsr_*_spv.h` |
 | TotK Recomp DLSS/DLAA through NVIDIA NGX (`vk_dlaa.c`: NGX core loading, parameter vtable, feature creation and evaluation, work images, jitter, presets, `inv4`) | same TotK commit | MIT | `runtime/gfx/vk_dlaa.c` (MLB's frame, camera and motion vectors are our own, marked `fastball`); `runtime/shaders/dlss_mv.comp` is our own. NVIDIA's `nvngx_dlss.dll` (NVIDIA RTX SDK licence) is not in the repository: it is downloaded next to `mlb.exe` |
 | AMD FidelityFX Super Resolution 1 headers `ffx_a.h`, `ffx_fsr1.h` (unmodified), as vendored by TotK Recomp | https://github.com/GPUOpen-Effects/FidelityFX-FSR, via TotK Recomp `runtime/shaders/ffx/` at the same commit, Copyright (c) 2021 Advanced Micro Devices, Inc. | MIT | `runtime/shaders/ffx/` (licence in `LICENSE.txt` there) |
+| AMD FSR SDK 2.4.0 API headers `ffx_api.h`, `ffx_api_types.h`, `ffx_api_vk.h`, `ffx_upscale.h` (unmodified) | https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK at `7539ae8b6568ad29ed78a753404351daf3b5cca7` (`Kits/FidelityFX`), Copyright (C) 2026 Advanced Micro Devices, Inc. | MIT (the SDK's licence in `LICENSE.md` there) | `runtime/third_party/ffx/`, compiled into `runtime/gfx/vk_ffx.c` (our own; the version choice follows Super Odyssey PC Recomp `runtime/nvn/vulkan/fsr3_sdk.c` 0.4.8, https://github.com/Simon3Sarkis/super-odyssey-pc-recomp). AMD's signed runtime DLLs are never committed or bundled: the setup downloads them |
 | Dear ImGui 1.91.9 (core and Vulkan back end, unmodified), as vendored by TotK Recomp | https://github.com/ocornut/imgui, via TotK Recomp `runtime/third_party/imgui/` at the same commit, Copyright (c) 2014-2025 Omar Cornut | MIT | `runtime/third_party/imgui/` (licence in `LICENSE.txt` there) |
 | Roboto Medium font (Dear ImGui's `misc/fonts/Roboto-Medium.ttf`, unmodified) | https://fonts.google.com/specimen/Roboto, via TotK Recomp `runtime/ui/fonts/` at the same commit, Copyright 2011 Google Inc. | Apache-2.0 | `runtime/gfx/ui/fonts/Roboto-Medium.ttf` (licence text in `runtime/gfx/ui/fonts/LICENSE-Roboto.txt`), embedded by `runtime/gfx/ui/menu.cpp` |
 | glslang 16.6.0 (shader compiler, used by `tools/build_shaders.py` only; not shipped) | https://github.com/KhronosGroup/glslang/releases/tag/16.6.0 | BSD-3-Clause and others | the committed `runtime/gfx/fxaa_spv.h` (compiled from our `runtime/shaders/fxaa.comp`) |
@@ -34,8 +35,9 @@ rows are in TotK Recomp's own `THIRD_PARTY_NOTICES.md` at the commit below, and 
 ## In the setup release (docs/release.md)
 
 The release zip carries these besides the repository's own code; their licence texts are in its `licenses/` folder or
-inside the bundled packages. NVIDIA's `nvngx_dlss.dll` is never bundled: the setup downloads it from NVIDIA's DLSS
-repository when the player ticks the box.
+inside the bundled packages. NVIDIA's `nvngx_dlss.dll` and AMD's FSR runtime (`amd_fidelityfx_loader_vk.dll`,
+`amd_fidelityfx_upscaler_vk.dll`) are never bundled: the setup downloads them from NVIDIA's and AMD's repositories
+for the graphics card it finds (DLSS on a GeForce RTX, FSR on any AMD, NVIDIA or Intel card).
 
 | Component | Source and version | License | Used in |
 |---|---|---|---|

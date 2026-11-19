@@ -16,6 +16,7 @@
 #include "vk.h"
 #include "platform/platform.h"
 #include "vk_dlaa.h"
+#include "vk_ffx.h"
 
 static VkCtx g_vk;
 static int g_ready;
@@ -395,6 +396,9 @@ typedef struct {
     VkPhysicalDeviceAttachmentFeedbackLoopLayoutFeaturesEXT fbl;
     VkPhysicalDeviceDynamicRenderingLocalReadFeaturesKHR lr;
     VkPhysicalDeviceAddressBindingReportFeaturesEXT abr;
+    VkPhysicalDeviceCooperativeMatrixFeaturesKHR coop;              // fastball: FSR 4 (vk_ffx.c)
+    VkPhysicalDeviceShaderFloat8FeaturesEXT f8;
+    VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR csd;
 } FeatureChain;
 
 static int create_device(void) {
@@ -402,7 +406,7 @@ static int create_device(void) {
     vkEnumerateDeviceExtensionProperties(g_vk.phys, NULL, &ne, NULL);
     VkExtensionProperties *ep = calloc(ne ? ne : 1, sizeof *ep);
     vkEnumerateDeviceExtensionProperties(g_vk.phys, NULL, &ne, ep);
-    const char *ext[48];
+    const char *ext[56];
     uint32_t n_ext = 0;
     for (size_t i = 0; i < sizeof k_required_ext / sizeof *k_required_ext; i++) ext[n_ext++] = k_required_ext[i];
     if (g_vk.has_host_import) ext[n_ext++] = VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME;   // pick_device
@@ -447,7 +451,25 @@ static int create_device(void) {
         CHAIN(fbl, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ATTACHMENT_FEEDBACK_LOOP_LAYOUT_FEATURES_EXT);
         CHAIN(lr, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_LOCAL_READ_FEATURES_KHR);
     }
-    vk_dlaa_device_exts(ep, ne, ext, &n_ext, 40);   // NGX's; the eight slots after it stay for the seven below
+    vk_dlaa_device_exts(ep, ne, ext, &n_ext, 40);   // NGX's; the sixteen slots after it stay for the ten below
+    // fastball: FSR 4's machine-learning models (vk_ffx.c), only while MLB_FSR is on: AMD's sample framework
+    // (FidelityFX SDK 2.4.0, Cauldron2 device_vk.cpp) turns these on for them. FSR 3.1 needs nothing beyond Vulkan 1.3.
+    if (vk_ffx_wanted()) {
+        int f4 = 0;
+        if (has_ext(ep, ne, VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME)) {
+            ext[n_ext++] = VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME, f4++;
+            CHAIN(coop, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR);
+        }
+        if (has_ext(ep, ne, VK_EXT_SHADER_FLOAT8_EXTENSION_NAME)) {
+            ext[n_ext++] = VK_EXT_SHADER_FLOAT8_EXTENSION_NAME, f4++;
+            CHAIN(f8, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT8_FEATURES_EXT);
+        }
+        if (has_ext(ep, ne, VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME)) {
+            ext[n_ext++] = VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME, f4++;
+            CHAIN(csd, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_KHR);
+        }
+        rt_log("vk: FSR is on: %d of FSR 4's three extensions (cooperative matrix, float8, compute derivatives) here", f4);
+    }
     if (has_ext(ep, ne, VK_EXT_MEMORY_BUDGET_EXTENSION_NAME)) { g_vk.has_memory_budget = 1; ext[n_ext++] = VK_EXT_MEMORY_BUDGET_EXTENSION_NAME; }
     // GPU timestamps on the CPU clock (vk_sync.c): the perf line splits GPU idle time into waiting for a submission or not.
     if (has_ext(ep, ne, VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME)) { g_vk.has_calibrated = 2; ext[n_ext++] = VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME; }
@@ -589,7 +611,7 @@ int vk_init(void) {
     plat_mutex_lock(&g_lock);
     if (!g_ready) {
         memset(&g_vk, 0, sizeof g_vk);
-        if (create_instance() && pick_device() && create_device()) g_ready = 1, vk_upload_pools_init(), vk_headroom_start(), vk_dlaa_init();
+        if (create_instance() && pick_device() && create_device()) g_ready = 1, vk_upload_pools_init(), vk_headroom_start(), vk_dlaa_init(), vk_ffx_init();
         else destroy_all();
     }
     int ok = g_ready;

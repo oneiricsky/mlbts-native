@@ -478,7 +478,7 @@ class App:
         opts = ttk.Frame(b)   # the DLSS and save boxes join it once detect() has looked (detected)
         opts.pack(fill='x')
         # shortcuts off by default: the port lives in its folder, and deleting the folder removes all of it
-        self.opt = {'shortcut': tk.BooleanVar(value=False), 'dlss': tk.BooleanVar(value=False),
+        self.opt = {'shortcut': tk.BooleanVar(value=False),
                     'import_save': tk.BooleanVar(value=False), 'equipment': tk.BooleanVar(value=False),
                     'packages': tk.BooleanVar(value=False)}
         ttk.Checkbutton(opts, text='Shortcuts on the desktop and in the Start menu',
@@ -487,8 +487,9 @@ class App:
                         variable=self.opt['equipment']).pack(anchor='w')
         ttk.Checkbutton(opts, text='Add Road to the Show packages: earn equipment from packs like the online game '
                                    '(items start locked)', variable=self.opt['packages']).pack(anchor='w')
-        self.dlss_box = ttk.Checkbutton(opts, text='Download NVIDIA DLSS (sharper picture on RTX graphics cards; from '
-                                                   'NVIDIA, about 56 MB)', variable=self.opt['dlss'])
+        # the upscalers are not a choice here: the setup downloads what this PC's graphics card runs (steps.py
+        # Finish.upscalers) and the game's settings turn them on; this line says what it found
+        self.gpu_note = ttk.Label(opts, text='', style='Muted.TLabel', wraplength=self.wrap, justify='left')
         self.save_box = ttk.Checkbutton(opts, text='Copy my MLB The Show 26 save from Ryujinx',
                                         variable=self.opt['import_save'])
         self.form_error = ttk.Label(foot, text='', style='Bad.TLabel', wraplength=self.px(540), justify='left')
@@ -510,7 +511,9 @@ class App:
                 extra.insert(0, Path(self.vars[k].get()).parent)
         found = detect.find_game_files(extra)
         keys = detect.find_keys([ROOT, ROOT.parent] + [p.parent for p in found.values() if p])
-        info = {'found': found, 'keys': keys, 'rtx': detect.nvidia_rtx(), 'save': detect.ryujinx_save(),
+        gpus = detect.gpus()
+        info = {'found': found, 'keys': keys, 'gpus': gpus, 'rtx': detect.nvidia_rtx(gpus),
+                'fsr': detect.fsr_gpu(gpus), 'save': detect.ryujinx_save(),
                 'dest': default_dest()}
         self.events.put(('detected', info))
 
@@ -527,9 +530,13 @@ class App:
             self.notes['keys'].configure(text=where(info['keys']), style='Ok.TLabel')
         if not self.vars['dest'].get():
             self.vars['dest'].set(str(info['dest']))
-        if info['rtx']:
-            self.opt['dlss'].set(True)
-            self.dlss_box.pack(anchor='w')
+        ups = [n for n, on in (('NVIDIA DLSS (about 56 MB)', info['rtx']), ('AMD FSR (about 36 MB)', info['fsr'])) if on]
+        if ups:
+            card = next((g for g in info['gpus'] if any(v in g.upper() for v in ('AMD', 'RADEON', 'NVIDIA', 'INTEL'))),
+                        info['gpus'][0])
+            self.gpu_note.configure(text=f'Graphics card: {card}. The setup also downloads {" and ".join(ups)} for it; '
+                                         'turn it on in the game\'s settings (F1, Graphics).')
+            self.gpu_note.pack(anchor='w', pady=(self.px(4), 0))
         if info['save']:
             self.opt['import_save'].set(not (Path(self.vars['dest'].get()) / 'profile' / 'save').exists())
             self.save_box.pack(anchor='w')
