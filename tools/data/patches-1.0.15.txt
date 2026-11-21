@@ -1,0 +1,14 @@
+# Code patches for game 1.0.15: the same sets and sites as patches-1.0.20.txt (read that file for what each does),
+# at 1.0.15's addresses. tools/addrmap.py puts every site and branch target 0x1500 lower than in 1.0.20 (8 or more
+# words matched each) and the original words are the same. One replacement word differs: the lighting-version
+# counter's slot is main+0x2283820 (1.0.20 main+0x2284890), so site 2 loads it with `ldr x9, [x9, #0x820]`.
+
+set  walkup_light  MLB_WALKUP_LIGHT  1
+site  walkup_light  main  108a6b4  52800021  52800028  3930b408  2a1f03e1
+site  walkup_light  main  12d0a74  b9000128  b9000128  f0007d89  f9441129  b9400128  11000508  b9000128
+site  walkup_light  main  12d0a7c  b4fffc28  b40004e8
+site  walkup_light  main  12d0a84  b4fffbe8  b40004a8
+site  walkup_light  main  12d0a98  17ffffda  14000020
+site  walkup_light  main  108a6c0  52828408  b94d3c09  12167929  b90d3c09  52828408
+set  walkup_leaders  MLB_WALKUP_LEADERS  1
+site  walkup_leaders  main  e52308  940004fe  d503201f
