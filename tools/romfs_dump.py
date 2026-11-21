@@ -14,6 +14,7 @@ import hashlib
 import json
 import os
 import random
+import shutil
 import time
 import sys
 from pathlib import Path
@@ -69,6 +70,35 @@ def verify_ivfc(info, n, master):
             if hashlib.sha256(st.read(l1off, l1size)).digest() != master:
                 fails += 1
     return len(picks), fails
+
+
+_rename_fallback_noted = False
+
+
+def finish_part(part, dst):
+    """Rename a finished <name>.part to <name>. A player's setup (issue #24, setup 0.1.5) stopped on the first .XML of
+    the RomFS: after 7,582 .MOD/.AB renames in the same tree, os.replace of AND/CHARACTERS/MASTERFILES/CLOTHPOSESETS.XML
+    failed with WinError 17 (ERROR_NOT_SAME_DEVICE) although both names were in one folder on one drive. That is not
+    the file system's answer; a security program's file filter that watches some file types can give it. Retry a
+    moment (a scanner holding the file), then copy the bytes over and delete the .part, which needs no rename."""
+    global _rename_fallback_noted
+    for i in range(8):
+        try:
+            os.replace(part, dst)
+            return
+        except FileNotFoundError:
+            raise
+        except OSError as e:
+            err = e
+            time.sleep(0.25)
+    if not _rename_fallback_noted:
+        _rename_fallback_noted = True
+        print(f"note: renaming {part.name} failed ({err}); copying instead (an antivirus may be watching this folder)",
+              flush=True)
+    shutil.copyfile(part, dst)
+    if dst.stat().st_size != part.stat().st_size:
+        raise OSError(f"copy of {part} to {dst} came out short")
+    part.unlink()
 
 
 def main():
@@ -143,7 +173,7 @@ def main():
                     pos += n
                     progress_done += n
                     progress()
-            os.replace(part, dst)
+            finish_part(part, dst)
             done += 1
             written += size
             if done % 500 == 0:
