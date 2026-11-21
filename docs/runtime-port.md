@@ -61,7 +61,7 @@ that another title couldn't replace.
 ## Building and running
 
 ```bash
-.venv/Scripts/python -I recomp/gen.py --exefs work/update/exefs --out work/gen --modules main,sdk
+.venv/Scripts/python -I recomp/gen.py --exefs work/update/exefs --out work/gen --modules main,sdk --patches tools/data/patches-1.0.20.txt
 .venv/Scripts/python -I tools/build.py
 work/build/mlb.exe
 ```

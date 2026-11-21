@@ -80,7 +80,8 @@ LLVM_BIN = {'clang.exe', 'clang++.exe', 'clang-23.exe', 'ld.lld.exe', 'llvm-ar.e
 LLVM_SKIP_DIRS = {'aarch64-w64-mingw32', 'armv7-w64-mingw32', 'i686-w64-mingw32', 'busybox', 'python', 'share'}
 # tools/ the setup runs (and what they import)
 TOOLS_FILES = ['build.py', 'check_content.py', 'romfs_dump.py', 'nxextract.py', 'ncastorage.py', 'swcrypto.py',
-               'hostmem.py', 'data/expected-1.0.15.json', 'data/expected-1.0.20.json']   # hostmem: recomp/gen.py sizes its workers with it
+               'hostmem.py', 'data/expected-1.0.15.json', 'data/expected-1.0.20.json', 'data/patches-1.0.15.txt',
+               'data/patches-1.0.20.txt']   # hostmem: recomp/gen.py sizes its workers with it
 # Every script the setup runs: smoke() starts each with --help on the folder's own Python, so a missing import stops
 # the release instead of a player's install (recomp/gen.py's hostmem did, after the 37 GB extraction)
 SETUP_SCRIPTS = ['recomp/gen.py', 'tools/build.py', 'tools/romfs_dump.py']

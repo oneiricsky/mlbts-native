@@ -3,7 +3,8 @@
     check    always: the setup folder, the PC (AVX2, Vulkan), the game files and keys, free space
     exefs    the update's code (main, sdk, rtld, main.npdm) into <dest>/game/exefs, checked against its version's hashes
     romfs    the game's data (base + update, about 37 GB) into <dest>/game/romfs (tools/romfs_dump.py; resumable)
-    build    lift the code to C (recomp/gen.py) and compile it with the prebuilt runtime (tools/build.py) into mlb.exe
+    build    lift the code to C (recomp/gen.py, with the version's code patches, tools/data/patches-<version>.txt) and
+             compile it with the prebuilt runtime (tools/build.py) into mlb.exe
     equipment  optional: every Road to the Show equipment item, offline (tools/equipment); only shown when in play
     packages   optional: Road to the Show's Packages, offline (tools/packages, runtime/mlb/packages.c); the same
     finish   always: mlb.cfg, the shader translator, DLSS and FSR for the graphics card, shortcuts, a Ryujinx save (optional), clean up
@@ -398,7 +399,9 @@ class Build(Step):
     id, title = 'build', 'Build the game for this PC (a few minutes)'
 
     def key(self, ctx):
-        return fingerprint('build-1', ctx.layout.release, json.dumps(ctx.expected['exefs_sha256'], sort_keys=True))
+        patches = ctx.layout.patches(ctx.expected['display_version'])
+        return fingerprint('build-1', ctx.layout.release, json.dumps(ctx.expected['exefs_sha256'], sort_keys=True),
+                           sha256_file(patches) if patches.is_file() else '')
 
     def current(self, ctx, record):
         return (ctx.dest / 'mlb.exe').is_file()
@@ -415,8 +418,11 @@ class Build(Step):
             return False
 
         rep.progress(self.id, 'Translating the code to C', force=True)
+        # the code patches of this game version (tools/data/patches-<version>.txt); each set has a settings row
+        patches = lay.patches(ctx.expected['display_version'])
         ctx.run_tool(self.id, py + [lay.recomp / 'gen.py', '--exefs', ctx.game / 'exefs', '--out', gen,
-                                   '--modules', 'main,sdk'], lift_line)
+                                   '--modules', 'main,sdk'] + (['--patches', patches] if patches.is_file() else []),
+                     lift_line)
 
         def build_line(text):
             m = re.match(r'\[(\d+)/(\d+)\]', text)

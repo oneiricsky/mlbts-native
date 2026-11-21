@@ -75,8 +75,10 @@ replace-and-assert is reliable.
   kept in `work/update-1.0.15/exefs` and `work/romfs-1.0.15`). Each has `tools/data/expected-<version>.json`.
 - One `mlb.exe` runs one version. `tools/build.py` picks it from the SHA-256 of `--exefs`'s `main` (default
   `work/update/exefs`) and refuses `--gen` output of another version. The runtime reads it as `rt_game_build`
-  ("1.0.20"). To build 1.0.15: `recomp/gen.py --exefs work/update-1.0.15/exefs`, then `tools/build.py --exefs
-  work/update-1.0.15/exefs` and `MLB_EXEFS`/`MLB_ROMFS` pointing at the 1.0.15 folders.
+  ("1.0.20"). To build 1.0.15: `recomp/gen.py --exefs work/update-1.0.15/exefs --patches
+  tools/data/patches-1.0.15.txt`, then `tools/build.py --exefs work/update-1.0.15/exefs` and `MLB_EXEFS`/`MLB_ROMFS`
+  pointing at the 1.0.15 folders. Each version's code patches (`tools/data/patches-<version>.txt`, the
+  `recomp/patches.py` format) go to `recomp/gen.py --patches`; the setup passes them too.
 - 1.0.20 changed only `main` (sdk, rtld and the 765 imports are the same). Code addresses moved by +0x20 to +0x1500,
   read-only data and data by about +0x1000 to +0x1070. Address comments in `runtime/` are 1.0.15's unless they say
   otherwise; `tools/addrmap.py work/update-1.0.15/exefs work/update/exefs <addr>...` finds them in 1.0.20. Code that
