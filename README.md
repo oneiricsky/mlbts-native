@@ -11,7 +11,13 @@ Performance improvements on an AMD Radeon RX 6700 XT
 
 What has changed so far:
 
-- **Pipeline builds moved off the replay thread.**
+- **Pipeline builds moved off the replay thread.** Pipelines build on background workers and the ones
+  recorded by earlier runs are prebuilt at boot, so a draw never waits on a fresh shader compile.
+- **Boot intro skip.** `MLB_SKIP_INTRO` (F1 → Game → *Skip intro logos*) leaves out the two boot
+  intro movies; the game goes from the loading screen straight to the title.
+- **Dev-config harness.** The game's own hidden dev options work in this build:
+  `AIvAI` + `GameOnly` boot straight into an AI-vs-AI game with no input. The full option table,
+  hashes and the mechanism are in [docs/dev-config.md](docs/dev-config.md).
 
 
 <details>
