@@ -29,7 +29,7 @@ a game.
 | `OpenBetaDemo` | `0x21108949` | Queried across boot and gameplay; the open-beta/demo switch. | | 53 |
 | `StartupMovies` | `0x267A2101` | Gates the boot intro movies. | | 1 |
 | `FastPlay` | `0x875D5965` | Faster gameplay pacing. | ✅ | 1 |
-| `FastLoad` | `0x3DFD2037` | Faster loading. | | 2 |
+| `FastLoad` | `0x3DFD2037` | Sets a flag in a boot-globals struct. An A/B test showed no measurable change to boot-to-gameplay time; behavior otherwise unknown. | | 2 |
 | `hrderbyOnly` | `0x07BDBC05` | Home Run Derby only. | | 7 |
 | `ForceBootflow` | `0x96C88199` | Forces the boot flow. | | 1 |
 | `ForcePlayGo` | `0x68452829` | Forces play-go (straight to gameplay). | | 4 |
@@ -53,7 +53,8 @@ a game.
 
 "Sites" is how many places in the retail code pass the hash to one of the three config-query
 functions. The hashes are the values the game compares config flags against. "Named?" means the
-option appears (commented out) in CONFIG_MAIN.TXT itself.
+option appears (commented out) in CONFIG_MAIN.TXT itself. Except where a row says "(confirmed)",
+the behavior descriptions are readings of the option names, not verified in-game behavior.
 
 ## Named in CONFIG_MAIN.TXT but compiled out
 
