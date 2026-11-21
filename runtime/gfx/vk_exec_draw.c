@@ -4860,13 +4860,16 @@ static void op_dispatch(VkExec *ex, const p_dispatch *d) {
     bind_resources(ex, info);
     twin_dispatch = 0;
     if (LT.cand) lt_end(ex, lt_rec + (B.pipe[1] != lt_pipe) + 1);
-    // mlbts-native diagnosis: the lighting-probe shaders (MLB_DISPATCH_DUMP, hex FNV hashes; default the RTTS room's
-    // probe and cube generators) get the dump below whatever addresses they use, their first 8 dispatches each.
+    // mlbts-native diagnosis: the lighting-probe shaders (MLB_DISPATCH_DUMP, hex FNV hashes; the RTTS room's probe and
+    // cube generators were 6dfb3fe0,1760ce02,96b26045,029166ea,0e0c2eb9,257c230d,2ef7a42a) get the dump below
+    // whatever addresses they use, their first 8 dispatches each. Off by default, like MLB_WATCH: the dump scans and
+    // hex-dumps the dispatch's buffers on the replay thread (2,655 log lines in a 100 s run), which must cost nothing
+    // in normal play.
     static uint32_t dd_want[16];
     static int dd_n = -1;
     if (dd_n < 0) {
         const char *e = cfg_get("MLB_DISPATCH_DUMP");
-        if (!e) e = "6dfb3fe0,1760ce02,96b26045,029166ea,0e0c2eb9,257c230d,2ef7a42a";
+        if (e && (!*e || !strcmp(e, "off"))) e = NULL;
         dd_n = 0;
         while (e && *e && dd_n < 16) {
             char *end;

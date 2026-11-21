@@ -127,7 +127,8 @@ is refused). Players' launchers (0.1.1 and later) find the newest release throug
 - **Under RenderDoc**, F12 is RenderDoc's capture (see below) and our capture moves to **F9**.
 - Knobs for the same machinery: `MLB_DRAWLOG=<frame>|game`, `MLB_SHOT=<frame>,...`, `MLB_DRAWTEX=<fs hash>,...`
   (save the textures of draws with those fragment shaders), `MLB_WATCH=<addr>,<size>;...` (log texture creations and
-  GPU writes in a guest range), and `MLB_TRACE=svc,host,ipc,fs,gfx,perf,sched,audio,present,all`.
+  GPU writes in a guest range), `MLB_DISPATCH_DUMP=<cs hash>,...` (dump what matching compute dispatches read and
+  write; off by default), and `MLB_TRACE=svc,host,ipc,fs,gfx,perf,sched,audio,present,all`.
 - Following game code without symbols (slows the game while set; nothing when unset):
   - `MLB_TRACE=fs` logs every open (and failed open), the first reads and every 64th of each file, and closes with
     totals; with `MLB_FS_STACK=<path text>` also the game's call stack at each open, read and close of matching files.
