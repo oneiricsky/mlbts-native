@@ -286,7 +286,7 @@ static bool g_modal;            // a confirmation is open: B and Esc close it, n
 static const char *const kMenuKeys[] = {
     "RENDER_SCALE", "UPSCALER", "SHARPNESS", "DLSS", "DLSS_PRESET", "FSR", "FSR_VERSION", "FSR_SHARPNESS", "AA", "AA_STRENGTH", "ANISO", "COLOR_PRESET", "COLOR_BRIGHTNESS", "COLOR_CONTRAST", "COLOR_SATURATION",
     "COLOR_GAMMA", "FULLSCREEN", "WINDOW_SIZE", "VK_PRESENT", "FPS_LIMIT", "ASPECT", "GPU_INDEX", "PERF_OVERLAY", "FRAME_QUEUE",
-    "ASSUME_FOCUS", "VOLUME", "PAD_MAP", "PROMPTS", "RUMBLE", "RUMBLE_STRENGTH", "STICK_DEADZONE", "LSTICK_DEADZONE",
+    "ASSUME_FOCUS", "KEEP_TUTORIALS", "VOLUME", "PAD_MAP", "PROMPTS", "RUMBLE", "RUMBLE_STRENGTH", "STICK_DEADZONE", "LSTICK_DEADZONE",
     "RSTICK_DEADZONE", "ASYNC_PREEMPT", "REPLAY_ASYNC", "PIPE_WAIT", "PIPE_SKIP", "LIB_PREBUILD",
     "LIB_PREBUILD_THREADS", "PIPE_PREBUILD", "PREWARM_XLATE", "GPL", "ASTC", "MEMORY", "TEX_ALIAS",
     "TEX_VRAM_PRESSURE", "ASTC_BC", "LOD_GUARD", "FIX_C0", "FIX_ZERO", "BIND_SKIP", "SHADER_MEMO", "PIPE_MEMO",
@@ -643,6 +643,10 @@ static void tab_game(float scale) {
                "On (the default), the game keeps running while you are in another window, and the keyboard stays "
                "quiet until the window is in front again. Off, it pauses when its window loses focus, as on the "
                "Switch when Home is pressed.");
+    opt_toggle("KEEP_TUTORIALS", "Remember finished tutorials",
+               "On (the default), a tutorial you have finished does not come back the next time you start the game. "
+               "The list is kept in tutorials-seen.txt in the profile folder; delete it while the game is closed to "
+               "see every tutorial again. Off, they come back on every start. Applies after a restart.");
     row_play_time();
     opt_end();
 }

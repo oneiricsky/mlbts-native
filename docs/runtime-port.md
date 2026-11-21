@@ -227,6 +227,11 @@ linker. `tools/shader_smoke.py` translates a sample of MLB's FXB shaders offline
     the game trusts, in memory. The game's online code then logs in to that server and nowhere else. `time:u` serves
     `LoadTimeZoneRule`, `ToCalendarTime` and `ToPosixTime`, which the game calls once it is online. With the setting
     off none of it is installed.
+21. **Finished tutorials** (`MLB_KEEP_TUTORIALS`, on by default; `runtime/mlb/tutorials.c`). The game keeps the
+    tutorials a player has finished only in its online profile, which the server sends back after each login, so
+    offline every tutorial came back on every start. The runtime keeps the list in `<profile>/tutorials-seen.txt`
+    and gives it back to the game: it wraps the eight function pointers through which the game asks whether a
+    tutorial was seen or marks one seen. With the setting off nothing is installed.
 
 Commands each service has not been seen to use stop with a named fatal (`ipc_unimplemented`), so every new one is
 found where it is first needed; commands that only pass a setting are accepted and logged under `MLB_TRACE=ipc`.
