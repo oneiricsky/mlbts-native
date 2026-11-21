@@ -2,15 +2,18 @@
 // MacNativeGames games/totk/runtime/loader.c and services.c @ b75be8cf (MIT) and LAS Recomp runtime/main.c @ da35b83
 // (MIT). The boot driver: the guest main thread runs the SDK's own nn::init::Start with three host callbacks in
 // place of rtld; the second runs DT_INIT of every loaded module (main, sdk); Start then calls nnMain.
-// TotK's per-version checkpoints, shader prewarm, patch sets, mods and cheats are not ported.
+// TotK's per-version checkpoints, patch sets, mods and cheats are not ported.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include "cfg.h"
 #include "host.h"
 #include "platform/platform.h"
 
 void res_apply(void);   // resolution.c
+void vk_pipeline_async_enable(void);   // vk_pipeline.c
+void vk_pipeline_prewarm(void);        // vk_pipeline.c
 
 #define SYM_INIT_START "_ZN2nn4init5StartEmmPFvvES2_S2_"
 #define CTOR_DONE 2   // a module's constructor flag after its DT_INIT ran the init_array
@@ -134,6 +137,14 @@ void rt_boot(void) {
     cb_addr[1] = hostfn_register("<rtld module_inits>", cb_module_inits);
     cb_addr[2] = hostfn_register("<rtld module_finis>", cb_module_finis);
     hostfn_seal();
+    // mlbts-native: pipelines build on background workers (a draw whose pipeline is building is skipped or gets a
+    // fast-linked one), and the ones earlier runs recorded in pipeline-keys.bin are built before the guest starts.
+    // Without this every new pipeline compiled on the replay thread: frames of 0.5 to 3.5 s on an RX 6700 XT. A
+    // MLB_SHOT run needs every draw, so it keeps the synchronous builds, as TotK's --shot does. MLB_PIPE_SYNC=1 too.
+    if (!cfg_get("MLB_SHOT")) {
+        vk_pipeline_async_enable();
+        vk_pipeline_prewarm();
+    }
     rt_log("boot: guest starts %llu ms after process start",
            (unsigned long long)(plat_process_uptime_ns() / 1000000));
     rt_guest_start_ns = kern_now_ns();
