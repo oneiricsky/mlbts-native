@@ -99,8 +99,8 @@ First-time setup, once:
 ```bash
 # 1. extract the ExeFS and the RomFS from your own dumps (about 37 GB)
 .venv/Scripts/python -I tools/romfs_dump.py --keys "$APPDATA/Ryujinx/system/prod.keys" --titlekeys "$APPDATA/Ryujinx/system/title.keys" --extract-all "gamefiles/<base>.nsp" "gamefiles/<update>.nsp" work/romfs
-# 2. generate C from the game's code (about 50 s)
-.venv/Scripts/python -I recomp/gen.py --exefs work/update/exefs --out work/gen --modules main,sdk
+# 2. generate C from the game's code, with its code patches (about 50 s)
+.venv/Scripts/python -I recomp/gen.py --exefs work/update/exefs --out work/gen --modules main,sdk --patches tools/data/patches-1.0.20.txt
 # 3. fetch Vulkan headers, VMA and SDL3; build the shader translator
 .venv/Scripts/python -I tools/fetch_deps.py
 .venv/Scripts/python -I tools/build_xlate.py

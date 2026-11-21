@@ -61,7 +61,7 @@ that another title couldn't replace.
 ## Building and running
 
 ```bash
-.venv/Scripts/python -I recomp/gen.py --exefs work/update/exefs --out work/gen --modules main,sdk
+.venv/Scripts/python -I recomp/gen.py --exefs work/update/exefs --out work/gen --modules main,sdk --patches tools/data/patches-1.0.20.txt
 .venv/Scripts/python -I tools/build.py
 work/build/mlb.exe
 ```
@@ -160,7 +160,8 @@ linker. `tools/shader_smoke.py` translates a sample of MLB's FXB shaders offline
     leave their constructor flag at 2. ✔
 11. **`nnMain` runs.** ✔ Its first SDK call was `nn::fs::QueryMountRomCacheSize`, which went to `fsp-srv` until
     the `nn::fs` overrides took it.
-12. **fs**: the game mounts the RomFS as `FS_Rom` and temporary storage as `FS_Temp`, reads
+12. **fs**: the game mounts the RomFS as `FS_Rom`, temporary storage as `FS_Temp` and cache storage 0 as
+    `FS_GameData` (which exists only with `MLB_CACHE_STORAGE`, step 23), reads
     `FS_Rom:/BOOT/CONFIG_MAIN.TXT`, and logs its own start-up lines (`[lm 0] Compiler: ...`). ✔
 13. **Graphics bring-up** (docs/graphics-plan.md). The `nv::` and `nn::vi::` overrides take the place of `nvdrv`, and
     `nvnBootstrapLoader` hands out TotK's NVN procs. The game creates its device, records command buffers and presents
@@ -227,6 +228,21 @@ linker. `tools/shader_smoke.py` translates a sample of MLB's FXB shaders offline
     the game trusts, in memory. The game's online code then logs in to that server and nowhere else. `time:u` serves
     `LoadTimeZoneRule`, `ToCalendarTime` and `ToPosixTime`, which the game calls once it is online. With the setting
     off none of it is installed.
+21. **Finished tutorials** (`MLB_KEEP_TUTORIALS`, on by default; `runtime/mlb/tutorials.c`). The game keeps the
+    tutorials a player has finished only in its online profile, which the server sends back after each login, so
+    offline every tutorial came back on every start. The runtime keeps the list in `<profile>/tutorials-seen.txt`
+    and gives it back to the game: it wraps the eight function pointers through which the game asks whether a
+    tutorial was seen or marks one seen. With the setting off nothing is installed.
+22. **Road to the Show hub upgrades saved** (`MLB_RTTS_AUTOSAVE`, on by default; `runtime/mlb/rtts_autosave.c`).
+    The game saves a career after a played game and on a few game events, not after hub purchases, so perk and
+    attribute upgrades bought in the hub were lost by quitting before the next game. The runtime wraps the eleven
+    menu commands that buy or refund upgrades; after one, the game's own after-game autosave (with its own checks)
+    runs at the next screen change, normally when the player leaves the Perks, Tools or pitch upgrade screen. With
+    the setting off nothing is installed.
+23. **Cache storage** (`MLB_CACHE_STORAGE`, on by default; `runtime/mlb/cache_storage.c`). The game mounts cache
+    storage 0 as `FS_GameData` and keeps custom batting cameras, Audio Unlockables, an inventory copy and other files
+    there, but never creates it and its NACP declares none, so the mount failed and those files were never kept
+    (issue 19). The runtime creates `<profile>/cache/0` at start.
 
 Commands each service has not been seen to use stop with a named fatal (`ipc_unimplemented`), so every new one is
 found where it is first needed; commands that only pass a setting are accepted and logged under `MLB_TRACE=ipc`.

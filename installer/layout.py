@@ -79,13 +79,17 @@ class Layout:
     def expected(self, version):
         return self.tools / 'data' / f'expected-{version}.json'
 
+    def patches(self, version):
+        """The code patches for that game version (recomp/patches.py format), passed to recomp/gen.py --patches."""
+        return self.tools / 'data' / f'patches-{version}.txt'
+
     def missing(self):
         """Paths the steps need that do not exist."""
         need = [self.python, self.tools / 'build.py', self.tools / 'romfs_dump.py', self.tools / 'nxextract.py',
                 self.tools / 'equipment' / 'equipment.py', self.tools / 'packages' / 'server.py',
                 self.recomp / 'gen.py', self.llvm / 'bin' / 'clang.exe', self.deps / 'lib' / 'vulkan-1.lib',
                 self.deps / 'bin' / 'SDL3.dll', self.runtime_lib, self.ninja, self.xlate]
-        need += [self.expected(v) for v in GAME_VERSIONS]
+        need += [self.expected(v) for v in GAME_VERSIONS] + [self.patches(v) for v in GAME_VERSIONS]
         return [str(p) for p in need if not p.exists()]
 
 
