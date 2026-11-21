@@ -141,22 +141,32 @@ void gfx_event_story(const volatile uint32_t *val, uint64_t t0, char *b, size_t 
 // moved on or another event was polled): t0 the first poll at the old value, t1 now, polls how many. Waits closer than
 // 50 ms to the last one form a burst; a burst that waited 100 ms or more gets one line: per wait, from its start, when
 // the submission whose signal ended it was queued for the replay, replayed, submitted, seen reached by the completion
-// thread and applied, and when the game saw it. Per thread (the main thread's are the ones that matter).
+// thread and applied, and when the game saw it. The replay of those submissions is also split into its phases
+// (vk_sync_phase_times: before the submit, recording, upload flush, mirror prologue, queue submit, tail), which says
+// where the port's share of each wait goes. Per thread (the main thread's are the ones that matter).
 int gfx_fence_times(uint64_t v, uint64_t *enq, uint64_t *rs, uint64_t *re);   // vk_backend.c
 static _Thread_local struct {
-    uint64_t start, last_end, n, waited, timed;
-    double s[7];
+    uint64_t start, last_end, n, waited, timed, ptimed, omin, omax, h0_first, h0_last, nsame;
+    double s[7], p[7];
 } EB;
 static void eb_flush(void) {
     if (EB.n && EB.waited >= 100000000ull) {
         double k = EB.timed ? 1e-6 / (double)EB.timed : 0;
+        double pk = EB.ptimed ? 1e-6 / (double)EB.ptimed : 0;
+        double po = EB.ptimed ? 1.0 / (double)EB.ptimed : 0;
         double span = (double)(EB.last_end - EB.start);
         rt_log("nvn: game GPU wait burst: %llu waits over %.1f ms (%.1f ms waiting, the game ran %.2f ms between waits); "
                "per wait from its start (%llu timed): queued %+.2f, replay start %+.2f, end %+.2f, submitted %+.2f, "
-               "GPU reached (seen) %+.2f, applied %+.2f, seen by the game %+.2f ms (frame %llu)",
+               "GPU reached (seen) %+.2f, applied %+.2f, seen by the game %+.2f ms; the replay split (%llu timed): "
+               "before submit %+.2f (drain, textures, lock), record %+.2f of %.0f commands (%llu to %llu; %llu of %llu "
+               "submissions the same first buffer as the one before), upload flush %+.2f, prologue %+.2f (shadow, "
+               "mirror), queue submit %+.2f, tail %+.2f ms (frame %llu)",
                (unsigned long long)EB.n, span / 1e6, EB.waited / 1e6, (span - (double)EB.waited) / 1e6 / (double)EB.n,
                (unsigned long long)EB.timed, EB.s[0] * k, EB.s[1] * k, EB.s[2] * k, EB.s[3] * k, EB.s[4] * k,
-               EB.s[5] * k, EB.s[6] * k, (unsigned long long)gfx_counters.frames);
+               EB.s[5] * k, EB.s[6] * k, (unsigned long long)EB.ptimed, EB.p[0] * pk, EB.p[1] * pk, EB.p[6] * po,
+               (unsigned long long)EB.omin, (unsigned long long)EB.omax, (unsigned long long)EB.nsame,
+               (unsigned long long)EB.ptimed, EB.p[2] * pk, EB.p[3] * pk, EB.p[4] * pk, EB.p[5] * pk,
+               (unsigned long long)gfx_counters.frames);
     }
     memset(&EB, 0, sizeof EB);
 }
@@ -167,7 +177,8 @@ void gfx_event_wait_end(const volatile uint32_t *val, uint64_t t0, uint64_t t1, 
     EB.n++, EB.waited += t1 - t0, EB.last_end = t1;
     int s = evs_find(val, 0);
     if (s < 0) return;
-    uint64_t f = evs[s].applied_fence, app = evs[s].applied_ns, enq, rs, re, sub, seen;
+    uint64_t f = evs[s].applied_fence, app = evs[s].applied_ns, enq, rs, re, sub, seen, beg, rec, fl, pro;
+    uint32_t ops = 0;
     if (!f || app < t0 || !gfx_fence_times(f, &enq, &rs, &re) || !vk_sync_value_times(f, &sub, &seen) || !rs || !re ||
         !seen)
         return;
@@ -175,6 +186,19 @@ void gfx_event_wait_end(const volatile uint32_t *val, uint64_t t0, uint64_t t1, 
                    (double)seen - (double)t0, (double)app - (double)t0, (double)t1 - (double)t0};
     for (int i = 0; i < 7; i++) EB.s[i] += d[i];
     EB.timed++;
+    if (vk_sync_phase_times(f, &beg, &rec, &fl, &pro, &ops) && beg >= rs && rec >= beg && fl >= rec && pro >= fl &&
+        sub >= pro && re >= sub) {
+        double p[7] = {(double)beg - (double)rs, (double)rec - (double)beg, (double)fl - (double)rec,
+                       (double)pro - (double)fl, (double)sub - (double)pro, (double)re - (double)sub, (double)ops};
+        for (int i = 0; i < 7; i++) EB.p[i] += p[i];
+        uint64_t h0 = vk_sync_submit_h0(f);
+        if (!EB.ptimed) EB.omin = EB.omax = ops, EB.h0_first = h0;
+        if (ops < EB.omin) EB.omin = ops;
+        if (ops > EB.omax) EB.omax = ops;
+        if (h0 && h0 == EB.h0_last) EB.nsame++;
+        EB.h0_last = h0;
+        EB.ptimed++;
+    }
 }
 
 static void event_cb(void *arg) {

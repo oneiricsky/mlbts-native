@@ -48,9 +48,10 @@ static int stop;
 static Pending *queue;            // side effects in the order they were added
 static int qhead, qn, qcap;
 // mlbts-native diagnosis (MLB_TRACE=perf; the game's GPU waits, nvn_api_core.c): per timeline value, when its
-// submission went to the queue and when the completion thread saw the GPU reach it (st_lock).
+// submission went to the queue and when the completion thread saw the GPU reach it (st_lock). vk_sync_submit adds the
+// phases of the replay itself (below) for vk_sync_phase_times; read by the wait-burst line (vk_exec_xfer.c).
 #define VT_N 1024
-static struct { uint64_t v, sub, seen; } vt[VT_N];
+static struct { uint64_t v, beg, rec, fl, pro, sub, seen, h0; uint32_t ops; } vt[VT_N];
 
 // ---- GPU time (TOTK_TRACE=perf): each submission part (vk_sync_split) writes a timestamp when it starts and when it
 // ends, into a ring of query pairs. The completion thread reads a pair once the part's value is reached and adds the
@@ -409,6 +410,13 @@ uint64_t vk_sync_reserve(void) {
 uint64_t vk_sync_submit(const uint64_t *handles, int n) {
     vk_sync_start();
     VkCtx *c = vk_ctx();
+    // mlbts-native diagnosis (MLB_TRACE=perf): the replay's phases per timeline value (vt, vk_sync_phase_times). beg is
+    // before the submit lock: the gap from the replay thread's dequeue (vk_backend.c ft.rs) is the present drain, the
+    // new-submit texture bookkeeping and waiting for the lock. rec after recording, fl after the upload flush, pro
+    // after the mirror prologue; sub is stamped below after vkQueueSubmit2.
+    int tp = (rt_trace & RT_TRACE_PERF) != 0;
+    uint64_t t_beg = 0, t_rec = 0, t_fl = 0, t_pro = 0;
+    if (tp) t_beg = kern_now_ns();
     plat_mutex_lock(&sub_lock);
     vk_mem_dirty_submit();   // TOTK_TRACE=perf: what a mirror would upload before this submit
     uint64_t fence = __atomic_load_n(&issued, __ATOMIC_ACQUIRE) + 1;
@@ -427,9 +435,12 @@ uint64_t vk_sync_submit(const uint64_t *handles, int n) {
     // The recorder is done with the part: the end-of-submission crumb, then the end, by the recorder when it records.
     if (!rec_end_cb(s->cb, VK_CRUMB_SUBMIT_END, fence)) vkEndCommandBuffer(s->cb);
     perf_replay(t0);
+    if (tp) t_rec = kern_now_ns();
     // After the recording: the uploads it asked for (and every earlier one) precede it in queue order.
     vk_upload_flush(0);
+    if (tp) t_fl = kern_now_ns();
     VkCommandBuffer pro = prologue(c, fence);
+    if (tp) t_pro = kern_now_ns();
     s = &slots[cur_slot];
     VkCommandBufferSubmitInfo cbi[2] = {{.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO, .commandBuffer = pro},
                                         {.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_SUBMIT_INFO, .commandBuffer = s->cb}};
@@ -447,7 +458,9 @@ uint64_t vk_sync_submit(const uint64_t *handles, int n) {
     }
     s->fence = recorded ? fence : 0;
     plat_mutex_lock(&st_lock);
-    if (rt_trace & RT_TRACE_PERF) vt[fence % VT_N].v = fence, vt[fence % VT_N].sub = kern_now_ns(), vt[fence % VT_N].seen = 0;
+    if (tp) vt[fence % VT_N].v = fence, vt[fence % VT_N].beg = t_beg, vt[fence % VT_N].rec = t_rec,
+            vt[fence % VT_N].fl = t_fl, vt[fence % VT_N].pro = t_pro, vt[fence % VT_N].sub = kern_now_ns(),
+            vt[fence % VT_N].seen = 0;
     __atomic_store_n(&issued, fence, __ATOMIC_RELEASE);
     plat_cond_broadcast(&cv_work);
     plat_mutex_unlock(&st_lock);
@@ -524,6 +537,35 @@ int vk_sync_value_times(uint64_t v, uint64_t *sub, uint64_t *seen) {
     if (ok) *sub = vt[v % VT_N].sub, *seen = vt[v % VT_N].seen;
     plat_mutex_unlock(&st_lock);
     return ok;
+}
+
+// mlbts-native diagnosis (the game's GPU-wait bursts, vk_exec_xfer.c): the replay of value v split into its phases.
+// The gap from the replay thread's dequeue (vk_backend.c gfx_fence_times rs) to beg is the present drain, the
+// new-submit texture bookkeeping and the submit lock; beg-rec is recording, rec-fl the upload flush, fl-pro the mirror
+// prologue (shadow sync first), pro-sub vkQueueSubmit2, sub-re the tail. 0 fields: the trace was off. ops is how many
+// commands the recording walked (vk_sync_note_ops).
+int vk_sync_phase_times(uint64_t v, uint64_t *beg, uint64_t *rec, uint64_t *fl, uint64_t *pro, uint32_t *ops) {
+    plat_mutex_lock(&st_lock);
+    int ok = vt[v % VT_N].v == v;
+    if (ok) *beg = vt[v % VT_N].beg, *rec = vt[v % VT_N].rec, *fl = vt[v % VT_N].fl, *pro = vt[v % VT_N].pro,
+            *ops = vt[v % VT_N].ops;
+    plat_mutex_unlock(&st_lock);
+    return ok;
+}
+
+// mlbts-native diagnosis: the first command-buffer handle value v's submission carried (vk_sync_note_ops).
+uint64_t vk_sync_submit_h0(uint64_t v) {
+    plat_mutex_lock(&st_lock);
+    uint64_t h = vt[v % VT_N].v == v ? vt[v % VT_N].h0 : 0;
+    plat_mutex_unlock(&st_lock);
+    return h;
+}
+
+// mlbts-native diagnosis: the recording thread, mid-record of value v (op counting under TOTK_TRACE=perf, vk_exec.c);
+// read once v is in the table (st_lock orders it after this store). h0: the submission's first command-buffer handle,
+// to tell a re-submitted buffer from a re-recorded one.
+void vk_sync_note_ops(uint64_t fence, uint32_t ops, uint64_t h0) {
+    vt[fence % VT_N].ops = ops, vt[fence % VT_N].h0 = h0;
 }
 
 void vk_completion_story(char *b, size_t n) {

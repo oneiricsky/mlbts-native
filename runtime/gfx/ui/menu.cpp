@@ -578,6 +578,10 @@ static void row_play_time(void) {
 
 static void tab_game(float scale) {
     opt_begin("##game", scale);
+    // mlbts-native: MLB_SKIP_INTRO (fs_host.c) — the boot logos answered as missing files
+    opt_toggle("SKIP_INTRO", "Skip intro logos",
+               "Go straight to the game-modes menu at start: the legal screen and the two intro movies are left "
+               "out. Applies at the next start of the game.");
     opt_toggle("FRAME_QUEUE", "Frame queue",
                "The game starts a frame while the previous one waits for its turn on screen: far fewer dropped frames "
                "at 60 fps, up to one frame more input delay. Applies at once.");
