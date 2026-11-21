@@ -37,6 +37,7 @@
 #ifdef _WIN32
 #define strdup _strdup   // mlbts-native: the MSVC C library names it so
 #endif
+#include "cfg.h"   // mlbts-native: cfg_bool (MLB_SKIP_INTRO), as kernel.c
 #include "host.h"
 #include "platform/platform.h"
 
@@ -1431,11 +1432,30 @@ static const char *traced_path(uint64_t h) {
     return f ? f->trace : NULL;
 }
 
+// mlbts-native (MLB_SKIP_INTRO, the settings menu's Game tab): both intro movies — MLB_INTRO.BIK (62 MB, 94 s of
+// narration) and SonyStudio_INTRO.BIK (5 MB) — are answered as not found, and the boot flow then goes from the SIE
+// text card straight to the game-modes menu (it cuts the MLB movie short after about 10 s even when it is there).
+// Tested limits: LOADINGSCREENBACKGROUNDS/SCE_PRESENTS.TEX must stay — it is the loading screen's background, and
+// without it that screen is a white square; and in an earlier build that hid every intro file at once the FMV player
+// never initialized and the boot flow sat on the white square forever, so the SIE text card and the loading screen's
+// legal page stay. Read once; the row is RESTART.
+#define strncasecmp _strnicmp   // mlbts-native: the MSVC C library names it so (as in vk_device.c)
+static int skip_intro_path(const char *path) {
+    static int on = -1;
+    if (on < 0) on = cfg_bool("MLB_SKIP_INTRO");
+    if (!on || !path) return 0;
+    for (const char *p = path; p[1]; p++) {
+        if (*p != 'M' && *p != 'm' && *p != 'S' && *p != 's') continue;
+        if (!strncasecmp(p, "mlb_intro.bik", 13) || !strncasecmp(p, "sonystudio_intro.bik", 19)) return 1;
+    }
+    return 0;
+}
+
 // mlbts-native: under MLB_TRACE=fs a failed open is logged with its result too (missing streamed audio was traced so)
 static void ov_open_file(Cpu *c) {
     const char *path = arg_p(c, 1);
     if (rt_trace & RT_TRACE_FS) fs_stack(c, "open", path);
-    uint32_t r = open_file(arg_p(c, 0), path, I32(2));
+    uint32_t r = skip_intro_path(path) ? FS_R_PATH_NOT_FOUND : open_file(arg_p(c, 0), path, I32(2));
     if (r && (rt_trace & RT_TRACE_FS)) rt_log("fs open failed %#x: %s", r, path ? path : "(null)");
     ret_x(c, r);
 }
@@ -1446,7 +1466,7 @@ static void ov_close_file(Cpu *c) {
 }
 static void ov_entry_type(Cpu *c) {
     const char *path = arg_p(c, 1);
-    uint32_t r = entry_type(arg_p(c, 0), path);
+    uint32_t r = skip_intro_path(path) ? FS_R_PATH_NOT_FOUND : entry_type(arg_p(c, 0), path);
     if (rt_trace & RT_TRACE_FS) rt_log("fs entry type %#x: %s", r, path ? path : "(null)");
     ret_x(c, r);
 }
