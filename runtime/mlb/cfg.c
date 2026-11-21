@@ -27,6 +27,7 @@ static const CfgMeta metas[] = {
     {"NICKNAME", "Player", NULL, RESTART},   // account.c GetNickname (up to 32 bytes of UTF-8)
     {"OFFLINE_PACKAGES", "0", "0|1", RESTART},   // packages.c: Road to the Show's Packages from a server on this PC
     {"KEEP_TUTORIALS", "1", "0|1", RESTART},   // tutorials.c: finished tutorials stay finished (profile/tutorials-seen.txt)
+    {"RTTS_AUTOSAVE", "1", "0|1", RESTART},   // rtts_autosave.c: hub upgrades saved when their screen is left
     {"PAD_MAP", "auto", "auto|label|position", LIVE},   // hid.c: face buttons by label in menus, by place in play
     {"RUMBLE", "1", "0|1", LIVE},   // hid.c: vibration on the controllers
     {"PAD_DRIVER", "sdl", "sdl|xinput", RESTART},   // hid.c: SDL3 (Xbox and PlayStation pads) or XInput (Xbox only)

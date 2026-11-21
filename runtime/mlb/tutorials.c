@@ -18,6 +18,8 @@
 // hash is the one seen last, the before-step does nothing more than read it (a few dozen short strings). With a
 // server that keeps the list (the packages server here does not), its list would replace the game's after login and
 // the next pass would add back what only the file knows, so both keep the same list.
+// Slot 4 (the screen-change function) is also used by rtts_autosave.c, which installs after this module and calls
+// this module's host function.
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>

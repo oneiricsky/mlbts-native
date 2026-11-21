@@ -232,6 +232,12 @@ linker. `tools/shader_smoke.py` translates a sample of MLB's FXB shaders offline
     offline every tutorial came back on every start. The runtime keeps the list in `<profile>/tutorials-seen.txt`
     and gives it back to the game: it wraps the eight function pointers through which the game asks whether a
     tutorial was seen or marks one seen. With the setting off nothing is installed.
+22. **Road to the Show hub upgrades saved** (`MLB_RTTS_AUTOSAVE`, on by default; `runtime/mlb/rtts_autosave.c`).
+    The game saves a career after a played game and on a few game events, not after hub purchases, so perk and
+    attribute upgrades bought in the hub were lost by quitting before the next game. The runtime wraps the eleven
+    menu commands that buy or refund upgrades; after one, the game's own after-game autosave (with its own checks)
+    runs at the next screen change, normally when the player leaves the Perks, Tools or pitch upgrade screen. With
+    the setting off nothing is installed.
 
 Commands each service has not been seen to use stop with a named fatal (`ipc_unimplemented`), so every new one is
 found where it is first needed; commands that only pass a setting are accepted and logged under `MLB_TRACE=ipc`.
