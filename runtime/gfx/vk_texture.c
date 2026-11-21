@@ -30,12 +30,22 @@
 #include "vk_exec.h"
 #include "platform/platform.h"
 #include "prompts.h"   // mlbts-native: runtime/mlb, the controller's button icons
+#include "hdtex.h"     // mlbts-native: runtime/mlb, PS5 textures in place of the Switch ones
 
 typedef struct {
     uint64_t addr;
     nvn_texdesc d;
     uint8_t has_layout, layout[8], pad[7];
 } TexKey;
+
+// mlbts-native: what the image fields of VkTexImage held before a PS5 image took them (hd_apply)
+typedef struct {
+    VkImage image;
+    VkFormat format;
+    VkImageUsageFlags usage;
+    uint32_t width, height, levels;
+    uint8_t block_views, fb_usage, bound;
+} HdSaved;
 
 typedef struct Tex {
     VkTexImage pub;               // first: vk_texture_get hands out &pub
@@ -70,6 +80,11 @@ typedef struct Tex {
                                   // with a later use_seq on overlapping storage replaced this one's bytes
     uint8_t prompts;              // mlbts-native: the game's button icons (prompts_apply)
     int8_t prompts_set;           // mlbts-native: the icon set copied over them at the last upload, -1 none
+    uint8_t hd_active;            // mlbts-native: pub holds the PS5 image (hd_apply); the upload suspends it
+    uint64_t hd_hash;             // the index entry it was made from
+    VkImage hd_image;             // the PS5 image, while there is one
+    VmaAllocation hd_alloc;
+    HdSaved hd_sw, hd_ps5;        // the image fields of the Switch-sized image and of the PS5 one
 } Tex;
 
 // A slot keeps what vk_texture_by_id resolved for it, so a draw binding skips the key lookup and the address chain: the
@@ -649,7 +664,9 @@ static void dropped_check(const TexKey *k) {
 }
 
 static void cube_unqueue(const Tex *e);   // mlbts-native, below
+static void hd_drop(Tex *e);              // mlbts-native, below
 static void destroy_tex(Tex *e) {
+    hd_drop(e);
     own_remove(e);
     cube_unqueue(e);
     tex_gen_bump(e->key.addr);
@@ -1244,11 +1261,119 @@ static inline void prompts_fresh(Tex *e) {
     if (__builtin_expect(e->prompts, 0) && e->uploaded && e->prompts_set != mlb_prompts_set()) upload(e);
 }
 
+// mlbts-native: PS5 textures in place of the Switch ones (runtime/mlb/hdtex.c, MLB_HD_TEXTURES). The game made the
+// texture at its Switch size and copies the file's storage into it, so it is recognised here, at its upload: a hash of
+// the storage finds the PS5 file, and an image made from that file takes the place of the Switch-sized one in pub (the
+// replay's views follow the image handle, so the next binding samples it). The Switch-sized image stays, uploaded as
+// always: upload() puts it back in pub while it copies, and hd_apply decides again after every upload (the storage may
+// now hold another texture: the PS5 image goes, or a new one comes).
+static int vkfmt_srgb(VkFormat f) {
+    return f == VK_FORMAT_BC1_RGB_SRGB_BLOCK || f == VK_FORMAT_BC1_RGBA_SRGB_BLOCK || f == VK_FORMAT_BC2_SRGB_BLOCK ||
+           f == VK_FORMAT_BC3_SRGB_BLOCK || f == VK_FORMAT_BC7_SRGB_BLOCK;
+}
+
+static void hd_pub_set(Tex *e, const HdSaved *s) {
+    e->pub.image = s->image, e->pub.format = s->format, e->pub.usage = s->usage;
+    e->pub.width = s->width, e->pub.height = s->height, e->pub.levels = s->levels;
+    e->pub.block_views = s->block_views, e->pub.fb_usage = s->fb_usage, e->pub.bound = s->bound;
+}
+
+static void hd_drop(Tex *e) {
+    if (!e->hd_image) return;
+    hd_pub_set(e, &e->hd_sw);
+    vk_exec_image_gone(e->hd_image);
+    vk_defer_image(e->hd_image, e->hd_alloc);
+    e->hd_image = VK_NULL_HANDLE, e->hd_alloc = NULL, e->hd_active = 0, e->hd_hash = 0;
+    tex_gen_bump(e->pub.addr);
+}
+
+static void hd_apply(Tex *e) {
+    const nvn_texdesc *d = &e->t.d;
+    uint32_t levels = umax(d->levels, 1);
+    const MlbHdEntry *h = NULL;
+    if (mlb_hd_on() && d->target == NVN_TEXTURE_TARGET_2D && levels >= 2 && mlb_hd_shape(d->width, d->height, levels))
+        h = mlb_hd_find(e->t.mem, e->t.L.size, d->width, d->height, levels);
+    if (!h) {
+        hd_drop(e);
+        return;
+    }
+    if (e->hd_image && e->hd_hash == mlb_hd_hash(h)) {   // the same texture again: its PS5 image is still right
+        hd_pub_set(e, &e->hd_ps5);
+        e->hd_active = 1;
+        return;
+    }
+    hd_drop(e);
+    uint64_t t0 = kern_now_ns();
+    MlbHdTex tx;
+    if (!mlb_hd_load(h, &tx)) return;
+    VkCtx *c = vk_ctx();
+    int srgb = vkfmt_srgb(e->f.vk);
+    VkFormat fmt = tx.bpb == 16 ? (srgb ? VK_FORMAT_BC7_SRGB_BLOCK : VK_FORMAT_BC7_UNORM_BLOCK)
+                                : (srgb ? VK_FORMAT_BC1_RGBA_SRGB_BLOCK : VK_FORMAT_BC1_RGBA_UNORM_BLOCK);
+    VkFormatFeatureFlags need = VK_FORMAT_FEATURE_SAMPLED_IMAGE_BIT | VK_FORMAT_FEATURE_TRANSFER_DST_BIT;
+    if ((features_of(fmt) & need) != need) {
+        rt_log("hdtex: VkFormat %d cannot be sampled and copied to here", (int)fmt);
+        mlb_hd_free(&tx);
+        return;
+    }
+    VkImageUsageFlags usage = VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    VkImageCreateInfo ci = {.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO, .flags = VK_IMAGE_CREATE_MUTABLE_FORMAT_BIT,
+                            .imageType = VK_IMAGE_TYPE_2D, .format = fmt, .extent = {tx.width, tx.height, 1},
+                            .mipLevels = tx.levels, .arrayLayers = 1, .samples = VK_SAMPLE_COUNT_1_BIT,
+                            .tiling = VK_IMAGE_TILING_OPTIMAL, .usage = usage, .initialLayout = VK_IMAGE_LAYOUT_UNDEFINED};
+    VmaAllocationCreateInfo ai = {.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE};
+    VkImage img;
+    VmaAllocation alloc;
+    if (vmaCreateImage(c->vma, &ci, &ai, &img, &alloc, NULL) != VK_SUCCESS) {
+        rt_log("hdtex: image %ux%u creation failed", tx.width, tx.height);
+        mlb_hd_free(&tx);
+        return;
+    }
+    VkBufferImageCopy *rg = calloc(tx.levels, sizeof *rg);
+    if (!rg) rt_fatal("vk: out of memory (PS5 texture regions)");
+    for (uint32_t l = 0; l < tx.levels; l++)
+        rg[l] = (VkBufferImageCopy){.bufferOffset = tx.off[l], .bufferRowLength = tx.lw[l] * 4, .bufferImageHeight = tx.lh[l] * 4,
+                                    .imageSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, l, 0, 1},
+                                    .imageExtent = {mip(tx.width, l), mip(tx.height, l), 1}};
+    VkBuffer sb;
+    uint8_t *stg = vk_staging(tx.size, &sb, NULL);
+    memcpy(stg, tx.data, tx.size);
+    VkCommandBuffer cb = vk_upload_begin();
+    VkImageMemoryBarrier2 ib = {.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2, .srcStageMask = VK_PIPELINE_STAGE_2_NONE,
+                                .dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                                .dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
+                                .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED, .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+                                .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                .image = img, .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, VK_REMAINING_MIP_LEVELS, 0, 1}};
+    VkDependencyInfo di = {.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 1, .pImageMemoryBarriers = &ib};
+    vkCmdPipelineBarrier2(cb, &di);
+    barrier(cb, ALL_RW, VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT);
+    vkCmdCopyBufferToImage(cb, sb, img, VK_IMAGE_LAYOUT_GENERAL, tx.levels, rg);
+    barrier(cb, VK_PIPELINE_STAGE_2_COPY_BIT, VK_ACCESS_2_TRANSFER_WRITE_BIT, ALL_RW);
+    vk_upload_end();
+    free(rg);
+    e->hd_sw = (HdSaved){e->pub.image, e->pub.format, e->pub.usage, e->pub.width, e->pub.height, e->pub.levels,
+                         e->pub.block_views, e->pub.fb_usage, e->pub.bound};
+    e->hd_ps5 = (HdSaved){img, fmt, usage, tx.width, tx.height, tx.levels, 0, 0, 0};
+    e->hd_image = img, e->hd_alloc = alloc, e->hd_hash = mlb_hd_hash(h);
+    hd_pub_set(e, &e->hd_ps5);
+    e->hd_active = 1;
+    tex_gen_bump(e->pub.addr);
+    static volatile int32_t n_logged;
+    if (plat_inc32(&n_logged) <= 64)
+        rt_log("hdtex: texture %#llx %ux%u (%u levels, nvn %#x, vk %d%s) is %s: image %ux%u, %u levels, %s%s, %.1f MiB, %.1f ms",
+               (unsigned long long)e->pub.addr, (unsigned)d->width, (unsigned)d->height, (unsigned)levels, (unsigned)d->format,
+               (int)e->f.vk, e->f.alpha_one ? ", alpha one" : "", mlb_hd_name(h), tx.width, tx.height, tx.levels,
+               tx.bpb == 16 ? "BC7" : "BC1", srgb ? " sRGB" : " UNORM", tx.size / 1048576.0, (kern_now_ns() - t0) / 1e6);
+    mlb_hd_free(&tx);
+}
+
 static void upload(Tex *e) {
     const tex_t *t = &e->t;
     const nvn_texdesc *d = &t->d;
     int bw, bh;
     if (!nvn_fmt_bpb(d->format, &bw, &bh) || !t->mem) return;
+    if (e->hd_active) hd_pub_set(e, &e->hd_sw);   // the copy below is the Switch-sized image's
     if (vk_watch_hit(e->pub.addr, t->L.size)) {
         const uint8_t *m = (const uint8_t *)(uintptr_t)e->pub.addr;
         uint64_t nz = 0;
@@ -1261,6 +1386,7 @@ static void upload(Tex *e) {
     int why = UP_GPU;
     if (!upload_gpu(e)) why = up_why, upload_cpu(e);
     if (mlb_prompts_shape((int)d->format, d->width, d->height, umax(d->levels, 1))) prompts_apply(e);
+    hd_apply(e);
     uint64_t dt = kern_now_ns() - u0;
     up_n[why]++, up_bytes[why] += t->L.size, up_ns[why] += dt;
     if (e->uploaded) {
