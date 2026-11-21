@@ -160,7 +160,8 @@ linker. `tools/shader_smoke.py` translates a sample of MLB's FXB shaders offline
     leave their constructor flag at 2. ✔
 11. **`nnMain` runs.** ✔ Its first SDK call was `nn::fs::QueryMountRomCacheSize`, which went to `fsp-srv` until
     the `nn::fs` overrides took it.
-12. **fs**: the game mounts the RomFS as `FS_Rom` and temporary storage as `FS_Temp`, reads
+12. **fs**: the game mounts the RomFS as `FS_Rom`, temporary storage as `FS_Temp` and cache storage 0 as
+    `FS_GameData` (which exists only with `MLB_CACHE_STORAGE`, step 23), reads
     `FS_Rom:/BOOT/CONFIG_MAIN.TXT`, and logs its own start-up lines (`[lm 0] Compiler: ...`). ✔
 13. **Graphics bring-up** (docs/graphics-plan.md). The `nv::` and `nn::vi::` overrides take the place of `nvdrv`, and
     `nvnBootstrapLoader` hands out TotK's NVN procs. The game creates its device, records command buffers and presents
@@ -238,6 +239,10 @@ linker. `tools/shader_smoke.py` translates a sample of MLB's FXB shaders offline
     menu commands that buy or refund upgrades; after one, the game's own after-game autosave (with its own checks)
     runs at the next screen change, normally when the player leaves the Perks, Tools or pitch upgrade screen. With
     the setting off nothing is installed.
+23. **Cache storage** (`MLB_CACHE_STORAGE`, on by default; `runtime/mlb/cache_storage.c`). The game mounts cache
+    storage 0 as `FS_GameData` and keeps custom batting cameras, Audio Unlockables, an inventory copy and other files
+    there, but never creates it and its NACP declares none, so the mount failed and those files were never kept
+    (issue 19). The runtime creates `<profile>/cache/0` at start.
 
 Commands each service has not been seen to use stop with a named fatal (`ipc_unimplemented`), so every new one is
 found where it is first needed; commands that only pass a setting are accepted and logged under `MLB_TRACE=ipc`.
