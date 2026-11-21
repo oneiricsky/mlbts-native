@@ -1,3 +1,22 @@
+# MLB The Show 26: native Windows port (fork)
+
+This is a personal fork of [sam110411/mlbts-native](https://github.com/sam110411/mlbts-native), the static
+recompilation of MLB The Show 26 (Nintendo Switch) into a native Windows program. The upstream README is kept
+unchanged in the collapsed section below. Its download links and release instructions point to upstream, not to this
+fork.
+
+## What this fork is for
+
+Performance improvements on an AMD Radeon RX 6700 XT
+
+What has changed so far:
+
+- **Pipeline builds moved off the replay thread.**
+
+
+<details>
+<summary>Original README (upstream)</summary>
+
 # MLB The Show 26: native Windows port
 
 <a href="https://recomplauncher.com/game/mlbts-native"><picture><source media="(prefers-color-scheme: dark)" srcset="https://recomplauncher.com/assets/press/launcher/badge-light.svg"><img alt="Get it on RecompLauncher" src="https://recomplauncher.com/assets/press/launcher/badge-dark.svg" height="48"></picture></a>
@@ -163,3 +182,5 @@ redistributed), Roboto font. Exact versions, licences and the files they went in
 Third-party code keeps its own licence and attribution header; see
 [THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md). The code adapted from TotK Recomp is MIT-licensed
 (`runtime/core/LICENSE.totk-recomp`). No game content is distributed with this repository.
+
+</details>
