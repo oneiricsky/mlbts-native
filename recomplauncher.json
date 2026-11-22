@@ -347,28 +347,6 @@
             }
         },
         {
-            "id": "fps",
-            "label": "Frame rate",
-            "group": "Graphics",
-            "choices": [
-                {
-                    "label": "60 fps",
-                    "set": {
-                        "MLB_FPS_LIMIT": "60"
-                    }
-                },
-                {
-                    "label": "30 fps",
-                    "set": {
-                        "MLB_FPS_LIMIT": "30"
-                    }
-                }
-            ],
-            "defaults": {
-                "MLB_FPS_LIMIT": "60"
-            }
-        },
-        {
             "id": "dlss",
             "label": "DLSS",
             "group": "Graphics",
@@ -416,10 +394,57 @@
             }
         },
         {
+            "id": "fsr",
+            "label": "AMD FSR",
+            "group": "Graphics",
+            "help": "AMD FSR 3.1, or FSR 4 on the Radeon cards that run it, for any graphics card. Native AA keeps the full resolution; the others draw fewer pixels for more frames per second. When DLSS is on too, DLSS is used.",
+            "choices": [
+                {
+                    "label": "Off",
+                    "set": {
+                        "MLB_FSR": "off"
+                    }
+                },
+                {
+                    "label": "Native AA",
+                    "set": {
+                        "MLB_FSR": "native"
+                    }
+                },
+                {
+                    "label": "Quality",
+                    "set": {
+                        "MLB_FSR": "quality"
+                    }
+                },
+                {
+                    "label": "Balanced",
+                    "set": {
+                        "MLB_FSR": "balanced"
+                    }
+                },
+                {
+                    "label": "Performance",
+                    "set": {
+                        "MLB_FSR": "performance"
+                    }
+                },
+                {
+                    "label": "Ultra Performance",
+                    "set": {
+                        "MLB_FSR": "ultra_performance"
+                    }
+                }
+            ],
+            "defaults": {
+                "MLB_FSR": "off"
+            }
+        },
+        {
             "id": "upscaler",
             "label": "Upscaler",
             "group": "Graphics",
-            "help": "How the picture is scaled to the window. Bilinear is the game's own look.",
+            "help": "How the picture is scaled to the window. Bilinear is the game's own look; FSR 1 is sharper.",
             "choices": [
                 {
                     "label": "Bilinear",
@@ -428,7 +453,7 @@
                     }
                 },
                 {
-                    "label": "FSR",
+                    "label": "FSR 1",
                     "set": {
                         "MLB_UPSCALER": "fsr"
                     }

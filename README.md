@@ -54,8 +54,9 @@ release is made: [docs/release.md](docs/release.md).
   Nothing is sent anywhere, and it is off unless turned on.
 - Xbox and PlayStation controllers (through SDL3) with rumble. The game's button prompts follow the controller in use.
 - Keyboard and mouse.
-- Resolution options: output size, render scale, FSR 1, and NVIDIA DLSS / DLAA (the DLSS library is downloaded
-  separately, not shipped here).
+- Resolution options: output size, render scale, FSR 1, NVIDIA DLSS / DLAA and AMD FSR 3.1 / FSR 4 (the setup
+  downloads the DLSS and FSR libraries for the graphics card from NVIDIA's and AMD's repositories; they are not
+  shipped here).
 - FXAA, anisotropic filtering, shadow quality options, colour presets, HDR output, field-of-view and aspect options.
 - In-game settings menu, performance overlay, fullscreen toggle (F11).
 - Frame rate limit from 30 to 240 fps or the monitor's rate, at the game's normal speed

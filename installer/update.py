@@ -12,7 +12,7 @@ apply() moves only what a release holds (layout.RELEASE_ENTRIES). The next windo
 So the port stays in one folder (portable). Setups up to 0.1.5 unpacked each update beside the old setup folder, or
 into %LOCALAPPDATA%; they still do that when they update to this one, which then works from the new folder.
 
-Releases are named Fastball-<version>-windows.zip (the launcher Fastball.exe) from 0.1.6; up to 0.1.5 they were
+Releases are named Fastball-<version>-windows.zip (the launcher Fastball.exe) from 0.2.0; up to 0.1.5 they were
 MLBTS-Setup-<version>-windows.zip (MLBTS-Setup.exe), and the updaters of those setups look only for that name and start
 only MLBTS-Setup.exe. So a release also carries MLBTS-Setup-<version>-windows.zip, the same folder plus a copy of the
 launcher as MLBTS-Setup.exe (tools/make_release.py); the window removes that copy once it runs (gui.py). This updater

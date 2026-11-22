@@ -84,7 +84,8 @@ TOOLS_FILES = ['build.py', 'check_content.py', 'romfs_dump.py', 'nxextract.py', 
                'data/patches-1.0.20.txt']   # hostmem: recomp/gen.py sizes its workers with it
 # Every script the setup runs: smoke() starts each with --help on the folder's own Python, so a missing import stops
 # the release instead of a player's install (recomp/gen.py's hostmem did, after the 37 GB extraction)
-SETUP_SCRIPTS = ['recomp/gen.py', 'tools/build.py', 'tools/romfs_dump.py']
+SETUP_SCRIPTS = ['recomp/gen.py', 'tools/build.py', 'tools/romfs_dump.py', 'tools/equipment/equipment.py',
+                 'tools/packages/server.py']
 # The only executables and libraries a release may hold (folders are prefixes); anything else stops the release
 EXE_ALLOWED = ('Fastball.exe', 'python/', 'llvm/', 'bin/ninja.exe', 'bin/totk_xlate.exe', 'runtime/deps/bin/SDL3.dll',
                'runtime/deps/lib/vulkan-1.lib', 'runtime/libmlbrt.a')
@@ -392,6 +393,41 @@ def smoke(out):
     print('setup smoke run: ok (asks for the game files)')
     shutil.rmtree(out / 'logs', ignore_errors=True)
     shutil.rmtree(dest, ignore_errors=True)
+    smoke_packages(out)
+
+
+def smoke_packages(out):
+    """The packages step copies the server and only a few files of python/ into an install (installer/steps.py
+    Packages.PYTHON), and the game runs the server on that copy. The same copy here must import the whole server and
+    make a TLS server context, so a module the server starts to need that the list lacks stops the release, not a
+    player's game."""
+    sys.path.insert(0, str(out))
+    try:
+        from installer.steps import Packages
+    finally:
+        sys.path.pop(0)
+    folder = WORK / 'smoke-packages'
+    shutil.rmtree(folder, ignore_errors=True)
+    py = folder / 'python'
+    py.mkdir(parents=True)
+    for f in (out / 'tools' / 'packages').glob('*.py'):
+        shutil.copy2(f, folder / f.name)
+    for pattern in Packages.PYTHON:
+        found = sorted((out / 'python').glob(pattern))
+        if not found:
+            sys.exit(f'packages smoke: python/{pattern} is not in the release')
+        for f in found:
+            shutil.copy2(f, py / f.name)
+    library = next(py.glob('python3??.zip'))
+    (py / (library.stem + '._pth')).write_text(library.name + '\n.\n', encoding='ascii')
+    code = ('import sys; sys.path.insert(0, sys.argv[1]); import ssl, server, handlers, cert, rpc; '
+            'ssl.SSLContext(ssl.PROTOCOL_TLS_SERVER); print("packages server imports on its python copy")')
+    r = subprocess.run([str(py / 'python.exe'), '-I', '-X', 'utf8', '-c', code, str(folder)], cwd=folder,
+                       env=clean_env(), capture_output=True, text=True, timeout=60)
+    if r.returncode:
+        sys.exit('packages smoke: the server does not start on the copied python:\n' + r.stderr[-2000:])
+    print(r.stdout.strip())
+    shutil.rmtree(folder, ignore_errors=True)
 
 
 def export_head():
