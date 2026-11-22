@@ -8,7 +8,7 @@
 #include <string.h>
 #ifdef _WIN32
 #include <windows.h>   // GetModuleHandleA (vk_debug_names_on)
-#define strncasecmp _strnicmp   // mlbts-native: the MSVC C library names it so
+#define strncasecmp _strnicmp   // fastball: the MSVC C library names it so
 #endif
 
 #include "cfg.h"
@@ -16,6 +16,7 @@
 #include "vk.h"
 #include "platform/platform.h"
 #include "vk_dlaa.h"
+#include "vk_ffx.h"
 
 static VkCtx g_vk;
 static int g_ready;
@@ -33,6 +34,60 @@ static AbEvent *ab_ring;
 static uint64_t ab_head;
 static int ab_want;   // the instance has the messenger for it (create_instance)
 
+// fastball: every binding still in place, as well as the ring. A player's GTX 1070 lost the device after 7 hours on
+// the Franchise home screen ("write invalid at 0x4ce4000"), and the ring, which holds about a minute of texture churn,
+// could not name the address: objects bound at boot (the imported guest pools, VMA's blocks) had long left it. The
+// table is keyed by object, base and type, filled and emptied by the same binding events (one lock per object made or
+// freed, none per draw), and read only by the fault report.
+typedef struct { uint64_t base, size, handle, issued; int32_t type; uint32_t used; } AbLive;
+static AbLive *ab_live;
+static uint32_t ab_live_cap, ab_live_n;   // ab_live_lock
+static uint64_t ab_live_dropped;          // ab_live_lock: bindings not kept (no memory for the table)
+static PlatMutex ab_live_lock = PLAT_MUTEX_INIT;
+
+static uint32_t ab_live_slot(uint64_t handle, int32_t type, uint64_t base) {
+    uint64_t h = (handle ^ base * 0x9E3779B97F4A7C15ull ^ (uint64_t)(uint32_t)type << 56) * 0xff51afd7ed558ccdull;
+    return (uint32_t)(h >> 32) & (ab_live_cap - 1);
+}
+
+static int ab_live_grow(void) {
+    uint32_t ncap = ab_live_cap ? ab_live_cap * 2 : 4096;
+    AbLive *n = calloc(ncap, sizeof *n), *old = ab_live;
+    if (!n) return 0;
+    uint32_t ocap = ab_live_cap;
+    ab_live = n, ab_live_cap = ncap;
+    for (uint32_t i = 0; i < ocap; i++) {
+        if (!old[i].used) continue;
+        uint32_t s = ab_live_slot(old[i].handle, old[i].type, old[i].base);
+        while (n[s].used) s = (s + 1) & (ncap - 1);
+        n[s] = old[i];
+    }
+    free(old);
+    return 1;
+}
+
+// ab_live_lock held. Open addressing with linear probing; a removal shifts the entries after it back, so no tombstones.
+static void ab_live_note(const AbEvent *e) {
+    if (!e->unbind) {
+        if ((ab_live_n + 1) * 2 > ab_live_cap && !ab_live_grow()) { ab_live_dropped++; return; }
+        uint32_t s = ab_live_slot(e->handle, e->type, e->base);
+        while (ab_live[s].used) s = (s + 1) & (ab_live_cap - 1);
+        ab_live[s] = (AbLive){e->base, e->size, e->handle, e->issued, e->type, 1};
+        ab_live_n++;
+        return;
+    }
+    if (!ab_live_cap) return;
+    uint32_t m = ab_live_cap - 1, s = ab_live_slot(e->handle, e->type, e->base);
+    for (; ab_live[s].used; s = (s + 1) & m)
+        if (ab_live[s].handle == e->handle && ab_live[s].type == e->type && ab_live[s].base == e->base) break;
+    if (!ab_live[s].used) return;   // bound while the table had no room
+    ab_live[s].used = 0, ab_live_n--;
+    for (uint32_t j = (s + 1) & m; ab_live[j].used; j = (j + 1) & m) {
+        uint32_t home = ab_live_slot(ab_live[j].handle, ab_live[j].type, ab_live[j].base);
+        if (((j - home) & m) >= ((j - s) & m)) ab_live[s] = ab_live[j], ab_live[j].used = 0, s = j;
+    }
+}
+
 static void ab_record(const VkDebugUtilsMessengerCallbackDataEXT *d) {
     const VkDeviceAddressBindingCallbackDataEXT *b = NULL;
     for (const VkBaseInStructure *p = d->pNext; p; p = p->pNext)
@@ -46,7 +101,11 @@ static void ab_record(const VkDebugUtilsMessengerCallbackDataEXT *d) {
     e->type = d->objectCount ? (int32_t)d->pObjects[0].objectType : 0;
     e->unbind = b->bindingType == VK_DEVICE_ADDRESS_BINDING_TYPE_UNBIND_EXT;
     e->issued = vk_sync_issued(), e->done = vk_sync_fence_done();
+    AbEvent copy = *e;
     __atomic_store_n(&e->seq, i + 1, __ATOMIC_RELEASE);
+    plat_mutex_lock(&ab_live_lock);
+    ab_live_note(&copy);
+    plat_mutex_unlock(&ab_live_lock);
 }
 
 static const char *ab_type_name(int32_t t, char *buf, size_t n) {
@@ -58,8 +117,9 @@ static const char *ab_type_name(int32_t t, char *buf, size_t n) {
     }
 }
 
-// The newest events whose range meets the precision-aligned range around a fault address, newest first.
-static void ab_report(uint64_t addr, uint64_t precision) {
+// The newest events whose range meets the precision-aligned range around a fault address, newest first. data: an
+// address the shader read or wrote, not an instruction pointer.
+static void ab_report(uint64_t addr, uint64_t precision, int data) {
     if (!ab_ring) return;
     uint64_t lo = precision > 1 ? addr & ~(precision - 1) : addr, hi = lo + (precision > 1 ? precision : 1);
     uint64_t head = __atomic_load_n(&ab_head, __ATOMIC_ACQUIRE), n = head < AB_N ? head : AB_N;
@@ -77,6 +137,44 @@ static void ab_report(uint64_t addr, uint64_t precision) {
     }
     if (!found) rt_log("vk: fault address %#llx: no binding in the last %llu address events", (unsigned long long)addr,
                        (unsigned long long)n);
+    // fastball: the bindings still in place there, however old. For a data address with none, the nearest live
+    // objects below and above it: a write just past an object's end is an overrun, one in a gap a freed object.
+    plat_mutex_lock(&ab_live_lock);
+    const AbLive *below = NULL, *above = NULL;
+    int live = 0;
+    uint64_t now = vk_sync_issued();
+    for (uint32_t i = 0; i < ab_live_cap; i++) {
+        const AbLive *l = &ab_live[i];
+        if (!l->used) continue;
+        if (l->base < hi && l->base + l->size > lo) {
+            if (++live <= 6) {
+                char tn[32];
+                rt_log("vk: fault address %#llx: live %s %#llx [%#llx, +%#llx] bound %llu submissions before the fault",
+                       (unsigned long long)addr, ab_type_name(l->type, tn, sizeof tn), (unsigned long long)l->handle,
+                       (unsigned long long)l->base, (unsigned long long)l->size,
+                       (unsigned long long)(now - l->issued));
+            }
+            continue;
+        }
+        if (l->base + l->size <= lo && (!below || l->base + l->size > below->base + below->size)) below = l;
+        if (l->base >= hi && (!above || l->base < above->base)) above = l;
+    }
+    if (!live && data) {
+        rt_log("vk: fault address %#llx: in no live binding (%u live, %llu not kept)", (unsigned long long)addr,
+               ab_live_n, (unsigned long long)ab_live_dropped);
+        const AbLive *nearest[2] = {below, above};
+        for (int k = 0; k < 2; k++) {
+            if (!nearest[k]) continue;
+            char tn[32];
+            const AbLive *l = nearest[k];
+            uint64_t gap = k ? l->base - addr : addr - (l->base + l->size);
+            rt_log("vk: fault address %#llx: nearest live object %s: %s %#llx [%#llx, +%#llx] %#llx bytes away, bound %llu "
+                   "submissions before the fault", (unsigned long long)addr, k ? "above" : "below",
+                   ab_type_name(l->type, tn, sizeof tn), (unsigned long long)l->handle, (unsigned long long)l->base,
+                   (unsigned long long)l->size, (unsigned long long)gap, (unsigned long long)(now - l->issued));
+        }
+    }
+    plat_mutex_unlock(&ab_live_lock);
 }
 
 static VKAPI_ATTR VkBool32 VKAPI_CALL debug_cb(VkDebugUtilsMessageSeverityFlagBitsEXT sev, VkDebugUtilsMessageTypeFlagsEXT type,
@@ -298,6 +396,9 @@ typedef struct {
     VkPhysicalDeviceAttachmentFeedbackLoopLayoutFeaturesEXT fbl;
     VkPhysicalDeviceDynamicRenderingLocalReadFeaturesKHR lr;
     VkPhysicalDeviceAddressBindingReportFeaturesEXT abr;
+    VkPhysicalDeviceCooperativeMatrixFeaturesKHR coop;              // fastball: FSR 4 (vk_ffx.c)
+    VkPhysicalDeviceShaderFloat8FeaturesEXT f8;
+    VkPhysicalDeviceComputeShaderDerivativesFeaturesKHR csd;
 } FeatureChain;
 
 static int create_device(void) {
@@ -305,7 +406,7 @@ static int create_device(void) {
     vkEnumerateDeviceExtensionProperties(g_vk.phys, NULL, &ne, NULL);
     VkExtensionProperties *ep = calloc(ne ? ne : 1, sizeof *ep);
     vkEnumerateDeviceExtensionProperties(g_vk.phys, NULL, &ne, ep);
-    const char *ext[48];
+    const char *ext[56];
     uint32_t n_ext = 0;
     for (size_t i = 0; i < sizeof k_required_ext / sizeof *k_required_ext; i++) ext[n_ext++] = k_required_ext[i];
     if (g_vk.has_host_import) ext[n_ext++] = VK_EXT_EXTERNAL_MEMORY_HOST_EXTENSION_NAME;   // pick_device
@@ -350,7 +451,25 @@ static int create_device(void) {
         CHAIN(fbl, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_ATTACHMENT_FEEDBACK_LOOP_LAYOUT_FEATURES_EXT);
         CHAIN(lr, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_DYNAMIC_RENDERING_LOCAL_READ_FEATURES_KHR);
     }
-    vk_dlaa_device_exts(ep, ne, ext, &n_ext, 40);   // NGX's; the eight slots after it stay for the seven below
+    vk_dlaa_device_exts(ep, ne, ext, &n_ext, 40);   // NGX's; the sixteen slots after it stay for the ten below
+    // fastball: FSR 4's machine-learning models (vk_ffx.c), only while MLB_FSR is on: AMD's sample framework
+    // (FidelityFX SDK 2.4.0, Cauldron2 device_vk.cpp) turns these on for them. FSR 3.1 needs nothing beyond Vulkan 1.3.
+    if (vk_ffx_wanted()) {
+        int f4 = 0;
+        if (has_ext(ep, ne, VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME)) {
+            ext[n_ext++] = VK_KHR_COOPERATIVE_MATRIX_EXTENSION_NAME, f4++;
+            CHAIN(coop, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COOPERATIVE_MATRIX_FEATURES_KHR);
+        }
+        if (has_ext(ep, ne, VK_EXT_SHADER_FLOAT8_EXTENSION_NAME)) {
+            ext[n_ext++] = VK_EXT_SHADER_FLOAT8_EXTENSION_NAME, f4++;
+            CHAIN(f8, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT8_FEATURES_EXT);
+        }
+        if (has_ext(ep, ne, VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME)) {
+            ext[n_ext++] = VK_KHR_COMPUTE_SHADER_DERIVATIVES_EXTENSION_NAME, f4++;
+            CHAIN(csd, VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_COMPUTE_SHADER_DERIVATIVES_FEATURES_KHR);
+        }
+        rt_log("vk: FSR is on: %d of FSR 4's three extensions (cooperative matrix, float8, compute derivatives) here", f4);
+    }
     if (has_ext(ep, ne, VK_EXT_MEMORY_BUDGET_EXTENSION_NAME)) { g_vk.has_memory_budget = 1; ext[n_ext++] = VK_EXT_MEMORY_BUDGET_EXTENSION_NAME; }
     // GPU timestamps on the CPU clock (vk_sync.c): the perf line splits GPU idle time into waiting for a submission or not.
     if (has_ext(ep, ne, VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME)) { g_vk.has_calibrated = 2; ext[n_ext++] = VK_KHR_CALIBRATED_TIMESTAMPS_EXTENSION_NAME; }
@@ -492,7 +611,7 @@ int vk_init(void) {
     plat_mutex_lock(&g_lock);
     if (!g_ready) {
         memset(&g_vk, 0, sizeof g_vk);
-        if (create_instance() && pick_device() && create_device()) g_ready = 1, vk_upload_pools_init(), vk_headroom_start(), vk_dlaa_init();
+        if (create_instance() && pick_device() && create_device()) g_ready = 1, vk_upload_pools_init(), vk_headroom_start(), vk_dlaa_init(), vk_ffx_init();
         else destroy_all();
     }
     int ok = g_ready;
@@ -596,7 +715,10 @@ void vk_device_fault_report(VkResult r) {
         for (uint32_t i = 0; i < n.addressInfoCount; i++) {
             rt_log("vk: device fault address %u: %s at %#llx, precision %#llx", i, fault_address_type(ai[i].addressType),
                    (unsigned long long)ai[i].reportedAddress, (unsigned long long)ai[i].addressPrecision);
-            ab_report(ai[i].reportedAddress, ai[i].addressPrecision);
+            ab_report(ai[i].reportedAddress, ai[i].addressPrecision,
+                      ai[i].addressType == VK_DEVICE_FAULT_ADDRESS_TYPE_READ_INVALID_EXT ||
+                          ai[i].addressType == VK_DEVICE_FAULT_ADDRESS_TYPE_WRITE_INVALID_EXT ||
+                          ai[i].addressType == VK_DEVICE_FAULT_ADDRESS_TYPE_EXECUTE_INVALID_EXT);
         }
         for (uint32_t i = 0; i < n.vendorInfoCount; i++)
             rt_log("vk: device fault vendor info %u: \"%s\" code %#llx data %#llx", i, vi[i].description,

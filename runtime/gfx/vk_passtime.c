@@ -1,4 +1,4 @@
-// mlbts-native, our own: GPU time per render pass and per run of compute dispatches (MLB_TRACE=perf). The pass marks
+// fastball, our own: GPU time per render pass and per run of compute dispatches (MLB_TRACE=perf). The pass marks
 // of vk.h (vk_exec.c pass begin and end; vk_exec_draw.c one per run of dispatches with no barrier between them) each
 // get a pair of timestamps written at ALL_COMMANDS, so a mark measures its own work after the work before it finished.
 // Marks sit next to barriers, which drain the GPU anyway: a mark per dispatch drained it 1,500-3,600 more times a

@@ -10,6 +10,7 @@
 #include "ipc.h"
 #include "platform/platform.h"
 #include "cfg.h"
+#include "packages.h"
 #include "prompts.h"
 
 void gfx_capture_arm(long ahead);   // runtime/gfx/gfx_stubs.c
@@ -54,7 +55,7 @@ static void lm_packet(const uint8_t *d, uint64_t n) {
     }
     if (!text) return;
     while (text_n > 0 && (text[text_n - 1] == '\n' || text[text_n - 1] == '\r' || !text[text_n - 1])) text_n--;
-    hid_game_log(text, text_n);   // mlbts-native: the screens the game enters switch MLB_PAD_MAP=auto
+    hid_game_log(text, text_n);   // fastball: the screens the game enters switch MLB_PAD_MAP=auto
     if (memmem_lite(text, text_n, "===GAME ENTERED===")) {   // MLB_DRAWLOG=game: one frame's capture in the match
         const char *dl = cfg_get("MLB_DRAWLOG");
         if (dl && !strcmp(dl, "game")) gfx_capture_arm(600);
@@ -195,24 +196,37 @@ static uint32_t nifm_event(uint32_t *w) {
 static void nifm_request_handler(IpcSession *s, const IpcRequest *rq, IpcResponse *rs) {
     static uint32_t ev_state, ev_other;
     switch (rq->cmd) {
-    case 0: {   // GetRequestState -> u32
-        uint32_t free_state = 1;
-        IPC_OUT(rs, free_state);
+    case 0: {   // GetRequestState -> u32: 1 Free; with offline packages (packages.c) 3 Accepted, a network is there
+        uint32_t state = packages_on() ? 3 : 1;
+        IPC_OUT(rs, state);
         return;
     }
     case 1:     // GetResult: why there is no connection. nifm (module 110) description 1111, network communication
                 // disabled, as with networking switched off [H: the code from yuzu's behaviour, not checked on a console]
-        rs->result = 0x8AE6Eu;
+        rs->result = packages_on() ? 0 : 0x8AE6Eu;
         return;
     case 2:     // GetSystemEventReadableHandles -> two copy handles
         rs->copy[rs->ncopy++] = nifm_event(&ev_state);
         rs->copy[rs->ncopy++] = nifm_event(&ev_other);
         return;
-    case 3: case 4: return;   // Cancel, Submit
+    case 3: return;   // Cancel
+    case 4:           // Submit. With offline packages the request is accepted at once: its state event fires
+        if (packages_on()) {
+            nifm_event(&ev_state);
+            kern_event_signal(ev_state);
+        }
+        return;
     case 6: case 8: case 10: case 11: case 12: case 13: case 14: case 15: case 16: case 17: case 23:
         return;   // SetRequirementPreset, SetPriority, SetRejectable, SetConnectionConfirmationOption, SetPersistent,
                   // SetInstant, SetSustainable, SetRawPriority, SetGreedy, SetSharable, SetKeptInSleep
-    default: ipc_unimplemented(s, rq);
+    default:
+        if (!packages_on()) {
+            ipc_unimplemented(s, rq);
+            return;
+        }
+        rt_log("packages: nifm:IRequest command %u answered empty", rq->cmd);
+        uint64_t zero = 0;
+        IPC_OUT(rs, zero);
     }
 }
 
@@ -221,7 +235,35 @@ static void nifm_general_handler(IpcSession *s, const IpcRequest *rq, IpcRespons
     case 4:   // CreateRequest(s32 requirement preset) -> IRequest
         rs->move[rs->nmove++] = ipc_session_new("nifm:IRequest", nifm_request_handler, NULL, NULL);
         return;
-    default: ipc_unimplemented(s, rq);
+    case 12:  // GetCurrentIpAddress -> u32 (network byte order). Only with offline packages: this PC
+        if (packages_on()) {
+            uint32_t ip = 0x0100007Fu;   // 127.0.0.1
+            IPC_OUT(rs, ip);
+            return;
+        }
+        ipc_unimplemented(s, rq);
+        return;
+    default:
+        if (!packages_on()) {
+            ipc_unimplemented(s, rq);
+            return;
+        }
+        if (rq->cmd == 1) {   // GetClientId -> buffer 0x1A (u32 client id), in the B or C buffer
+            const IpcBuffer *o = rq->nb && rq->b[0].size ? &rq->b[0] : rq->nc && rq->c[0].size ? &rq->c[0] : NULL;
+            if (o && o->size >= 4) {
+                uint32_t id = 1;
+                memcpy(ipc_guest(o->addr, o->size), &id, 4);
+            }
+            return;
+        }
+        if (rq->cmd == 21 || rq->cmd == 22) {   // IsAny{Internet,Foreground}RequestAccepted -> bool: yes
+            uint8_t yes = 1;
+            IPC_OUT(rs, yes);
+            return;
+        }
+        rt_log("packages: nifm:IGeneralService command %u answered empty", rq->cmd);
+        uint64_t zero = 0;
+        IPC_OUT(rs, zero);
     }
 }
 
@@ -357,8 +399,31 @@ static void set_handler(IpcSession *s, const IpcRequest *rq, IpcResponse *rs) {
 
 // ---- friend:u: friends (online). The service creator hands out sessions; their commands are served as MLB uses them.
 static void friend_service_handler(IpcSession *s, const IpcRequest *rq, IpcResponse *rs) {
-    (void)rs;
-    ipc_unimplemented(s, rq);
+    // Offline nothing reaches here. With offline packages (packages.c) the game's online code runs: answer as an
+    // account with no friends.
+    static uint32_t ev;
+    if (!packages_on()) {
+        ipc_unimplemented(s, rq);
+        return;
+    }
+    int32_t zero = 0;
+    switch (rq->cmd) {
+    case 0:   // GetCompletionEvent -> copy handle
+        rs->copy[rs->ncopy++] = nifm_event(&ev);
+        return;
+    case 10100: case 10101: case 10400: case 20101:   // friend / blocked list ids and counts: none
+        IPC_OUT(rs, zero);
+        break;
+    case 1: case 10102: case 10120: case 10121: case 10600: case 10601: case 10610: case 20401: case 30830:
+        break;    // Cancel, UpdateFriendInfo, IsFriendListCacheAvailable, EnsureFriendListAvailable,
+                  // Declare{Open,Close}OnlinePlaySession, UpdateUserPresence, SyncBlockedUserList, ClearPlayLog
+    default:
+        rt_log("packages: friend:IFriendService command %u answered empty", rq->cmd);
+        IPC_OUT(rs, zero);
+        break;
+    }
+    nifm_event(&ev);
+    kern_event_signal(ev);   // the asynchronous ones are done at once
 }
 
 // INotificationService: the friend notifications of one user (requests, presence). Offline none arrive: the event is

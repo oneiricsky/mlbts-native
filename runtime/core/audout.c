@@ -1,4 +1,4 @@
-// Vendored from Astral Chain Recomp runtime/ov_audout.c @ e9b63a9 (MIT, LICENSE.astral-recomp). mlbts-native: the SDL3
+// Vendored from Astral Chain Recomp runtime/ov_audout.c @ e9b63a9 (MIT, LICENSE.astral-recomp). fastball: the SDL3
 // stream is replaced by WASAPI (platform/audio_out.h), so "the SDL audio thread" below is the output's own thread;
 // settings are TOTK_/MLB_ keys (cfg.h) instead of AC_. MLB opens it for nn::audio::OpenDefaultAudioOut alongside
 // an audio renderer.
@@ -48,13 +48,13 @@
 // AUDOUT_RING_FRAMES. Both start at 1 so a queued buffer's end marker is never 0 (0 means "no buffer"). Guest threads
 // append under push (one producer at a time); the SDL thread only moves played.
 static struct {
-    AudioOut *stream;   // mlbts-native: WASAPI output
+    AudioOut *stream;   // fastball: WASAPI output
     int device_ok, opened;
     float ring[AUDOUT_RING_FRAMES * 2];
     _Atomic uint64_t played, queued;
     PlatMutex push;
     volatile int64_t overruns;
-    volatile int64_t underruns, missing;   // mlbts-native: pulls the ring could not fill, and the frames short
+    volatile int64_t underruns, missing;   // fastball: pulls the ring could not fill, and the frames short
     volatile int64_t appends, releases, zero_releases;
     double level_sum, level_peak;
     uint64_t level_count;
@@ -117,7 +117,7 @@ static void notify_released(void) {
             if (!o) continue;
             uint64_t end = atomic_load_explicit(&o->oldest_end, memory_order_acquire);
             if (!end || played < end) continue;
-            // mlbts-native: signalled again on every device pull while a played buffer waits to be taken, not once per
+            // fastball: signalled again on every device pull while a played buffer waits to be taken, not once per
             // oldest buffer: MLB's audio thread cleared the event after a signal that came before Start and then
             // waited for good. The hardware signals at every buffer it finishes; an extra wake costs one empty
             // GetReleasedAudioOutBuffers.
@@ -134,7 +134,7 @@ static void notify_released(void) {
 }
 
 // SDL's audio thread: hands stereo float to the device, silence when the ring runs dry.
-// mlbts-native: the WASAPI thread's pull callback, writing straight into the endpoint buffer in AUDOUT_MAX_FRAME steps
+// fastball: the WASAPI thread's pull callback, writing straight into the endpoint buffer in AUDOUT_MAX_FRAME steps
 static void audout_pull(void *user, float *dst, uint32_t total) {
     (void)user;
     uint64_t played = atomic_load_explicit(&out.played, memory_order_relaxed);
@@ -150,7 +150,7 @@ static void audout_pull(void *user, float *dst, uint32_t total) {
             tmp[2 * i + 1] = out.ring[2 * k + 1];
         }
         if (n < frames) memset(tmp + 2 * n, 0, (size_t)(frames - n) * 2 * sizeof(float));
-        if (n < frames && queued > 1) plat_inc64(&out.underruns), plat_add64(&out.missing, frames - n);   // mlbts-native
+        if (n < frames && queued > 1) plat_inc64(&out.underruns), plat_add64(&out.missing, frames - n);   // fastball
         played += (uint64_t)n;
         atomic_store_explicit(&out.played, played, memory_order_release);
         dst += 2 * frames;
@@ -169,7 +169,7 @@ static void out_open(void) {
         rt_log("audout: TOTK_AUDIO=none: buffers are recycled without a device");
         return;
     }
-    // mlbts-native: WASAPI in place of SDL_OpenAudioDeviceStream
+    // fastball: WASAPI in place of SDL_OpenAudioDeviceStream
     int period = 0;
     char name[128], err[160];
     out.stream = audio_out_open(AUDOUT_RATE, AUDOUT_CHANNELS, audout_pull, NULL, &period, name, sizeof name, err,
@@ -185,7 +185,7 @@ static void out_open(void) {
 
 // Converts and queues guest PCM (signed 16-bit interleaved) and returns the frame counter at which it has been played.
 // Frames past the ring's capacity are dropped; the buffer still comes back to the game.
-// mlbts-native: 6-channel sessions (FL FR C LFE RL RR) fold into the stereo ring: front 1.0, centre and rear 0.707 each,
+// fastball: 6-channel sessions (FL FR C LFE RL RR) fold into the stereo ring: front 1.0, centre and rear 0.707 each,
 // LFE dropped, then clamped. MLB opens its AudioOut with 6 channels.
 #define DOWNMIX_SIDE 0.70710678f
 static uint64_t out_push(const int16_t *pcm, uint64_t frames, int channels, float volume) {
@@ -448,7 +448,7 @@ static void audout_out_handler(IpcSession *s, const IpcRequest *rq, IpcResponse 
         return;
     }
     case 9: {   // GetAudioOutBufferCount
-        // mlbts-native: the buffers the device has not played yet, not those played but not taken back yet (Ryujinx
+        // fastball: the buffers the device has not played yet, not those played but not taken back yet (Ryujinx
         // AudioDeviceSession counts appended, unreleased buffers). MLB's audio thread polls this after every buffer
         // event and takes its buffers back only once the count falls.
         uint64_t played = atomic_load_explicit(&out.played, memory_order_acquire);
@@ -527,7 +527,7 @@ static void audout_open(const IpcRequest *rq, IpcResponse *rs) {
         rs->result = AUDOUT_R_INVALID_SAMPLE_RATE;
         return;
     }
-    if (channels != 0 && channels != 2 && channels != 6) {   // mlbts-native: 6 too, folded to stereo (out_push)
+    if (channels != 0 && channels != 2 && channels != 6) {   // fastball: 6 too, folded to stereo (out_push)
         rt_log("audout: OpenAudioOut asked for %u channels, only stereo and 5.1 are offered", channels);
         rs->result = AUDOUT_R_INVALID_CHANNEL_COUNT;
         return;

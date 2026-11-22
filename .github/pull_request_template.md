@@ -23,6 +23,6 @@
 - [ ] Works on Switch versions **1.0.20** and **1.0.15**, offline scope only
 - [ ] No copyrighted game files, extracted assets, keys, or `work/` / `gamefiles/` artifacts included
 - [ ] `runtime/core/` remains generic (MLB-specific code stays in `runtime/mlb/`)
-- [ ] Changes to vendored files (`runtime/core/`, `runtime/gfx/`) are marked `mlbts-native` with a comment explaining the observed case
+- [ ] Changes to vendored files (`runtime/core/`, `runtime/gfx/`) are marked `fastball` with a comment explaining the observed case
 - [ ] `THIRD_PARTY_NOTICES.md` updated (if any third-party code or dependency was added/adapted)
 - [ ] No always-on slow diagnostics (gated behind F12/F9, `mlb.cfg` / `MLB_*`, or RenderDoc)

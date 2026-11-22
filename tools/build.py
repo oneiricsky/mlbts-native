@@ -35,7 +35,7 @@ from check_content import GENERATED_MARKER  # noqa: E402
 
 DEFAULT_CLANG = r'C:\Program Files\LLVM\bin\clang.exe'
 # Generated code: TotK Recomp tools/build_game.py GEN_FLAGS @ ae30a61 (LAS Recomp's flags plus -march).
-# mlbts-native: -O2 instead of TotK's -O1. In a match at an unlocked frame rate the game's own code (main thread and
+# fastball: -O2 instead of TotK's -O1. In a match at an unlocked frame rate the game's own code (main thread and
 # its three job workers) holds the frame, not the GPU; -O2 gave 3-6% more fps in every game state measured on
 # 2026-11-17 (exhibition, MLB_FPS_LIMIT=240, Ryzen 5 5600X: 109.5 -> 113.8 fps over the match states) for about 13%
 # more compile time per file.
@@ -43,7 +43,7 @@ GEN_FLAGS = ['-O2', '-fno-strict-aliasing', '-Wno-return-type', '-Wno-unused-lab
              '-march=x86-64-v3']
 RT_FLAGS = ['-O2', '-g', '-Wall', '-Wno-unused-function', '-fno-strict-aliasing', '-march=x86-64-v3', '-std=gnu11',
             '-D_CRT_SECURE_NO_WARNINGS']
-LIBS = ['bcrypt', 'user32', 'kernel32', 'advapi32', 'ntdll', 'synchronization', 'winmm', 'psapi', 'shell32', 'ole32',
+LIBS = ['bcrypt', 'ws2_32', 'user32', 'kernel32', 'advapi32', 'ntdll', 'synchronization', 'winmm', 'psapi', 'shell32', 'ole32',
         'dbghelp', 'gdi32', 'dwmapi', 'imm32', 'uuid']
 RUNTIME_SOURCES = ['runtime/core/*.c', 'runtime/core/platform/common.c', 'runtime/core/platform/win32.c',
                    'runtime/core/platform/audio_win32.c', 'runtime/core/platform/prof_win.c',
@@ -53,6 +53,14 @@ RUNTIME_SOURCES = ['runtime/core/*.c', 'runtime/core/platform/common.c', 'runtim
                    'runtime/third_party/imgui/backends/*.cpp']
 DEPS = ROOT / 'work' / 'deps'   # tools/fetch_deps.py: Vulkan headers, VMA, vulkan-1.lib
 CXX_FLAGS = ['-O2', '-g', '-std=c++17', '-march=x86-64-v3', '-D_CRT_SECURE_NO_WARNINGS', '-Wno-nullability-completeness']
+# fastball: profile-guided optimisation of the runtime alone (--pgo), after TotK Recomp tools/build_game.py set_pgo
+# @ ae30a61. The replay thread is runtime code and most of a slow frame; the profile, made by an instrumented build
+# playing the attract match (tools/pgo.py), names only runtime functions and holds their counts, so the release's
+# libmlbrt.a is built with it and players need nothing. The game's code is never instrumented or built with a profile:
+# its counts would be data taken from the game. A static function's profile name carries the base name of its file
+# only, so a build from another folder (the release's export) finds the same names.
+RUNTIME_PROFILE = ROOT / 'tools' / 'data' / 'runtime.profdata'
+PGO_NAMES = ['-mllvm', '-static-func-full-module-prefix=false']
 
 
 def c_string(s):
@@ -152,6 +160,9 @@ def main():
     ap.add_argument('--runtime-lib', type=Path, help='link this prebuilt libmlbrt.a instead of compiling the runtime')
     ap.add_argument('--portable', action='store_true', help="default paths beside mlb.exe (game/exefs, game/romfs, "
                                                            "profile) instead of the repository's work/ folders")
+    ap.add_argument('--pgo', default='auto', metavar='auto|off|gen|FILE',
+                    help='profile-guided optimisation of the runtime: auto (default) uses tools/data/runtime.profdata '
+                         'when it exists, gen builds a runtime that counts (tools/pgo.py), FILE another .profdata')
     a = ap.parse_args()
     mingw = a.toolchain is not None
     if mingw:
@@ -213,6 +224,25 @@ def main():
     exe = out / 'mlb.exe'
     bin_dir = Path(a.clang).parent
     rt_flags, cxx_flags = list(RT_FLAGS), list(CXX_FLAGS)
+    pgo_link, pgo_dep = '', ''
+    profile = None if a.pgo in ('off', 'gen') else RUNTIME_PROFILE if a.pgo == 'auto' else Path(a.pgo).resolve()
+    if a.pgo == 'gen':
+        # the counts go to <mlb.exe's folder>/pgo every minute and at exit (runtime/core/platform/win32.c)
+        pgo_flags = ['-fprofile-generate', '-DTOTK_PGO_GEN']
+        pgo_link = '-fprofile-generate '   # links clang_rt.profile
+    elif profile and profile.is_file():
+        # unprofiled: code the training never ran; out-of-date and backend-plugin: functions changed since the training,
+        # which compile as without a profile
+        pgo_flags = [f'-fprofile-use={rel(profile)}', '-Wno-profile-instr-unprofiled', '-Wno-profile-instr-out-of-date',
+                     '-Wno-backend-plugin']
+        pgo_dep = f' | {ninja_path(profile)}'   # a new profile rebuilds the runtime
+    elif a.pgo not in ('auto', 'off'):
+        raise SystemExit(f'--pgo {a.pgo}: no such profile')
+    else:
+        pgo_flags = []
+    if pgo_flags:
+        rt_flags += pgo_flags + PGO_NAMES
+        cxx_flags += pgo_flags + PGO_NAMES
     vulkan = rel(deps / 'lib' / 'vulkan-1.lib')
     if mingw:
         # llvm-mingw: Windows 10 API level (its headers default lower); libc++, libunwind and winpthread linked
@@ -224,11 +254,11 @@ def main():
         # an installed game is a windowed program: no console window of log lines beside it (the log file stays;
         # plat_fatal_notice shows a fatal error in a message box instead)
         whole += '-mwindows ' if a.portable else ''
-        link = (f'"{(bin_dir / "clang++.exe").as_posix()}" -fuse-ld=lld -g -static @$out.rsp {whole}-o $out '
+        link = (f'"{(bin_dir / "clang++.exe").as_posix()}" -fuse-ld=lld -g -static {pgo_link}@$out.rsp {whole}-o $out '
                 f'{" ".join("-l" + l for l in LIBS)} {vulkan} -Wl,--stack,8388608 -Wl,-Map={rel(out)}/mlb.map')
         rc = f'"{(bin_dir / "llvm-windres.exe").as_posix()}" -I runtime/mlb -O coff $in -o $out'
     else:
-        link = (f'$cc -fuse-ld=lld -g @$out.rsp -o $out {" ".join("-l" + l for l in LIBS)} '
+        link = (f'$cc -fuse-ld=lld -g {pgo_link}@$out.rsp -o $out {" ".join("-l" + l for l in LIBS)} '
                 f'"{compiler_rt(a.clang)}" {vulkan} '
                 f'-Wl,/STACK:8388608 -Wl,/errorlimit:0 -Wl,/MAP:{rel(out)}/mlb.map')
         rc = f'"{(bin_dir / "llvm-rc.exe").as_posix()}" /nologo /I runtime/mlb /FO $out $in'
@@ -236,7 +266,7 @@ def main():
     lines = [f'# {GENERATED_MARKER}: written by tools/build.py', f'builddir = {rel(out)}', f'cc = "{Path(a.clang).as_posix()}"',
              f'genflags = {" ".join(GEN_FLAGS)} {" ".join(inc_gen)}',
              f'rtflags = {" ".join(rt_flags)} {" ".join(inc_rt)}',
-             # mlbts-native: the generated code tracks its headers too (runtime/core/simd.h is inlined everywhere: a
+             # fastball: the generated code tracks its headers too (runtime/core/simd.h is inlined everywhere: a
              # change there left every game object stale)
              'rule cc_gen', '  command = $cc $genflags -MD -MF $out.d -c $in -o $out', '  depfile = $out.d',
              '  deps = gcc', '  description = CC $in',
@@ -255,7 +285,7 @@ def main():
     for s in rt_srcs:
         sub = s.relative_to(ROOT) if s.is_relative_to(ROOT) else Path(s.name)
         o = out / "obj" / "rt" / sub.with_suffix(".o")
-        lines.append(f'build {ninja_path(o)}: {"cxx_rt" if s.suffix == ".cpp" else "cc_rt"} {ninja_path(s)}')
+        lines.append(f'build {ninja_path(o)}: {"cxx_rt" if s.suffix == ".cpp" else "cc_rt"} {ninja_path(s)}{pgo_dep}')
         objs.append(o)
     if not a.runtime_lib:   # the icon and the manifest (runtime/mlb/mlb.rc); a prebuilt library holds them
         res = out / 'obj' / 'rt' / ('mlb.res.o' if mingw else 'mlb.res')

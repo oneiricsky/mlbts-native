@@ -2,7 +2,7 @@
 // games/totk/runtime/fs_host.c @ b75be8cf (MIT, Copyright (c) 2026 MacNativeGames contributors); the probe follows
 // MacNativeGames' romfs.c runtime_fs_probe and fs_host.c runtime_save_probe.
 //
-// mlbts-native changes: the RomFS is a read-only mount of the extracted directory (M_ROM; TotK's romfs.c served an
+// fastball changes: the RomFS is a read-only mount of the extracted directory (M_ROM; TotK's romfs.c served an
 // indexed romfs.bin), so OpenDirectory works on it too; the title's id and storage sizes come from fs_title (fs.h);
 // the overloads MLB imports beyond TotK's (GetFreeSpaceSize, Extend/GetSaveDataSize, MountCacheStorage(name),
 // DeleteDirectory, GetDirectoryEntryCount, QueryMountRomCacheSize(size_t *, int), EnableGlobalFileDataCache) are
@@ -19,8 +19,8 @@
 //   <profile>/temp/                    emptied at start
 //   <profile>/cache/<index>/           cache storage
 //   <profile>/save-size                the save data size and journal size after ExtendSaveData (two s64)
-//   <profile>/save-before-import/<time>/  mlbts-native: the committed save an --import-save replaced (fs_save_import)
-//   <profile>/profile.lock             mlbts-native: held open while a game runs on this profile
+//   <profile>/save-before-import/<time>/  fastball: the committed save an --import-save replaced (fs_save_import)
+//   <profile>/profile.lock             fastball: held open while a game runs on this profile
 //   <romfs>/                           the game's RomFS, extracted by tools/romfs_dump.py --extract-all; MountRom
 //                                      mounts it read-only once <romfs>.complete says the extraction finished
 //
@@ -35,7 +35,7 @@
 #include "fs.h"
 
 #ifdef _WIN32
-#define strdup _strdup   // mlbts-native: the MSVC C library names it so
+#define strdup _strdup   // fastball: the MSVC C library names it so
 #endif
 #include "cfg.h"   // mlbts-native: cfg_bool (MLB_SKIP_INTRO), as kernel.c
 #include "host.h"
@@ -49,10 +49,10 @@
 #define PATH_CAP 1100
 
 enum { M_FREE, M_SAVE, M_TEMP, M_CACHE, M_SAVE_RO, M_ROM };   // M_SAVE: the working copy; M_SAVE_RO: the
-                                                              // committed save; M_ROM: the RomFS (mlbts-native)
+                                                              // committed save; M_ROM: the RomFS (fastball)
 
 typedef struct { int kind; char name[32]; char root[1024]; } Mount;
-// mlbts-native: trace (MLB_TRACE=fs only): the guest path, and reads and bytes read so far, logged at times and on close
+// fastball: trace (MLB_TRACE=fs only): the guest path, and reads and bytes read so far, logged at times and on close
 typedef struct { PlatFile *h; int mode, save; char *trace; uint64_t reads, bytes; } File;   // h NULL = free; save: on a save-data mount
 typedef struct { char *name; int kind; uint64_t size; } Listed;
 typedef struct { Listed *e; int n, next, mode, used; } Dir;   // the directory's entries at open; used 0 = free
@@ -225,9 +225,9 @@ static int remove_tree_retry(const char *path) {
 #define COPY_CHUNK (1u << 20)
 
 static char tx_root[1100], backup_root[1100], new_root[1100], old_root[1100];
-static char import_root[1100];   // mlbts-native: <profile>/save-tx/import, fs_save_import's staging copy
-static int profile_lock_busy;    // mlbts-native: another process holds <profile>/profile.lock (a running game)
-static PlatFile *profile_lock;   // mlbts-native: this process's hold on it; the probe lets go to delete its profile
+static char import_root[1100];   // fastball: <profile>/save-tx/import, fs_save_import's staging copy
+static int profile_lock_busy;    // fastball: another process holds <profile>/profile.lock (a running game)
+static PlatFile *profile_lock;   // fastball: this process's hold on it; the probe lets go to delete its profile
 static char ready_root[1100];   // the newest finished commit not swapped in, empty when none
 static unsigned ready_seq;      // the highest ready-<n> this run made or found
 static PlatMutex tx_lock = PLAT_MUTEX_INIT;   // taken before lock, never inside it
@@ -481,7 +481,7 @@ static void save_recover(void) {
     const char *did = "nothing to recover";
     ready_scan();
     int has_save = exists(save_root);
-    // mlbts-native: an --import-save that stopped (fs_save_import). Between its two moves save/<uid> is absent and
+    // fastball: an --import-save that stopped (fs_save_import). Between its two moves save/<uid> is absent and
     // nothing else is in save-tx: the finished copy goes in. Any other time it is an unfinished copy: deleted.
     if (exists(import_root)) {
         if (!has_save && !*ready_root && !exists(new_root) && !exists(old_root)) {
@@ -590,7 +590,7 @@ static void save_wait_commit(void) {
 
 void fs_save_flush(void) { save_wait_commit(); }
 
-// mlbts-native: --import-save (save_import.c). The committed save becomes a copy of the save data files in src as
+// fastball: --import-save (save_import.c). The committed save becomes a copy of the save data files in src as
 // another host keeps them. A Switch save is the same files on every host: MLB lists the save's folders and reads them
 // by name (CARR<id>/SAVEINFO, SAVE_000, ...), and a Ryujinx save loaded unchanged into its Road to the Show career.
 // The save it replaces moves whole to <profile>/save-before-import/<UTC time>, which no Commit prunes. Steps: (1) copy
@@ -713,7 +713,7 @@ static uint32_t save_commit(void) {
 }
 
 // ---- storage roots
-// mlbts-native: the profile lock, held until the process ends: --import-save must not replace the save under a
+// fastball: the profile lock, held until the process ends: --import-save must not replace the save under a
 // running game, nor run save_recover, which deletes that game's working copy. A second game on the same profile still
 // starts, as before, and logs it. Taken once, by storage_init or first by fs_save_import.
 static void profile_lock_take(void) {
@@ -823,7 +823,7 @@ static uint32_t host_path_kind(const char *path, char *out, size_t cap, int *kin
     plat_mutex_unlock_shared(&lock);
     if (k == M_FREE) return FS_R_PATH_NOT_FOUND;
     if (kind) *kind = k;
-    // mlbts-native: the path is normalised as nn::fs's PathNormalizer does: repeated separators collapse to one (MLB
+    // fastball: the path is normalised as nn::fs's PathNormalizer does: repeated separators collapse to one (MLB
     // opens "FS_Rom:/NSW//LIVECONTENT"), "." is dropped and ".." takes back the component before it; a ".." above the
     // mount's root is refused. MLB reaches shared data this way: "FS_Rom:/NSW/../CROSS/STADIUMS/AUDIO/LAD/
     // AUDIOEMITTER.BIN" (the stadium's sound emitters: crowd, organ, PA) and "FS_Rom:/NSW/STADIUMS/LAD/../COMMON/
@@ -1022,14 +1022,14 @@ static File *file_of(uint64_t h, PlatFile **fh, int *mode) {
     return v ? f : NULL;
 }
 
-// mlbts-native: the graphics back end's record of guest memory the CPU wrote (vk_memory.c); a no-op without one.
+// fastball: the graphics back end's record of guest memory the CPU wrote (vk_memory.c); a no-op without one.
 __attribute__((weak)) void rt_host_wrote(uint64_t addr, uint64_t size) { (void)addr, (void)size; }
 
 // Positional reads: bytes read at off, 0 at the end, -1 on an error.
 static int64_t host_read_at(PlatFile *f, void *buf, uint32_t n, uint64_t off) {
     mem_thaw((uintptr_t)buf, n);   // the kernel's write would fail on a frozen page instead of faulting
     int64_t got = plat_file_pread(f, buf, n, off);
-    // mlbts-native: the kernel's writes are reported, not left to the write watch: textures and buffers the game
+    // fastball: the kernel's writes are reported, not left to the write watch: textures and buffers the game
     // streams from disk into memory it already uses must be uploaded again
     if (got > 0) rt_host_wrote((uintptr_t)buf, (uint64_t)got);
     if (got == -2)   // a read-only page in the buffer: a frozen region missed its thaw
@@ -1279,7 +1279,7 @@ static void close_directory(uint64_t h) {
     listing_free(d.e, d.n);
 }
 
-// ---- mlbts-native: the RomFS mount, save data size, free space, and the overloads MLB imports beyond TotK's
+// ---- fastball: the RomFS mount, save data size, free space, and the overloads MLB imports beyond TotK's
 void fs_trace(const char *what, const char *path) {
     if (rt_trace & RT_TRACE_FS) rt_log("fs %s %s", what, path ? path : "(null)");
 }
@@ -1351,7 +1351,7 @@ static uint32_t extend_save(const uint64_t *uid, int64_t size, int64_t journal) 
 }
 
 // Free space of a mount: its size less what its files take (the RomFS has none).
-// mlbts-native: a bare mount name counts as its root. MLB asks GetFreeSpaceSize("savedata") (main+0xd76904) and reads
+// fastball: a bare mount name counts as its root. MLB asks GetFreeSpaceSize("savedata") (main+0xd76904) and reads
 // a failure as 0 bytes free; it then grows the save 8 MiB at a time and, once past 0x7E00000, unmounts it without
 // mounting it again (main+0xd76940), so the next check unmounted an unknown mount and stopped [C, disassembly].
 static uint32_t free_space(int64_t *out, const char *path) {
@@ -1408,7 +1408,7 @@ static uint32_t directory_entry_count(int64_t *out, uint64_t h) {
 // and ApplicationId are 8-byte structs passed in one register; Uid, ReadOption and WriteOption by reference.
 #define I32(i) ((int32_t)arg_x(c, i))
 #define I64(i) ((int64_t)arg_x(c, i))
-// mlbts-native: MLB_FS_STACK=<text> (environment, with MLB_TRACE=fs): the game's call stack at each open, read and
+// fastball: MLB_FS_STACK=<text> (environment, with MLB_TRACE=fs): the game's call stack at each open, read and
 // close of a file whose path contains <text>, on one line (frame records through x29). Followed why the audio engine
 // read one header of each song and closed it again.
 static void fs_stack(Cpu *c, const char *what, const char *path) {
@@ -1432,14 +1432,14 @@ static const char *traced_path(uint64_t h) {
     return f ? f->trace : NULL;
 }
 
-// mlbts-native (MLB_SKIP_INTRO, the settings menu's Game tab): both intro movies — MLB_INTRO.BIK (62 MB, 94 s of
+// fastball (MLB_SKIP_INTRO, the settings menu's Game tab): both intro movies — MLB_INTRO.BIK (62 MB, 94 s of
 // narration) and SonyStudio_INTRO.BIK (5 MB) — are answered as not found, and the boot flow then goes from the SIE
 // text card straight to the game-modes menu (it cuts the MLB movie short after about 10 s even when it is there).
 // Tested limits: LOADINGSCREENBACKGROUNDS/SCE_PRESENTS.TEX must stay — it is the loading screen's background, and
 // without it that screen is a white square; and in an earlier build that hid every intro file at once the FMV player
 // never initialized and the boot flow sat on the white square forever, so the SIE text card and the loading screen's
 // legal page stay. Read once; the row is RESTART.
-#define strncasecmp _strnicmp   // mlbts-native: the MSVC C library names it so (as in vk_device.c)
+#define strncasecmp _strnicmp   // fastball: the MSVC C library names it so (as in vk_device.c)
 static int skip_intro_path(const char *path) {
     static int on = -1;
     if (on < 0) on = cfg_bool("MLB_SKIP_INTRO");
@@ -1451,7 +1451,7 @@ static int skip_intro_path(const char *path) {
     return 0;
 }
 
-// mlbts-native: under MLB_TRACE=fs a failed open is logged with its result too (missing streamed audio was traced so)
+// fastball: under MLB_TRACE=fs a failed open is logged with its result too (missing streamed audio was traced so)
 static void ov_open_file(Cpu *c) {
     const char *path = arg_p(c, 1);
     if (rt_trace & RT_TRACE_FS) fs_stack(c, "open", path);
@@ -1504,7 +1504,7 @@ static void ov_read_cache_list(Cpu *c) { ret_x(c, read_cache_list(arg_p(c, 0), a
 static void ov_close_cache_list(Cpu *c) { close_cache_list(arg_x(c, 0)); }
 // The fs priority only orders I/O inside the system fs process; host I/O is unordered.
 static void ov_set_priority(Cpu *c) { (void)c; }
-// mlbts-native
+// fastball
 // nn::Result MountRom(const char *name, void *cache, size_t cache_size): the cache is not used
 static void ov_mount_rom(Cpu *c) { ret_x(c, mount_rom(arg_p(c, 0))); }
 // nn::Result QueryMountRomCacheSize(size_t *out, int): no cache needed, the host reads files directly
@@ -1557,7 +1557,7 @@ static void ov_entry_count(Cpu *c) { ret_x(c, directory_entry_count(arg_p(c, 0),
 #define S_READ_CACHE_LIST "_ZN2nn2fs20ReadCacheStorageListEPiPNS0_16CacheStorageInfoENS0_22CacheStorageListHandleEi"
 #define S_CLOSE_CACHE_LIST "_ZN2nn2fs21CloseCacheStorageListENS0_22CacheStorageListHandleE"
 #define S_SET_PRIORITY "_ZN2nn2fs26SetPriorityOnCurrentThreadENS0_8PriorityE"
-// mlbts-native
+// fastball
 #define S_MOUNT_ROM "_ZN2nn2fs8MountRomEPKcPvm"
 #define S_QUERY_CACHE "_ZN2nn2fs22QueryMountRomCacheSizeEPmi"
 #define S_INITIALIZE "_ZN2nn2fs24InitializeForApplicationEv"
@@ -1976,7 +1976,7 @@ static void probe_storage(void) {
     CHECK(fs_save_busy(), "closed but uncommitted save data does not count as a save in progress");
     CHECK(tx_commit() == 0 && !fs_save_busy(), "Commit");
     CHECK(RES(S_COMMIT, U("nomount")) == FS_R_PATH_NOT_FOUND, "Commit of an unknown mount");
-    {   // mlbts-native: GetFreeSpaceSize takes a bare mount name as MLB passes it ("savedata"), same as "name:/"
+    {   // fastball: GetFreeSpaceSize takes a bare mount name as MLB passes it ("savedata"), same as "name:/"
         int64_t bare = -1, rooted = -2;
         CHECK(RES(S_FREE_SPACE, U(&bare), U("save")) == 0 && RES(S_FREE_SPACE, U(&rooted), U("save:/")) == 0 &&
                   bare == rooted && bare > 0,
@@ -2106,7 +2106,7 @@ int probe_fs(void) {
     return 0;
 }
 
-// ---- mlbts-native: the game's C stdio FILE calls on the host mounts
+// ---- fastball: the game's C stdio FILE calls on the host mounts
 //
 // MLB's audio stream library (Scream snd_stream: crowd, music, organ, commentary) opens its stream files with the C
 // library's fopen ("FS_Rom:/NSW/AUDIO/MUSIC.SKX", "r"), not nn::fs. fopen and the other FILE functions are the SDK's

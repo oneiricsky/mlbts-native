@@ -152,7 +152,7 @@ static void self_controller(IpcSession *s, const IpcRequest *rq, IpcResponse *rs
     case 1: case 2: return;   // LockExit, UnlockExit
     case 3: case 4: return;   // EnterFatalSection, LeaveFatalSection
     case 9:   // GetLibraryAppletLaunchableEvent: signalled, as Horizon does (and Ryujinx) for a foreground application.
-        // mlbts-native: left unsignalled, the SDK waited on it forever before starting a library applet (the game froze
+        // fastball: left unsignalled, the SDK waited on it forever before starting a library applet (the game froze
         // at its keyboard screen). The keyboard is swkbd.c's now; another applet stops at ILibraryAppletCreator's
         // named fatal instead of hanging.
         COPY_EVENT(rs, &launchable);

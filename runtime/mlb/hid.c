@@ -165,7 +165,7 @@ static int key(int vk) { return (GetAsyncKeyState(vk) & 0x8000) != 0; }
 static const int face_pos[4] = {B_B, B_A, B_Y, B_X};
 typedef struct { uint8_t held; uint64_t lab[4]; } FaceIn;   // held: bit f for place f; lab[f]: Switch bits by label
 
-// mlbts-native: MLB_PAD_MAP=auto follows the game's own log. Its UI engine logs every screen it enters
+// fastball: MLB_PAD_MAP=auto follows the game's own log. Its UI engine logs every screen it enters
 // ("uiEngine: Entering screen: [<movie>-><screen> (n)]", lm). Two recorded sessions (menus, an exhibition, Road to
 // the Show practice, the pause menu, batting, pitching, fielding and its slow-motion throw) show menu movies entered
 // for every menu, the in-game pause menu included, and the play HUD movies entered again whenever play resumes. So
@@ -276,7 +276,7 @@ typedef struct {
     SDL_Gamepad *g;
     SDL_JoystickID id;
     int face_label[4];   // the Switch button of the south, east, west, north button by its label, -1 unknown
-    int kind;            // mlbts-native: for the button icons (prompts.h hid_prompt_kind): 1 Xbox, 2 PlayStation, 0 other
+    int kind;            // fastball: for the button icons (prompts.h hid_prompt_kind): 1 Xbox, 2 PlayStation, 0 other
 } SdlPad;
 static PlatMutex sdl_lock = PLAT_MUTEX_INIT;
 static PlatOnce sdl_once = PLAT_ONCE_INIT;
@@ -355,7 +355,7 @@ static int switch_of_label(SDL_GamepadButtonLabel l) {
 static const SDL_GamepadButton face_sdl[4] = {SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTTON_EAST,
                                               SDL_GAMEPAD_BUTTON_WEST, SDL_GAMEPAD_BUTTON_NORTH};
 
-// mlbts-native: the kind of controller whose buttons the game's prompts show (prompts.c, MLB_PROMPTS=auto): the one
+// fastball: the kind of controller whose buttons the game's prompts show (prompts.c, MLB_PROMPTS=auto): the one
 // used last (a button pressed or a stick pushed past half way), else the one connected first; 0 without a controller.
 // A pad of a type SDL does not name goes by its south button's label (A: Xbox-like, cross: PlayStation); Nintendo pads
 // keep the game's own icons.
@@ -387,7 +387,7 @@ static void sdl_scan(void) {
             rt_log("hid: controller %u disconnected", (unsigned)pads[i].id);
             p_SDL_CloseGamepad(pads[i].g);
             pads[i] = pads[--npads];
-            prompt_kind_set(npads ? pads[0].kind : 0);   // mlbts-native: a pad still there, until another is used
+            prompt_kind_set(npads ? pads[0].kind : 0);   // fastball: a pad still there, until another is used
         }
     uint64_t now = plat_now_ns();
     if (now < next_scan) return;
@@ -404,7 +404,7 @@ static void sdl_scan(void) {
         p->g = g, p->id = ids[k];
         for (int f = 0; f < 4; f++) p->face_label[f] = switch_of_label(p_SDL_GetGamepadButtonLabel(g, face_sdl[f]));
         p->kind = pad_kind(g);
-        if (npads == 1) prompt_kind_set(p->kind);   // mlbts-native: the first pad, until another is used
+        if (npads == 1) prompt_kind_set(p->kind);   // fastball: the first pad, until another is used
         int rumble = p_SDL_GetBooleanProperty(p_SDL_GetGamepadProperties(g), SDL_PROP_GAMEPAD_CAP_RUMBLE_BOOLEAN, false);
         const char *name = p_SDL_GetGamepadName(g);
         rt_log("hid: controller %u \"%s\" connected (%s layout, %s)", (unsigned)p->id, name ? name : "?",
@@ -458,7 +458,7 @@ static int pad_read(PadIn *in, int overlay) {
             if (prompt_kind) prompt_kind_set(0);
             return 0;
         }
-        if (prompt_kind != 1) prompt_kind_set(1);   // mlbts-native: XInput pads are Xbox pads (button icons)
+        if (prompt_kind != 1) prompt_kind_set(1);   // fastball: XInput pads are Xbox pads (button icons)
         in->buttons = pad_bits(&p, &face) | face_bits(&face, overlay);
         in->lx = clamp_stick(p.lx), in->ly = clamp_stick(p.ly), in->rx = clamp_stick(p.rx), in->ry = clamp_stick(p.ry);
         return 1;
@@ -483,7 +483,7 @@ static int pad_read(PadIn *in, int overlay) {
         in->buttons |= b;
         take_stick(&in->lx, &in->ly, lx, ly);
         take_stick(&in->rx, &in->ry, rx, ry);
-        // mlbts-native: this pad is the one in use (button icons, prompt_kind)
+        // fastball: this pad is the one in use (button icons, prompt_kind)
         if (npads > 1 && pads[i].kind != prompt_kind &&
             (b || pf.held || abs(lx) > STICK_DIR || abs(ly) > STICK_DIR || abs(rx) > STICK_DIR || abs(ry) > STICK_DIR))
             prompt_kind_set(pads[i].kind);
@@ -512,7 +512,7 @@ static void pad_rumble(uint16_t lo, uint16_t hi) {
     }
 }
 
-// mlbts-native: the in-game settings menu (ui/menu.cpp) reads the pad itself while it is open, in Switch button bits
+// fastball: the in-game settings menu (ui/menu.cpp) reads the pad itself while it is open, in Switch button bits
 // (the same as the game's: A 0, B 1, X 2, Y 3, L 6, R 7, ZL 8, ZR 9, d-pad 12..15). 0 without a pad.
 int hid_menu_pad(uint64_t *buttons, int32_t *lx, int32_t *ly) {
     PadIn in;
@@ -521,7 +521,7 @@ int hid_menu_pad(uint64_t *buttons, int32_t *lx, int32_t *ly) {
     return have;
 }
 
-// mlbts-native: the settings menu's dead zone rows show how far each stick is pushed now, before the dead zone (a
+// fastball: the settings menu's dead zone rows show how far each stick is pushed now, before the dead zone (a
 // drifting stick's resting value). now[0] left, now[1] right, in percent of full travel; 0 without a pad.
 int hid_stick_percent(double now[2]) {
     PadIn in;
@@ -534,7 +534,7 @@ int hid_stick_percent(double now[2]) {
     return 1;
 }
 
-// mlbts-native: the software keyboard's window is open (swkbd.c): the game reads an idle controller (poll).
+// fastball: the software keyboard's window is open (swkbd.c): the game reads an idle controller (poll).
 static volatile int text_entry_open;
 void input_block(int on) { __atomic_store_n(&text_entry_open, on ? 1 : 0, __ATOMIC_RELEASE); }
 
@@ -572,7 +572,7 @@ static void poll(NpadState *st) {
     if (rx >= STICK_DIR) b |= BIT(B_RS_RIGHT);
     if (ry >= STICK_DIR) b |= BIT(B_RS_UP);
     if (ry <= -STICK_DIR) b |= BIT(B_RS_DOWN);
-    // mlbts-native: the in-game settings menu (ui/menu.cpp). Minus and Plus pressed together (Back and Start on an
+    // fastball: the in-game settings menu (ui/menu.cpp). Minus and Plus pressed together (Back and Start on an
     // Xbox pad, Share / Create and Options on a PlayStation pad) or the guide button (Xbox, PS) open or close it; while
     // it is open the game gets an idle controller. Buttons held when it closes stay hidden from the game until
     // released: the B that closed the menu would otherwise also go "back" in the game.
@@ -648,7 +648,7 @@ static void ov_get_supported_styles(Cpu *c) {
 // NpadStyleSet GetNpadStyleSet(const NpadIdType &id)
 static void ov_style_set(Cpu *c) { ret_x(c, connected(id_of(c, 0, "GetNpadStyleSet")) ? STYLE_FULL_KEY : 0); }
 
-// mlbts-native: held-button repeat at 60 ticks a second whatever the frame rate (MLB_FPS_LIMIT, framerate.c).
+// fastball: held-button repeat at 60 ticks a second whatever the frame rate (MLB_FPS_LIMIT, framerate.c).
 // MLB's pad update (1.0.20 f_7001341c20, 1.0.15 f_7001340720; read 2026-11-17) repeats a held d-pad or stick
 // direction by counting frames, not time: each pad record (0x790 bytes, an array whose address the game keeps at
 // 1.0.20 main+0x45aef28, 1.0.15 main+0x45acf28; 7 records seen) holds
@@ -721,7 +721,7 @@ static void npad_state(Cpu *c, int full_key, const char *fn) {
     uint64_t now = kern_now_ns();
     st.sampling = now / 5000000;   // the console samples every 5 ms
     if (full_key && connected(id)) {
-        // mlbts-native: one reading serves the calls of the next 1 ms. The game asks several times a frame on its main
+        // fastball: one reading serves the calls of the next 1 ms. The game asks several times a frame on its main
         // thread, and each reading asks SDL (or XInput) for the pads, Windows for 26 keys and the foreground window:
         // 2% of that thread's time in the attract demo match at an unlocked frame rate. The console samples every 5 ms.
         static PlatMutex poll_lock = PLAT_MUTEX_INIT;

@@ -114,7 +114,7 @@ void vk_caps_init(VkCtx *c) {
     if (a && !(a & (a - 1)) && a > real_align) l->minStorageBufferOffsetAlignment = a;
     vk_caps.sbuf_align = l->minStorageBufferOffsetAlignment > 4 ? (uint32_t)l->minStorageBufferOffsetAlignment : 0;
 
-    // mlbts-native: texel buffer views. A Vulkan 1.3 instance has texelBufferAlignment on, so a view's offset needs only
+    // fastball: texel buffer views. A Vulkan 1.3 instance has texelBufferAlignment on, so a view's offset needs only
     // the 1.3 alignments, or one texel when the single-texel flag says so, not minTexelBufferOffsetAlignment. Intel Arc
     // (A770, B580; issue #7) reports 64 in minTexelBufferOffsetAlignment but 16 bytes or one texel for storage views and
     // 1 byte for sampled ones. Checked against the 64, the skinning imageBuffers MLB places 32 bytes into a buffer got

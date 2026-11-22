@@ -1,7 +1,7 @@
 // Settings for the runtime: the environment, then values set at run time (cfg_set), then the table's default.
 // Interface and defaults from TotK Recomp runtime/cfg.h and cfg.c @ ae30a61 (MIT, LICENSE.totk-recomp); the settings
 // file (totk.ini) and the menu's save are not ported. Keys are TotK's names: "TOTK_X" and "X" mean the same setting;
-// mlbts-native: MLB_X in the environment wins over TOTK_X, and the table has MLB's own rows (LANGUAGE, TIMEZONE).
+// fastball: MLB_X in the environment wins over TOTK_X, and the table has MLB's own rows (LANGUAGE, TIMEZONE).
 #include "cfg.h"
 
 #define WIN32_LEAN_AND_MEAN
@@ -20,13 +20,19 @@
 #define RESTART 0
 
 static const CfgMeta metas[] = {
-    // mlbts-native rows
+    // fastball rows
     {"LANGUAGE", "en-US", NULL, RESTART},   // am.c GetDesiredLanguage; the NACP lists American English only
     {"TIMEZONE", "local", "local|utc", RESTART},   // time.c: the host time zone, or UTC
     {"SPIN", "1", "0|1", RESTART},   // kernel.c spin-wait gates (TotK reads it without a row)
     {"NICKNAME", "Player", NULL, RESTART},   // account.c GetNickname (up to 32 bytes of UTF-8)
     {"SKIP_INTRO", "0", "0|1", RESTART},   // fs_host.c: the boot logos (SCE legal screen, Sony Studio and MLB intro
                                            // movies) answered as not found; the game-modes menu follows directly
+    {"OFFLINE_PACKAGES", "0", "0|1", RESTART},   // packages.c: Road to the Show's Packages from a server on this PC
+    {"KEEP_TUTORIALS", "1", "0|1", RESTART},   // tutorials.c: finished tutorials stay finished (profile/tutorials-seen.txt)
+    {"RTTS_AUTOSAVE", "1", "0|1", RESTART},   // rtts_autosave.c: hub upgrades saved when their screen is left
+    {"CACHE_STORAGE", "1", "0|1", RESTART},   // cache_storage.c: the game's FS_GameData exists (custom cameras)
+    {"WALKUP_LIGHT", "1", "0|1", RESTART},   // tools/data/patches-*.txt: no lighting freeze before each pitch
+    {"WALKUP_LEADERS", "1", "0|1", RESTART},   // tools/data/patches-*.txt: league leaders built once per inning change
     {"PAD_MAP", "auto", "auto|label|position", LIVE},   // hid.c: face buttons by label in menus, by place in play
     {"RUMBLE", "1", "0|1", LIVE},   // hid.c: vibration on the controllers
     {"PAD_DRIVER", "sdl", "sdl|xinput", RESTART},   // hid.c: SDL3 (Xbox and PlayStation pads) or XInput (Xbox only)
@@ -39,13 +45,17 @@ static const CfgMeta metas[] = {
     {"FULLSCREEN", "0", "0|1", LIVE}, {"WINDOW_SIZE", "1920x1080", NULL, LIVE},
     {"VK_PRESENT", "mailbox", "mailbox|fifo|immediate", LIVE}, {"GPU_INDEX", "", NULL, RESTART},
     {"PERF_OVERLAY", "off", "off|fps|full", LIVE},
-    {"OUTPUT_RES", "1920x1080", NULL, RESTART}, {"RENDER_SCALE", "game", "game|100|125|150", RESTART},   // mlbts-native: resolution.c (200 ran out of a game heap)
-    // mlbts-native: UPSCALER bilinear by default (the game's own look); fsr: vk_fsr.c, on the 3D scene and the present
+    {"OUTPUT_RES", "1920x1080", NULL, RESTART}, {"RENDER_SCALE", "game", "game|100|125|150", RESTART},   // fastball: resolution.c (200 ran out of a game heap)
+    // fastball: UPSCALER bilinear by default (the game's own look); fsr: vk_fsr.c, on the 3D scene and the present
     {"UPSCALER", "bilinear", "fsr|bilinear", LIVE}, {"SHARPNESS", "80", "0..100", LIVE},
-    // mlbts-native: one DLSS row, off or the mode (vk_dlaa.c; the scene's size follows the mode, resolution.c), read at
+    // fastball: one DLSS row, off or the mode (vk_dlaa.c; the scene's size follows the mode, resolution.c), read at
     // start; TotK's DLAA switch and its characters' mask (TotK's G-buffer classes) are not used. The preset is live.
     {"DLSS", "off", "off|dlaa|quality|balanced|performance|ultra_performance", RESTART},
     {"DLSS_PRESET", "default", "default|k|j|m|l|e", LIVE}, {"FXAA", "1", "0|1", LIVE},
+    // fastball: AMD FSR 3.1 / 4 (vk_ffx.c), off by default like DLSS: the mode, read at start (the scene's size follows
+    // it, resolution.c); the version (4: FSR 4 where the GPU runs it, else 3.1) and FSR's own sharpening are live
+    {"FSR", "off", "off|native|quality|balanced|performance|ultra_performance", RESTART},
+    {"FSR_VERSION", "4", "4|3.1", LIVE}, {"FSR_SHARPNESS", "50", "0..100", LIVE},
     {"ASPECT", "fit", "fit|stretch", LIVE}, {"MOVIE_ASPECT", "keep", "keep|stretch", LIVE}, {"FOV", "100", "70..140", LIVE},
     {"ANISO", "game", "game|2|4|8|16", RESTART},   // vk_texture.c sampler_features
     // colour adjustment (vk_color.c); the preset is the menu's, the four values are what the present uses
@@ -61,10 +71,10 @@ static const CfgMeta metas[] = {
     {"SHADOW_RANGE", "100", "50..400", RESTART}, {"CONTACT_SHADOWS", "0", "0..100", RESTART},
     {"PCSS", "0", "0..200", RESTART},
     // Game
-    // mlbts-native: FRAME_QUEUE on (uneven frames at 60): the frame queue (nvn_api_obj.c nvnWindowAcquireTexture).
+    // fastball: FRAME_QUEUE on (uneven frames at 60): the frame queue (nvn_api_obj.c nvnWindowAcquireTexture).
     // Without it a window image is free only one period after its present, so a frame that runs a little long misses
     // its slot; with it the game draws the next frame while the previous one waits for its turn.
-    // mlbts-native: FPS_LIMIT 60 the game's own; any other rate through the game's frame timer (framerate.c)
+    // fastball: FPS_LIMIT 60 the game's own; any other rate through the game's frame timer (framerate.c)
     {"FPS_LIMIT", "60", "30|40|45|60|90|120|144|165|240|display", LIVE}, {"FPS60", "1", "0|1", LIVE}, {"FRAME_QUEUE", "1", "0|1", LIVE},
     {"REALTIME", "1", "0|1", RESTART}, {"CLOTH_REALTIME", "1", "0|1", RESTART},
     {"MODS_REBUILD", "auto", "auto|off", RESTART},
@@ -74,7 +84,7 @@ static const CfgMeta metas[] = {
     {"ASSUME_FOCUS", "1", "0|1", LIVE},   // read on every focus change (ov_system.c)
     // Sound, Controls, Menu
     {"VOLUME", "100", "0..100", LIVE}, {"AUDIO_CHANNELS", "stereo", "auto|stereo|5.1", RESTART},
-    // mlbts-native: RUMBLE_STRENGTH 100 (TotK 130), the strength MLB had before the row was read (hid.c)
+    // fastball: RUMBLE_STRENGTH 100 (TotK 130), the strength MLB had before the row was read (hid.c)
     {"MOTION", "1", "0|1", LIVE}, {"RUMBLE_STRENGTH", "100", "0..300", LIVE}, {"RUMBLE_CURVE", "0.6", "0.2..1.5", LIVE},
     {"RUMBLE_TRIGGERS", "0", "0|1", LIVE}, {"PAD_LAYOUT", "auto", "auto|nintendo|xbox", LIVE},
     {"PROMPTS", "nintendo", "nintendo|xbox|pc", RESTART},
@@ -90,7 +100,7 @@ static const CfgMeta metas[] = {
     {"DISCORD_APP_ID", "1567232599846293504", NULL, LIVE},
     {"DISCORD_IMAGE", "totk_512x512", NULL, LIVE},
     // Advanced: scheduling
-    // mlbts-native: REPLAY_ASYNC on (the batting frame rate): the replay runs on its own thread (vk_backend.c).
+    // fastball: REPLAY_ASYNC on (the batting frame rate): the replay runs on its own thread (vk_backend.c).
     // Synchronous, it ran on the game's main thread after the game's own work, and busy at-bat scenes took 6-9 ms of
     // replay on top of 10-12 ms of game work a frame (45-55 fps).
     {"ASYNC_PREEMPT", "1", "0|1|2", RESTART}, {"REPLAY_ASYNC", "1", "0|1", RESTART},
@@ -118,11 +128,12 @@ static const CfgMeta metas[] = {
     {"PASS_CRUMBS", "", "0|1", RESTART},   // vk_crumbs.c pass marks; unset: VK_AMD_buffer_marker only
     {"STATEDUMP", "0", "0|1", RESTART},    // statedump.c: F8 writes main's data and bss to the profile folder
     {"CAPTURE_KEY", "0", "0|1", RESTART},  // gfx_stubs.c: F12 captures a frame (always F9 under RenderDoc)
+    {"HEAP_CENSUS", "0", "0|1", RESTART},  // heap.c: with TRACE=perf, the malloc heap's live blocks by kind (#17)
     {"INPUT_RECORD", "", NULL, RESTART},
 };
 
 // Values set at run time (cfg_set): a small table under a lock; strings are never freed, as readers may hold them.
-#define MAX_SET 256   // mlbts-native: 64 in TotK; mlb.cfg and the menu's many rows set more
+#define MAX_SET 256   // fastball: 64 in TotK; mlb.cfg and the menu's many rows set more
 static struct { char key[64]; const char *value; } set_values[MAX_SET];
 static int n_set;
 static PlatMutex set_lock = PLAT_MUTEX_INIT;
@@ -171,7 +182,7 @@ void cfg_set(const char *name, const char *value) {
     plat_mutex_unlock(&set_lock);
 }
 
-// mlbts-native: settings from mlb.cfg beside the executable, one KEY=VALUE per line (MLB_X, TOTK_X or X; '#' or ';'
+// fastball: settings from mlb.cfg beside the executable, one KEY=VALUE per line (MLB_X, TOTK_X or X; '#' or ';'
 // starts a comment), so a player can switch an experiment without a new build or environment variables. Applied with
 // cfg_set before anything reads a setting: the environment still wins, and the defaults main.c sets for unset keys
 // leave a file's value alone. Returns how many settings it applied (0 without a file).
@@ -217,7 +228,7 @@ int cfg_from_env(const char *name) {
     return getenv(var) != NULL;
 }
 
-// mlbts-native: the settings the menu changed (cfg_set_saved), which cfg_save writes into mlb.cfg.
+// fastball: the settings the menu changed (cfg_set_saved), which cfg_save writes into mlb.cfg.
 #define MAX_SAVED 256
 static char saved_keys[MAX_SAVED][64];
 static int n_saved;
@@ -233,7 +244,7 @@ void cfg_set_saved(const char *name, const char *value) {
     plat_mutex_unlock(&set_lock);
 }
 
-// mlbts-native: the menu's changes go into mlb.cfg beside the executable. A line that sets one of those keys (MLB_X,
+// fastball: the menu's changes go into mlb.cfg beside the executable. A line that sets one of those keys (MLB_X,
 // TOTK_X or X, not commented out) gets the new value in place; the others, comments included, stay as the player
 // wrote them; keys without a line are added at the end under a heading. Written to mlb.cfg.tmp, then moved over
 // mlb.cfg, so a crash mid-write leaves the old file. 1 when written (or nothing to write).

@@ -61,7 +61,7 @@ typedef struct PoolRec {
     VmaAllocation malloc_;
     uint32_t acc_sub;                  // replay: the last submission that synced the mirror (mirror_sync)
     uint32_t wb_sub;                   // replay: the last submission that wrote mirror bytes back to guest memory
-    volatile uint8_t wb_direct;        // mlbts-native: a GPU write into the pool while mirrored that bypassed the mirror,
+    volatile uint8_t wb_direct;        // fastball: a GPU write into the pool while mirrored that bypassed the mirror,
                                        // or one before its mirror in the submission that created it (gpu_wrote,
                                        // mirror_create): its GPU writes always count as new for the mirror (mirror_holds)
     uint32_t direct_sub;               // replay: the last submission with a GPU write into it while it had no mirror
@@ -628,7 +628,7 @@ int vk_mem_vram(uint64_t *used, uint64_t *budget, int *exact) {
 #define GEN_CHUNKS (RT_ADDRESS_LIMIT >> GEN_CHUNK_SHIFT)
 #define GEN_PER_CHUNK (1u << (GEN_CHUNK_SHIFT - GEN_PAGE_SHIFT))
 static uint32_t *gen_chunk[GEN_CHUNKS];
-// mlbts-native: the same generations without the GPU writes a VRAM mirror already holds (vk_gpu_written), for the
+// fastball: the same generations without the GPU writes a VRAM mirror already holds (vk_gpu_written), for the
 // mirror sync and the write-back's page ages. A GPU write into a mirrored pool lands in the mirror first and goes back
 // to guest memory at the end of its submission (vk_mem_mirror_end); its completion stamped the pages like a CPU write,
 // so the next submission copied them up into the mirror again. In MLB's end-of-game handshake (twelve skinned players
@@ -723,7 +723,7 @@ static void stamp_range(uint64_t lo, uint64_t hi, uint32_t g) {
     for (uint64_t a = lo; a < hi; a += 1ull << GEN_PAGE_SHIFT) stamp_page(a, g);
 }
 
-int vk_watch_hit(uint64_t a, uint64_t n);   // vk_texture.c (mlbts-native diagnosis)
+int vk_watch_hit(uint64_t a, uint64_t n);   // vk_texture.c (fastball diagnosis)
 void vk_guest_written(uint64_t addr, uint64_t size) {
     if (vk_watch_hit(addr, size))
         rt_log("watch: guest wrote %#llx+%#llx (flush or write notice)", (unsigned long long)addr, (unsigned long long)size);
@@ -734,7 +734,7 @@ void vk_guest_written(uint64_t addr, uint64_t size) {
     plat_mutex_unlock(&gen_lock);
 }
 
-// mlbts-native: core/fs_host.c reports the bytes a file read wrote into guest memory (no Vulkan needed: page stamps only)
+// fastball: core/fs_host.c reports the bytes a file read wrote into guest memory (no Vulkan needed: page stamps only)
 void rt_host_wrote(uint64_t addr, uint64_t size) { vk_guest_written(addr, size); }
 
 int vk_mem_changed(uint64_t addr, uint64_t size, uint32_t since, uint32_t *now) {
@@ -1051,7 +1051,7 @@ void vk_mem_gpu_pending(uint64_t addr, uint64_t size) {
     plat_mutex_unlock(&shadow_lock);
 }
 
-// mlbts-native: [addr, addr+size) lies in a pool mirrored now whose GPU writes all went through the mirror (wb_direct
+// fastball: [addr, addr+size) lies in a pool mirrored now whose GPU writes all went through the mirror (wb_direct
 // clear), so the mirror holds what the GPU wrote and vk_mem_mirror_end copied or merged it back into guest memory.
 // A pool mirrored only after the write recorded holds it too: the mirror's first copy runs after it in queue order.
 // Pool lock shared held.
@@ -1286,11 +1286,11 @@ typedef struct {
     uint64_t subs, syncs, upload_bytes, upload_copies, first_n, first_bytes, wb_bytes, wb_copies, wb_ranges;
     uint64_t presnap_queries, sync_queries, presnap_t, sync_t, prologues, presnap_bytes;
     uint64_t snap_bytes, merge_bytes, merge_dispatches, snap_allocs;   // write-back merge
-    uint64_t quiet_bytes, quiet_ranges, quiet_broken;                  // mlbts-native: quiet pages copied (gpu_wrote)
+    uint64_t quiet_bytes, quiet_ranges, quiet_broken;                  // fastball: quiet pages copied (gpu_wrote)
     uint64_t age_bytes[4];                                             // merged page bytes by CPU write age (q_age)
     uint64_t merge_union, merge_ranges, snap_joined;                   // distinct bytes and ranges of the merges; joins
     uint64_t page_bytes, flush_n, flush_bytes, flush_calls, flush_sum;   // what mirror_sync queues, by source
-    uint64_t held_skip;                                                  // mlbts-native: pages not copied up again
+    uint64_t held_skip;                                                  // fastball: pages not copied up again
 } MirrorAcc;
 static MirrorAcc mrep;                 // replay: this submission
 static MirrorAcc macc;                 // mirror_stat_lock: since the last summary
@@ -1413,7 +1413,7 @@ static void refuse(PoolRec *r, int why, const char *what) {
 static void mirror_create(PoolRec *r) {
     VkCtx *c = vk_ctx();
     uint64_t n = r->import_hi - r->import_lo;
-    // mlbts-native: the first copy runs in the prologue of the part being recorded, which may come before a GPU write
+    // fastball: the first copy runs in the prologue of the part being recorded, which may come before a GPU write
     // recorded into the imported buffer earlier in the same part: such a pool keeps copying its GPU writes up again.
     if (r->direct_sub && r->direct_sub == msub) __atomic_store_n(&r->wb_direct, 1, __ATOMIC_RELAXED);
     r->mstate = MS_REFUSED;
@@ -1617,7 +1617,7 @@ static int nchunks, cchunks;
 // the pool holds the frames in flight: a VMA allocation that needs a new memory block costs 8-11 ms on the replay
 // thread. Chunk sizes are powers of two so that one fits the next request; what the pool cannot hold is destroyed.
 #define SNAP_LIST_MIN (64u << 10)
-// mlbts-native: 128 chunks, 256 MiB. MLB's draft cutscene merges 27 MiB a frame with up to three frames in flight; a
+// fastball: 128 chunks, 256 MiB. MLB's draft cutscene merges 27 MiB a frame with up to three frames in flight; a
 // 16 MiB pool made it create about 8 snapshot buffers every frame (mem: mirror "new buffers").
 #define SNAP_POOL_N 128
 #define SNAP_POOL_BYTES (256ull << 20)
@@ -1667,7 +1667,7 @@ fail:
     return 0;
 }
 
-// mlbts-native diagnosis: MLB_WB_AB=1 turns the merge off (plain copies, which can lose a CPU write made while the GPU
+// fastball diagnosis: MLB_WB_AB=1 turns the merge off (plain copies, which can lose a CPU write made while the GPU
 // runs) in every other window of 300 presents, so one run shows the GPU time with and without it.
 static int ab_cfg = -1;
 static int merging(void) {
@@ -1718,7 +1718,7 @@ static int chunk_new(uint64_t size, int host) {
         VkBufferCreateInfo bi = {.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO, .size = want,
                                  .usage = VK_BUFFER_USAGE_STORAGE_BUFFER_BIT | VK_BUFFER_USAGE_TRANSFER_DST_BIT,
                                  .sharingMode = VK_SHARING_MODE_EXCLUSIVE};
-        // mlbts-native: a range list (host) goes in device-local memory the CPU can map where there is some (the BAR):
+        // fastball: a range list (host) goes in device-local memory the CPU can map where there is some (the BAR):
         // every merge invocation binary-searches it, and from system memory those were reads over PCIe, 7 million
         // invocations a frame in MLB's draft cutscene. VMA falls back to system memory without such a type.
         VmaAllocationCreateInfo ai = {.usage = VMA_MEMORY_USAGE_AUTO_PREFER_DEVICE,
@@ -1743,7 +1743,7 @@ static int chunk_new(uint64_t size, int host) {
 }
 
 // Record time: room in a snapshot chunk for [off, off+size) of r's mirror, once per submission. 0: plain copy instead.
-// mlbts-native: a range overlapping or touching ranges of the same pool that have no snapshot yet (the part being
+// fastball: a range overlapping or touching ranges of the same pool that have no snapshot yet (the part being
 // recorded) joins them into one: their union, snapshotted at the same moment, merges each word once and exactly as the
 // separate ranges did. MLB's draft cutscene bound overlapping pieces of the same buffers to its skinning dispatches,
 // and the merge processed 22 MiB a frame for 6.3 MiB of distinct memory (12 ms of GPU time). Ranges of earlier parts
@@ -1906,7 +1906,7 @@ static void gpu_writes(const PoolRec *r, uint64_t off, uint64_t size) {
     if (frozen) mem_thaw(a, b - a), plat_inc64(&n_thaw_gpu);
 }
 
-// mlbts-native: quiet pages. The merge keeps the words the CPU writes while the GPU runs, but its shader writes guest
+// fastball: quiet pages. The merge keeps the words the CPU writes while the GPU runs, but its shader writes guest
 // memory a changed word at a time, and those partial writes over PCIe are slow: 23-25 MiB a frame took 12-14 ms of
 // GPU time in MLB's draft cutscene (skinned characters), where plain copies run at about 16 GB/s. Guest memory equals
 // the mirror's state before the submission on every page the CPU did not write since the prologue copied its writes
@@ -1927,7 +1927,7 @@ static uint64_t q_age[4];      // replay: merged page bytes by the age of the CP
 static int quiet_on(void) {
     if (quiet_cfg < 0) {
         const char *e = cfg_get("MLB_WB_QUIET");
-        // mlbts-native: on unless MLB_WB_QUIET=0. It once found no quiet page (the GPU's own write-backs counted as CPU
+        // fastball: on unless MLB_WB_QUIET=0. It once found no quiet page (the GPU's own write-backs counted as CPU
         // writes) and cost replay time (each repeat of a range split again); with both fixed, MLB's menu merged
         // 0.001 MiB a frame instead of 8 MiB, its write-back took 0.5 ms of GPU time instead of 4.3, the GPU frame went
         // from 11.9 to 4.3 ms, and no plain-copied page was written by the CPU right after.
@@ -1940,7 +1940,7 @@ static int quiet_on(void) {
     }
     return quiet_cfg && msub > 64;
 }
-// Page ages come from mgen_chunk (mlbts-native): with gen_chunk, the GPU's own write-backs made every page it wrote look
+// Page ages come from mgen_chunk (fastball): with gen_chunk, the GPU's own write-backs made every page it wrote look
 // 0-1 submissions old, so no page was ever quiet ("the draft cutscene had none").
 static void quiet_note(const PoolRec *r, uint64_t off, uint64_t size) {
     quiet_ring[quiet_at].r = r, quiet_ring[quiet_at].off = off, quiet_ring[quiet_at].size = size;
@@ -1968,7 +1968,7 @@ static void quiet_run(PoolRec *r, uint64_t off, uint64_t size, int quiet) {
         range_add(&wbl, &nwbl, &cwbl, r, off, size);
     }
 }
-// mlbts-native: ranges already split in this submission. The same written ranges come back with every dispatch that
+// fastball: ranges already split in this submission. The same written ranges come back with every dispatch that
 // binds them: in MLB's menu 5,500 splits a frame covered 250 MiB for 7 MiB of distinct memory, and splitting each again
 // (a write-watch query and an age per page) doubled the replay's time (8 to 17.5 ms a frame, 45 fps). A repeat adds
 // nothing: its quiet runs are in the copy list and its merged runs in the snapshot list (snap_add takes an identical
@@ -2194,7 +2194,7 @@ static uint64_t ver_off;
 
 // The CPU wrote the page since the mirror's sync that mgen records: stamped later, or its write-watch bit is set.
 static int page_dirty(uint64_t a, uint32_t mgen) {
-    uint32_t *s = mgen_slot(a);   // mlbts-native: a GPU write the mirror holds is compared, not skipped
+    uint32_t *s = mgen_slot(a);   // fastball: a GPU write the mirror holds is compared, not skipped
     if (s && __atomic_load_n(s, __ATOMIC_RELAXED) > mgen) return 1;
     uint64_t p[1];
     return mem_written_peek(a, 1ull << GEN_PAGE_SHIFT, p, 1) != 0;   // UINT64_MAX (not watched) counts as written
@@ -2459,7 +2459,7 @@ typedef struct {
     VkDeviceSize held;   // staging and scratch bytes freed when the batch completes (vk_upload_held)
 } Batch;
 
-enum { DEAD_IMAGE = 1, DEAD_IMAGE_VMA, DEAD_VIEW, DEAD_BUFFER_VMA, DEAD_HOST, DEAD_BUFFER_VIEW };   // DEAD_HOST: free(handle); mlbts-native: DEAD_BUFFER_VIEW
+enum { DEAD_IMAGE = 1, DEAD_IMAGE_VMA, DEAD_VIEW, DEAD_BUFFER_VMA, DEAD_HOST, DEAD_BUFFER_VIEW };   // DEAD_HOST: free(handle); fastball: DEAD_BUFFER_VIEW
 typedef struct { int kind; uint64_t handle; VmaAllocation alloc; uint64_t seq, tl; } Dead;
 
 static PlatRMutex cmd_lock;
@@ -2522,7 +2522,7 @@ static void collect_locked(VkCtx *c) {
             free((void *)(uintptr_t)d->handle);
             continue;
         }
-        if (d->kind == DEAD_BUFFER_VIEW) {   // mlbts-native: texel buffer views (vk_exec_draw.c texel_view)
+        if (d->kind == DEAD_BUFFER_VIEW) {   // fastball: texel buffer views (vk_exec_draw.c texel_view)
             vkDestroyBufferView(c->device, (VkBufferView)(uintptr_t)d->handle, NULL);
             continue;
         }
@@ -2748,7 +2748,7 @@ void vk_defer_image(VkImage img, VmaAllocation alloc) {
     if (img) defer(alloc ? DEAD_IMAGE_VMA : DEAD_IMAGE, (uint64_t)(uintptr_t)img, alloc);
 }
 void vk_defer_view(VkImageView view) { if (view) defer(DEAD_VIEW, (uint64_t)(uintptr_t)view, NULL); }
-void vk_defer_buffer_view(VkBufferView view) { if (view) defer(DEAD_BUFFER_VIEW, (uint64_t)(uintptr_t)view, NULL); }   // mlbts-native
+void vk_defer_buffer_view(VkBufferView view) { if (view) defer(DEAD_BUFFER_VIEW, (uint64_t)(uintptr_t)view, NULL); }   // fastball
 void vk_defer_buffer(VkBuffer buf, VmaAllocation alloc) {
     if (buf) defer(DEAD_BUFFER_VMA, (uint64_t)(uintptr_t)buf, alloc);
 }

@@ -1,4 +1,4 @@
-# AGENTS.md — MLB The Show 26 native Windows port
+# AGENTS.md — Fastball, the MLB The Show 26 native Windows port
 
 Native Windows x86-64 static recompilation of **MLB The Show 26 for Switch, version 1.0.20** (the dev tree's version; 1.0.15 stays supported, see "Game
 versions" below; no other versions).
@@ -13,7 +13,7 @@ Windows 11). Most current work is graphics correctness (wrong or missing images,
 - **Performance comes first.** The user notices any fps loss. Diagnostics must cost nothing during normal play: gate
   them behind F12, a cfg knob or RenderDoc. Remove test code that slows the game once it has done its job.
 - They want real fixes backed by evidence, not rounds of guesses. Trace the cause (RenderDoc, logs), then fix.
-- Commit to `main` and push it to GitHub (`origin`, https://github.com/sam110411/mlbts-native). Commit only the
+- Commit to `main` and push it to GitHub (`origin`, https://github.com/sam110411/fastball). Commit only the
   files of the task; the user may have uncommitted work of their own in the tree. End each commit message with the
   `Co-Authored-By:` line the session gives.
 - Write explanations in plain language. The user is not a graphics programmer.
@@ -37,12 +37,12 @@ Windows 11). Most current work is graphics correctness (wrong or missing images,
 | `runtime/mlb/` | MLB layer: `main.c` (log, crash reporter), `boot.c`, `cfg.c` (all settings), `services.c`, `hid.c` (input) |
 | `runtime/gfx/` | NVN front end and Vulkan back end (from TotK), present, window, RenderDoc support (`rdoc.c`) |
 | `tools/` | Build, extraction and analysis scripts (below) |
-| `installer/` | The player's setup and launcher (`MLBTS-Setup.exe`): extracts their files, builds `mlb.exe` on their PC (`docs/release.md`) |
+| `installer/` | The player's setup and launcher (`Fastball.exe`): extracts their files, builds `mlb.exe` on their PC (`docs/release.md`) |
 | `docs/` | `recon-report.md` (binary facts), `runtime-port.md` (build and boot), `graphics-plan.md` |
 | `work/` (ignored) | `gen/` generated C, `build/` exe and logs, `profile/` saves and captures, `romfs/`, `scratch/` |
 | `refs/` (ignored) | Reference checkouts: TotK Recomp (primary), Astral Chain Recomp, Power Moon Recomp |
 
-Changes to vendored TotK files are marked `mlbts-native` with a comment saying what MLB does and why. Keep that style:
+Changes to vendored TotK files are marked `fastball` with a comment saying what MLB does and why. Keep that style:
 comments explain the observed case (screen, texture, address) that made the code necessary.
 Third-party code goes in `THIRD_PARTY_NOTICES.md`.
 
@@ -55,9 +55,13 @@ Run Python as `.venv/Scripts/python -I <script>`. `-I` matters: user site-packag
 work/build/mlb.exe                               # paths default to work/update/exefs, work/romfs/romfs, work/profile
 ```
 
+The runtime is built with a profile (`tools/data/runtime.profdata`, profile-guided optimisation; `--pgo off` without
+it). Retrain it after large replay changes (`tools/pgo.py`, `docs/runtime-port.md`); the game's code never gets one.
 First-time setup (only for a fresh checkout): see `docs/runtime-port.md`. In short: extract the ExeFS and RomFS with
 `tools/romfs_dump.py` and the keys, then `recomp/gen.py`, `tools/fetch_deps.py` and `tools/build_xlate.py`.
 `mlb.exe` is locked while the game runs: the link fails then, so check `tasklist` first.
+Upscalers: `MLB_DLSS` needs `nvngx_dlss.dll` and `MLB_FSR` (FSR 3.1 / 4, `vk_ffx.c`) AMD's two DLLs next to `mlb.exe`;
+`tools/fetch_ffx.py` puts AMD's into `work/build`. Both are off by default and turned on in the F1 menu (Graphics).
 
 Settings: `work/build/mlb.cfg`, one `KEY=VALUE` per line. Environment variables `MLB_<KEY>` (or `TOTK_<KEY>`) override
 it. The full list is the table in `runtime/mlb/cfg.c`; `main.c` turns `FRAME_QUEUE` and `REPLAY_ASYNC` on by default.
@@ -73,8 +77,10 @@ replace-and-assert is reliable.
   kept in `work/update-1.0.15/exefs` and `work/romfs-1.0.15`). Each has `tools/data/expected-<version>.json`.
 - One `mlb.exe` runs one version. `tools/build.py` picks it from the SHA-256 of `--exefs`'s `main` (default
   `work/update/exefs`) and refuses `--gen` output of another version. The runtime reads it as `rt_game_build`
-  ("1.0.20"). To build 1.0.15: `recomp/gen.py --exefs work/update-1.0.15/exefs`, then `tools/build.py --exefs
-  work/update-1.0.15/exefs` and `MLB_EXEFS`/`MLB_ROMFS` pointing at the 1.0.15 folders.
+  ("1.0.20"). To build 1.0.15: `recomp/gen.py --exefs work/update-1.0.15/exefs --patches
+  tools/data/patches-1.0.15.txt`, then `tools/build.py --exefs work/update-1.0.15/exefs` and `MLB_EXEFS`/`MLB_ROMFS`
+  pointing at the 1.0.15 folders. Each version's code patches (`tools/data/patches-<version>.txt`, the
+  `recomp/patches.py` format) go to `recomp/gen.py --patches`; the setup passes them too.
 - 1.0.20 changed only `main` (sdk, rtld and the 765 imports are the same). Code addresses moved by +0x20 to +0x1500,
   read-only data and data by about +0x1000 to +0x1070. Address comments in `runtime/` are 1.0.15's unless they say
   otherwise; `tools/addrmap.py work/update-1.0.15/exefs work/update/exefs <addr>...` finds them in 1.0.20. Code that
@@ -92,11 +98,23 @@ fails the content check. The dev build stays MSVC; runtime code must also compil
 MSVC-only APIs): check with `tools/build.py --toolchain work/toolchain/llvm-mingw-20261020-ucrt-x86_64 --out
 work/build-mingw`. Details: `docs/release.md`.
 
+The release keeps to RecompLauncher's standards for recomp projects (`docs/release.md`, "Portable and one
+executable", "Command line"): one program to run (`Fastball.exe` starts the built game without a window), portable
+(the game in `MLBTS\` inside the setup folder, the setup's memory in `launcher.json` there, updates swapped in place,
+nothing in `%LOCALAPPDATA%` or shortcuts unless asked), and a flag for every choice (`mlb.exe --help`: every `cfg.c`
+setting is a flag). A new setting needs no extra flag code, but anything new the setup writes must stay in its folder.
+
 Publishing a version: bump `VERSION`, write `docs/release-notes-<version>.md`, commit and push, run
-`tools/make_release.py`, then `gh release create v<version> work/release/MLBTS-Setup-<version>-windows.zip --target
-<full commit SHA> --title "MLB The Show 26 for PC <version>" --notes-file docs/release-notes-<version>.md` (a short SHA
+`tools/make_release.py`, then `gh release create v<version> work/release/Fastball-<version>-windows.zip
+work/release/MLBTS-Setup-<version>-windows.zip --target <full commit SHA> --title "Fastball <version>" --notes-file
+docs/release-notes-<version>.md` (a short SHA
 is refused). Players' launchers (0.1.1 and later) find the newest release through GitHub's API and update from it
-(`installer/update.py`): the asset must keep the name `MLBTS-Setup-<version>-windows.zip`.
+(`installer/update.py`): the assets must keep the names `Fastball-<version>-windows.zip` and
+`MLBTS-Setup-<version>-windows.zip` (the second, with a copy of the launcher as `MLBTS-Setup.exe`, is the only one the
+updaters of setups 0.1.1 to 0.1.5 find and can start). The GitHub repository was renamed from `mlbts-native` to `fastball`
+(2026-11-22, before 0.2.0): GitHub redirects the old URLs, so the updaters of 0.1.x (which ask
+`repos/sam110411/mlbts-native`) still find new releases. Never create a repository named `mlbts-native` under the same
+account: that would end the redirect.
 
 ## Logs and crash reports
 
@@ -186,6 +204,9 @@ is refused). Players' launchers (0.1.1 and later) find the newest release throug
   keeps in its data. `MLB_FPS_LIMIT` (F1 → Display) other than 60 sets that count to 0 at each present and the
   present pacer holds the limit (`runtime/mlb/framerate.c`, `docs/frame-rate.md`). No game code is patched.
   `MLB_TRACE=perf` logs game time against wall time (`perf: frame rate:`).
+- Heavy scenes (fan cam) are slow because the game waits for each frame's GPU signal before starting the next: game
+  code + replay + the GPU's tail add up. What was measured, done and ruled out: `docs/frame-rate.md`, "What limits the
+  frame rate in heavy scenes".
 
 ## Audio notes
 

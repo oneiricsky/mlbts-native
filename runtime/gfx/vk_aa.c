@@ -1,4 +1,4 @@
-// mlbts-native, our own: antialiasing of MLB's 3D scene (MLB_AA=fxaa, the default; MLB_AA=off; the menu's Graphics
+// fastball, our own: antialiasing of MLB's 3D scene (MLB_AA=fxaa, the default; MLB_AA=off; the menu's Graphics
 // page). MLB draws its 3D scene into one HDR image (1440x810, B10G11R11 float, at 0x154ea0000 in every capture so far:
 // gameplay, menus, RTTS) with no antialiasing, lays its HUD into a separate 1920x1080 image, and one full-screen draw
 // then tone-maps the scene, scales it to 1080p and puts the HUD over it (fragment shader daf10a59; 1d3e4d6b on some

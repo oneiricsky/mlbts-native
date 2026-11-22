@@ -9,6 +9,7 @@
 
 #include "cfg.h"
 #include "host.h"
+#include "packages.h"
 #include "platform/platform.h"
 
 void res_apply(void);   // resolution.c
@@ -130,12 +131,22 @@ static void guest_main(Cpu *c) {
 
 void rt_boot(void) {
     check_npdm();
+    packages_start();    // packages.c, only with MLB_OFFLINE_PACKAGES: must come before the modules are linked
     ldr_load(rt_config()->exefs);
+    packages_loaded();
+    void tutorials_apply(void);
+    tutorials_apply();   // tutorials.c: MLB_KEEP_TUTORIALS, the list of finished tutorials kept in the profile
+    void rtts_autosave_apply(void);
+    rtts_autosave_apply();   // rtts_autosave.c: MLB_RTTS_AUTOSAVE, hub upgrades saved when their screen is left
+    void cache_storage_apply(void);
+    cache_storage_apply();   // cache_storage.c: MLB_CACHE_STORAGE, <profile>/cache/0 for the game's FS_GameData
     rt_patches_init();
-    res_apply();   // mlbts-native, resolution.c: MLB_RENDER_SCALE rewrites the scene size table before the game reads it
+    res_apply();   // fastball, resolution.c: MLB_RENDER_SCALE rewrites the scene size table before the game reads it
     cb_addr[0] = hostfn_register("<rtld loader_ready>", cb_loader_ready);
     cb_addr[1] = hostfn_register("<rtld module_inits>", cb_module_inits);
     cb_addr[2] = hostfn_register("<rtld module_finis>", cb_module_finis);
+    void mlb_heap_init(void);
+    mlb_heap_init();   // heap.c: the census callback (MLB_TRACE=perf, MLB_HEAP_CENSUS=1)
     hostfn_seal();
     // mlbts-native: pipelines build on background workers (a draw whose pipeline is building is skipped or gets a
     // fast-linked one), and the ones earlier runs recorded in pipeline-keys.bin are built before the guest starts.

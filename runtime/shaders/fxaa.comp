@@ -4,7 +4,7 @@
 // by how far it sits from the nearer end, so a stair step turns into a slope. Thin detail smaller than a pixel is
 // blended with its neighbours as well (strength: pc.subpix).
 //
-// mlbts-native: MLB's scene is linear HDR before the game's exposure and tone curve (B10G11R11, typical values around
+// fastball: MLB's scene is linear HDR before the game's exposure and tone curve (B10G11R11, typical values around
 // 0.005 at a ball park in daylight), so brightness is compared in stops (log2), which does not depend on the exposure;
 // FXAA's usual threshold relative to the brightest neighbour is a threshold in stops here.
 #version 450

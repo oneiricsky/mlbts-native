@@ -3,10 +3,13 @@
     check    always: the setup folder, the PC (AVX2, Vulkan), the game files and keys, free space
     exefs    the update's code (main, sdk, rtld, main.npdm) into <dest>/game/exefs, checked against its version's hashes
     romfs    the game's data (base + update, about 37 GB) into <dest>/game/romfs (tools/romfs_dump.py; resumable)
-    build    lift the code to C (recomp/gen.py) and compile it with the prebuilt runtime (tools/build.py) into mlb.exe
-    finish   always: mlb.cfg, the shader translator, DLSS (optional), shortcuts, a Ryujinx save (optional), clean up
+    build    lift the code to C (recomp/gen.py, with the version's code patches, tools/data/patches-<version>.txt) and
+             compile it with the prebuilt runtime (tools/build.py) into mlb.exe
+    equipment  optional: every Road to the Show equipment item, offline (tools/equipment); only shown when in play
+    packages   optional: Road to the Show's Packages, offline (tools/packages, runtime/mlb/packages.c); the same
+    finish   always: mlb.cfg, the shader translator, DLSS and FSR for the graphics card, shortcuts, a Ryujinx save (optional), clean up
 
-mlbts-install.json in the install folder records each finished step with a key: a fingerprint of what its output
+fastball-install.json in the install folder records each finished step with a key: a fingerprint of what its output
 depends on. A step whose recorded key matches and whose output is still there is skipped. So a cancelled setup resumes
 where it stopped, and a newer release on an existing folder only rebuilds mlb.exe (its key holds the release version):
 the game files are not needed again.
@@ -35,7 +38,15 @@ from pathlib import Path
 from . import detect
 from .layout import GAME_VERSIONS
 
-STATE = 'mlbts-install.json'
+STATE = 'fastball-install.json'
+LEGACY_STATE = 'mlbts-install.json'   # its name up to 0.1.5: read when there is no STATE, and replaced by it
+
+
+def state_file(dest):
+    """The install record of dest: STATE, or the older name when only that one is there."""
+    p = Path(dest) / STATE
+    old = Path(dest) / LEGACY_STATE
+    return old if not p.is_file() and old.is_file() else p
 GIB = 1 << 30
 SPACE_SLACK = 2 * GIB          # mlb.exe, the shader and pipeline caches, saves
 TEMP_BYTES = 2 * GIB           # the generated C (about 600 MB) and its objects (about 200 MB), with room
@@ -45,6 +56,16 @@ DLSS_VERSION = '310.9.1'
 DLSS_URL = f'https://raw.githubusercontent.com/NVIDIA/DLSS/v{DLSS_VERSION}/lib/Windows_x86_64/rel/{DLSS_DLL}'
 DLSS_SIZE = 58956912
 DLSS_SHA256 = '3975567b8943c53acce397f2b72380092f84f162d00b0d2c7d08a1025c563983'
+# AMD FSR 3.1 / 4 (runtime/gfx/vk_ffx.c): AMD's signed Vulkan runtime from the FSR SDK 2.4.0 (its licence allows
+# redistribution, but like DLSS it is downloaded from AMD's repository, never shipped). The same revision as the API
+# headers in runtime/third_party/ffx.
+FFX_REVISION = '7539ae8b6568ad29ed78a753404351daf3b5cca7'
+FFX_URL = (f'https://raw.githubusercontent.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/{FFX_REVISION}'
+           '/Kits/FidelityFX/signedbin/')
+FFX_DLLS = (('amd_fidelityfx_loader_vk.dll', 39184,
+             '38a56a01fb3565c0757d9f5c1e4e69de4b65e5f2e5769b323b200dc1f142bab9'),
+            ('amd_fidelityfx_upscaler_vk.dll', 36135696,
+             '4a7e895af6e0b615d40a84d59eb8c2b1054ad91cdd0c739567940270d51bdab7'))
 
 PLAYER_CFG = """# mlb.cfg - settings of MLB The Show 26 (PC port), one KEY=VALUE per line. A line starting with # is ignored.
 # Most settings are in the in-game menu (F1), which writes its changes into this file.
@@ -119,7 +140,7 @@ class Context:
         return 983040 if (self.game / 'romfs').is_dir() else None
 
     def load_state(self):
-        p = self.dest / STATE
+        p = state_file(self.dest)
         if p.is_file():
             try:
                 data = json.loads(p.read_text(encoding='utf-8'))
@@ -135,6 +156,7 @@ class Context:
         tmp = p.with_name(STATE + '.tmp')
         tmp.write_text(json.dumps(self.state, indent=1) + '\n', encoding='utf-8')
         os.replace(tmp, p)
+        (self.dest / LEGACY_STATE).unlink(missing_ok=True)   # now under the new name
 
     def run_tool(self, step, cmd, on_line=None):
         """Run a tool of the setup folder, its output to the log (and on_line), from the setup folder. A tool that fails
@@ -168,6 +190,10 @@ class Step:
     title = ''
     always = False
 
+    def applies(self, ctx):
+        """Whether this setup run has the step at all (an optional one nobody asked for is not even listed)."""
+        return True
+
     def key(self, ctx):
         return ''
 
@@ -194,11 +220,11 @@ class Check(Step):
                                'AMD Zen or newer).')
         if not detect.vulkan():
             raise InstallError('No Vulkan driver found (vulkan-1.dll). Install the latest driver for your graphics card.')
-        # A launcher keeps its folder, so the game may go in a folder of its own inside it (cli.py --launcher)
-        inside_ok = getattr(opt, 'launcher', False) and ctx.dest != lay.root and lay.temp not in (ctx.dest, *ctx.dest.parents)
-        if not lay.dev and not inside_ok and (ctx.dest == lay.root or lay.root in ctx.dest.parents):
-            raise InstallError('Pick an install folder outside the setup folder: the setup folder can be deleted after '
-                               'the install.')
+        # Portable: the game goes in a folder of its own inside the setup folder (MLBTS\ by default, as RecompLauncher
+        # does), never in the setup folder itself or one of the setup's own folders, which an update replaces
+        if lay.reserved(ctx.dest):
+            raise InstallError(f'Pick an install folder of its own, such as {lay.default_dest()}: not the setup folder '
+                               'or one of its folders.')
         needs_files = ctx.plan_runs('exefs') or ctx.plan_runs('romfs')
         if needs_files:
             self.check_files(ctx)
@@ -373,7 +399,9 @@ class Build(Step):
     id, title = 'build', 'Build the game for this PC (a few minutes)'
 
     def key(self, ctx):
-        return fingerprint('build-1', ctx.layout.release, json.dumps(ctx.expected['exefs_sha256'], sort_keys=True))
+        patches = ctx.layout.patches(ctx.expected['display_version'])
+        return fingerprint('build-1', ctx.layout.release, json.dumps(ctx.expected['exefs_sha256'], sort_keys=True),
+                           sha256_file(patches) if patches.is_file() else '')
 
     def current(self, ctx, record):
         return (ctx.dest / 'mlb.exe').is_file()
@@ -390,8 +418,11 @@ class Build(Step):
             return False
 
         rep.progress(self.id, 'Translating the code to C', force=True)
+        # the code patches of this game version (tools/data/patches-<version>.txt); each set has a settings row
+        patches = lay.patches(ctx.expected['display_version'])
         ctx.run_tool(self.id, py + [lay.recomp / 'gen.py', '--exefs', ctx.game / 'exefs', '--out', gen,
-                                   '--modules', 'main,sdk'], lift_line)
+                                   '--modules', 'main,sdk'] + (['--patches', patches] if patches.is_file() else []),
+                     lift_line)
 
         def build_line(text):
             m = re.match(r'\[(\d+)/(\d+)\]', text)
@@ -417,6 +448,165 @@ class Build(Step):
         return {}
 
 
+# ---- equipment ------------------------------------------------------------------------------------------------------
+
+class Equipment(Step):
+    """Optional: every Road to the Show equipment item, offline (tools/equipment/equipment.py). --equipment adds it and
+    --no-equipment takes it out again. Without either, an install keeps what it has: a later setup run (update,
+    repair, or the game data extracted again) puts the equipment back when it is gone or this release is another."""
+    id, title = 'equipment', 'Road to the Show equipment'
+    MARK = '<!-- rtts-equipment start -->'   # what the tool leaves in the game's item catalog
+
+    def wanted(self, ctx):
+        opt = ctx.options
+        if getattr(opt, 'no_equipment', False):
+            return False
+        return bool(getattr(opt, 'equipment', False) or (ctx.state['steps'].get(self.id) or {}).get('installed')
+                    or Packages.wanted(ctx))
+
+    def owned(self, ctx):
+        """With the packages option the player earns the equipment from packs, so none of it is owned at the start."""
+        return not Packages.wanted(ctx)
+
+    def installed(self, ctx):
+        catalog = ctx.game / 'romfs' / 'FRONTEND' / 'RTTS' / 'INVENTORYDATA.XML'
+        try:
+            return self.MARK in catalog.read_text(encoding='utf-8')
+        except OSError:
+            return False
+
+    def applies(self, ctx):
+        return self.wanted(ctx) or self.installed(ctx)
+
+    def key(self, ctx):
+        return fingerprint('equipment-1', str(self.wanted(ctx)), ctx.layout.release, ctx.expected['update_version'],
+                           *([] if self.owned(ctx) else ['not owned']))
+
+    def current(self, ctx, record):
+        return self.installed(ctx) == self.wanted(ctx)
+
+    def run(self, ctx):
+        lay, rep = ctx.layout, ctx.reporter
+        tool = [lay.python, '-I', '-X', 'utf8', lay.tools / 'equipment' / 'equipment.py']
+        if not self.wanted(ctx):
+            rep.progress(self.id, 'Putting the game files back', force=True)
+            ctx.run_tool(self.id, [*tool, 'uninstall', '--game', ctx.dest])
+            return {'installed': False}
+        rep.progress(self.id, 'Adding the equipment', force=True)
+
+        def line(text):
+            m = re.match(r'pictures: (\d+) of (\d+)', text)
+            if m:
+                rep.progress(self.id, f'Making the item pictures from your game files: {m.group(1)} of {m.group(2)}',
+                             int(m.group(1)), int(m.group(2)), 'items')
+            return bool(m)
+
+        ctx.run_tool(self.id, [*tool, 'install', '--game', ctx.dest, *([] if self.owned(ctx) else ['--no-own'])], line)
+        return {'installed': True}
+
+
+# ---- packages -------------------------------------------------------------------------------------------------------
+
+def set_cfg(cfg, values):
+    """Sets KEY=value lines in mlb.cfg (a value of None takes the key's lines out) and leaves every other line alone.
+    A key may stand in the file as MLB_X, TOTK_X or X, as the game reads it (runtime/mlb/cfg.c)."""
+    def name(key):
+        key = key.strip().upper()
+        return key[5:] if key.startswith('TOTK_') else key[4:] if key.startswith('MLB_') else key
+
+    values = {name(k): (k, v) for k, v in values.items()}
+    lines = cfg.read_text(encoding='utf-8').splitlines() if cfg.is_file() else PLAYER_CFG.splitlines()
+    kept = [line for line in lines if not ('=' in line and not line.lstrip().startswith(('#', ';'))
+                                           and name(line.split('=', 1)[0]) in values) and line != Packages.NOTE]
+    add = [f'{k}={v}' for k, v in values.values() if v is not None]
+    if add:
+        while kept and not kept[-1].strip():
+            kept.pop()
+        kept += ['', Packages.NOTE, *add]
+    while kept and not kept[-1].strip():
+        kept.pop()
+    tmp = cfg.with_name(cfg.name + '.tmp')
+    tmp.write_text('\n'.join(kept) + '\n', encoding='utf-8')
+    os.replace(tmp, cfg)
+
+
+class Packages(Step):
+    """Optional: Road to the Show's Packages without a connection. The game gets a small server on this PC to talk to
+    (tools/packages; runtime/mlb/packages.c starts it with the game), which hands out the equipment packs the game
+    awards and opens them. --packages turns it on, --no-packages off. It needs the equipment (the step above), which
+    then starts not owned: the packs are how the player gets it. Like the equipment, an install that has it keeps it
+    through updates and repairs.
+
+    In the install folder: packages/ (the server and, from a release, the few files of the setup's Python it needs, so
+    the game does not depend on where the setup folder is) and MLB_OFFLINE_PACKAGES=1 in mlb.cfg. What the player
+    earned (profile/offline-packages) stays when the option is taken out."""
+    id, title = 'packages', 'Road to the Show packages'
+    NOTE = "# Road to the Show's Packages without a connection (the setup's option; see packages/README.md)"
+    # what the server needs of the setup's Python: the interpreter, the standard library, TLS and the XML reader
+    PYTHON = ('python.exe', 'python3??.dll', 'python3??.zip', 'vcruntime140*.dll', '_socket.pyd', '_ssl.pyd',
+              'select.pyd', 'pyexpat.pyd', '_hashlib.pyd', 'unicodedata.pyd', 'libssl-*.dll', 'libcrypto-*.dll',
+              'LICENSE.txt')
+
+    @staticmethod
+    def wanted(ctx):
+        opt = ctx.options
+        if getattr(opt, 'no_packages', False) or getattr(opt, 'no_equipment', False):
+            return False
+        return bool(getattr(opt, 'packages', False) or (ctx.state['steps'].get(Packages.id) or {}).get('installed'))
+
+    def installed(self, ctx):
+        try:
+            cfg = (ctx.dest / 'mlb.cfg').read_text(encoding='utf-8')
+        except OSError:
+            return False
+        return (ctx.dest / 'packages' / 'server.py').is_file() and bool(
+            re.search(r'^\s*(MLB_|TOTK_)?OFFLINE_PACKAGES\s*=\s*1\s*$', cfg, re.M | re.I))
+
+    def applies(self, ctx):
+        return self.wanted(ctx) or self.installed(ctx)
+
+    def key(self, ctx):
+        return fingerprint('packages-1', str(self.wanted(ctx)), ctx.layout.release)
+
+    def current(self, ctx, record):
+        return self.installed(ctx) == self.wanted(ctx)
+
+    def run(self, ctx):
+        lay, rep, folder = ctx.layout, ctx.reporter, ctx.dest / 'packages'
+        try:
+            if folder.exists():
+                shutil.rmtree(folder)
+        except OSError as e:
+            raise InstallError(f'{folder} is in use ({e}). Close the game and run the setup again.')
+        if not self.wanted(ctx):
+            rep.progress(self.id, 'Taking the packages option out', force=True)
+            set_cfg(ctx.dest / 'mlb.cfg', {'MLB_OFFLINE_PACKAGES': None, 'MLB_PACKAGES_PYTHON': None})
+            return {'installed': False}
+        rep.progress(self.id, 'Adding the local packages server', force=True)
+        source = lay.tools / 'packages'
+        folder.mkdir(parents=True)
+        for f in sorted(source.glob('*.py')) + [source / 'README.md']:
+            shutil.copy2(f, folder / f.name)
+        python = lay.python   # a checkout has no Python that can be copied: the game is told where the checkout's is
+        if not lay.dev:
+            python = folder / 'python' / 'python.exe'
+            python.parent.mkdir()
+            for pattern in self.PYTHON:
+                found = sorted(lay.python.parent.glob(pattern))
+                if not found:
+                    raise InstallError(f'The setup folder is incomplete (python/{pattern} is missing). Unpack the '
+                                       'whole download again, into an empty folder.')
+                for f in found:
+                    shutil.copy2(f, python.parent / f.name)
+            library = next(python.parent.glob('python3??.zip'))
+            (python.parent / (library.stem + '._pth')).write_text(library.name + '\n.\n', encoding='ascii')
+        # the server once, as the game will run it: reads the item catalog and makes this PC's certificate
+        rep.progress(self.id, 'Checking the server and making its certificate', force=True)
+        ctx.run_tool(self.id, [python, '-I', '-X', 'utf8', folder / 'server.py', '--check', '--game', ctx.dest])
+        set_cfg(ctx.dest / 'mlb.cfg', {'MLB_OFFLINE_PACKAGES': '1', 'MLB_PACKAGES_PYTHON': python if lay.dev else None})
+        return {'installed': True}
+
+
 # ---- finish ---------------------------------------------------------------------------------------------------------
 
 class Finish(Step):
@@ -427,11 +617,12 @@ class Finish(Step):
         cfg = dest / 'mlb.cfg'
         if not cfg.is_file():
             cfg.write_text(PLAYER_CFG, encoding='utf-8')
-        if opt.dlss:
-            self.dlss(ctx)
+        self.upscalers(ctx)
         if opt.shortcut:
             rep.progress(self.id, 'Making shortcuts', force=True)
-            shortcuts(dest / 'mlb.exe')
+            # the launcher when there is one: it starts the game at once and checks for updates once a day
+            launcher = ctx.layout.root / 'Fastball.exe'
+            shortcuts(launcher if launcher.is_file() and not ctx.layout.dev else dest / 'mlb.exe', dest / 'mlb.exe')
         if opt.import_save:
             rep.progress(self.id, 'Copying your Ryujinx save', force=True)
             r = subprocess.run([str(dest / 'mlb.exe'), '--import-save'], cwd=dest, capture_output=True,
@@ -445,45 +636,66 @@ class Finish(Step):
         shutil.rmtree(ctx.temp, ignore_errors=True)
         return {}
 
-    def dlss(self, ctx):
-        rep, target = ctx.reporter, ctx.dest / DLSS_DLL
+    def upscalers(self, ctx):
+        """The upscalers' libraries for this PC's graphics card, without asking: NVIDIA DLSS on a GeForce RTX, AMD FSR
+        (3.1 everywhere, 4 on the Radeons that run it) on any AMD, NVIDIA or Intel card. Each runs only once it is
+        turned on in the game's settings (F1, Graphics), so a library on a PC that never uses it costs only disk space.
+        Every setup and update looks again, so a new graphics card gets its library at the next update. --dlss / --fsr
+        download one whatever the card; --no-dlss / --no-fsr never."""
+        rep, opt = ctx.reporter, ctx.options
+        names = detect.gpus()
+        rep.log('graphics cards: ' + (', '.join(names) if names else 'none found in the registry'))
+        if opt.dlss or (detect.nvidia_rtx(names) and not opt.no_dlss):
+            self.download(ctx, DLSS_DLL, DLSS_URL, DLSS_SIZE, DLSS_SHA256, 'NVIDIA DLSS', 'NVIDIA RTX SDK license')
+        if opt.fsr or (detect.fsr_gpu(names) and not opt.no_fsr):
+            for name, size, sha in FFX_DLLS:
+                if not self.download(ctx, name, FFX_URL + name, size, sha, 'AMD FSR', 'AMD FSR SDK license'):
+                    break
+
+    def download(self, ctx, name, url, size, sha256, label, licence):
+        """url into the install folder as name, checked by size and SHA-256. False when it could not be had (a
+        warning: the game runs without that upscaler)."""
+        rep, target = ctx.reporter, ctx.dest / name
         if target.is_file():
-            return   # this setup's copy, or a newer one the player put there
-        part = ctx.temp / (DLSS_DLL + '.part')
-        rep.log(f'dlss: {DLSS_URL} (NVIDIA RTX SDK license)')
+            return True   # this setup's copy, or a newer one the player put there
+        part = ctx.temp / (name + '.part')
+        rep.log(f'{label}: {url} ({licence})')
         try:
             part.parent.mkdir(parents=True, exist_ok=True)
             h, done = hashlib.sha256(), 0
-            with urllib.request.urlopen(DLSS_URL, timeout=60) as r, open(part, 'wb') as f:
+            with urllib.request.urlopen(url, timeout=60) as r, open(part, 'wb') as f:
                 while block := r.read(1 << 20):
                     f.write(block)
                     h.update(block)
                     done += len(block)
-                    rep.progress(self.id, "Downloading NVIDIA DLSS", min(done, DLSS_SIZE), DLSS_SIZE, 'bytes')
-            if done != DLSS_SIZE or h.hexdigest() != DLSS_SHA256:
+                    rep.progress(self.id, f'Downloading {label}', min(done, size), size, 'bytes')
+            if done != size or h.hexdigest() != sha256:
                 raise OSError(f'{done} bytes, not the expected file')
             os.replace(part, target)
-        except Exception as e:   # urllib's errors, a cut connection, a bad file: the game runs without DLSS
+            return True
+        except Exception as e:   # urllib's errors, a cut connection, a bad file: the game runs without it
             if isinstance(e, KeyboardInterrupt):
                 raise
             part.unlink(missing_ok=True)
-            rep.warning(f'NVIDIA DLSS could not be downloaded ({str(e)[:200]}). The game runs without it; run the '
+            rep.warning(f'{label} could not be downloaded ({str(e)[:200]}). The game runs without it; run the '
                         'setup again to retry.')
+            return False
 
 
-def shortcuts(exe):
-    """'MLB The Show 26' on the desktop and in the Start menu, through the Windows shell (WScript.Shell)."""
+def shortcuts(exe, icon):
+    """'MLB The Show 26' on the desktop and in the Start menu, through the Windows shell (WScript.Shell). Only when the
+    player ticks the option (off by default: the port is portable and keeps to its folder)."""
     script = ("$w = New-Object -ComObject WScript.Shell; "
               "foreach ($d in @([Environment]::GetFolderPath('Desktop'), [Environment]::GetFolderPath('Programs'))) { "
-              "$s = $w.CreateShortcut((Join-Path $d 'MLB The Show 26.lnk')); $s.TargetPath = $env:MLBTS_EXE; "
-              "$s.WorkingDirectory = (Split-Path $env:MLBTS_EXE); $s.IconLocation = $env:MLBTS_EXE + ',0'; "
-              "$s.Description = 'MLB The Show 26 (PC port)'; $s.Save() }")
+              "$s = $w.CreateShortcut((Join-Path $d 'MLB The Show 26.lnk')); $s.TargetPath = $env:FASTBALL_EXE; "
+              "$s.WorkingDirectory = (Split-Path $env:FASTBALL_EXE); $s.IconLocation = $env:FASTBALL_ICON + ',0'; "
+              "$s.Description = 'MLB The Show 26 (Fastball)'; $s.Save() }")
     subprocess.run(['powershell', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script],
-                   env=dict(os.environ, MLBTS_EXE=str(exe)), capture_output=True,
+                   env=dict(os.environ, FASTBALL_EXE=str(exe), FASTBALL_ICON=str(icon)), capture_output=True,
                    creationflags=subprocess.CREATE_NO_WINDOW if os.name == 'nt' else 0)
 
 
-STEPS = (Check, ExeFS, RomFS, Build, Finish)
+STEPS = (Check, ExeFS, RomFS, Build, Equipment, Packages, Finish)
 
 
 def all_steps():

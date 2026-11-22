@@ -1,6 +1,6 @@
 // Win32 adapter of the in-game settings menu: window messages to menu events (menu.h). Window thread.
 // From TotK Recomp runtime/ui/menu_win.cpp @ ae30a61 (MIT, Copyright (c) 2026 Valiantsin Dzerakh).
-// mlbts-native: F1 alone opens and closes the menu. Esc does not open it, because Esc is the game's B (hid.c); with the
+// fastball: F1 alone opens and closes the menu. Esc does not open it, because Esc is the game's B (hid.c); with the
 // menu open, Esc goes to the menu, which closes. F10 cycles the performance overlay, as in TotK. The game reads the
 // keyboard with GetAsyncKeyState (hid.c), which gets nothing while the menu is open.
 #include <windows.h>

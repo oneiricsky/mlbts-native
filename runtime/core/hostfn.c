@@ -190,7 +190,7 @@ void hostfn_seal(void) {
     static RtModule mods[16];   // kept by the dispatcher
     if (sealed) return;
     rt_register_host(RT_RET_HOST, return_sentinel);
-    rt_register_host_range(RT_HOSTFN_BASE, 16ull * (uint64_t)nslots, hostfn_entry);   // mlbts-native (dispatch.c)
+    rt_register_host_range(RT_HOSTFN_BASE, 16ull * (uint64_t)nslots, hostfn_entry);   // fastball (dispatch.c)
     sealed = 1;
     int n = rt_linked_modules(mods, 16);
     rt_dispatch_init(mods, n);

@@ -211,7 +211,7 @@ SN T FN(redo)(Fpcr c, int op, T a, T b, T d, T r) {
 
 SI VTU FN(vsel)(VTS m, VTU x, VTU y) { return (x & (VTU)m) | (y & ~(VTU)m); }
 
-// mlbts-native: NaN results in one vector pass, for the ops whose host result is right in every lane but its NaN
+// fastball: NaN results in one vector pass, for the ops whose host result is right in every lane but its NaN
 // lanes when FPCR.FZ and FPCR.DN are clear (MLB runs with FPCR 0): ADD, SUB, MUL, DIV, MADD (a + b*d) and the min/max
 // family. FPProcessNaNs: the first signalling NaN quietened, else the first quiet NaN, else (an invalid op) the default
 // NaN; MADD gives the default NaN for a quiet NaN addend with inf * 0; FMAXNM/FMINNM give the number when the other
@@ -247,7 +247,7 @@ SI VT FN(nanv)(int op, VT a, VT b, VT d, VT r) {
     }
     return (VT)FN(vsel)(take, res, (VTU)r);
 }
-// mlbts-native: the cold side of a scalar FP op, one call per op (r: the host result): a directed rounding mode
+// fastball: the cold side of a scalar FP op, one call per op (r: the host result): a directed rounding mode
 // (FPCR.RMode) reruns the op in that mode, NaN results of the common ops are fixed in place, the rest is redone exactly.
 SN T FN(sfix)(Fpcr c, int op, T a, T b, T d, T r) {
     if (simd_directed(c)) return FN(slow)(c, op, a, b, d);
@@ -282,7 +282,7 @@ SI VT FN(vflush)(VT a) {
     return (VT)FN(vsel)(den, u & SGN, u);
 }
 
-// mlbts-native: the cold side of a vector FP op, one call per op (r: the host result): NaN lanes of the common ops
+// fastball: the cold side of a vector FP op, one call per op (r: the host result): NaN lanes of the common ops
 // are fixed in one pass when FPCR.FZ, FPCR.DN and FPCR.RMode allow it, otherwise all lanes rerun through the scalar
 // path. One call site per op keeps the cold code small (Win64 passes the vectors through memory).
 SN VT FN(vfix)(Fpcr c, int op, VT a, VT b, VT d, VT r) {

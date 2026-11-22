@@ -26,7 +26,7 @@ enum { T_CLOSE = 2, T_REQUEST = 4, T_CONTROL = 5, T_REQUEST_CTX = 6, T_CONTROL_C
 // Services sm: hands out. Anything else is a named fatal.
 static const struct { const char *name; IpcHandler handler; } services[] = {
     {"audren:u", audren_manager_handler},
-    {"audout:u", audout_manager_handler},   // mlbts-native (audout.c)
+    {"audout:u", audout_manager_handler},   // fastball (audout.c)
     {"nfp:user", nfp_user_manager_handler},
 };
 
@@ -51,7 +51,7 @@ static uint32_t session_clone(IpcSession *s) {
     return kern_handle_new(KERN_SESSION, s);
 }
 
-// ---- CMIF domains (mlbts-native). After ConvertToDomain a session carries objects by id (1-based; object 1 is the
+// ---- CMIF domains (fastball). After ConvertToDomain a session carries objects by id (1-based; object 1 is the
 // session's own service object). Requests then start with a domain header naming the object; interfaces a service
 // returns come back as object ids. Layout per libnx sf/cmif.h (ISC), read for the layout only.
 #define DOMAIN_MAX 64
@@ -245,7 +245,7 @@ static void respond_domain(uint32_t *m, int tipc, const IpcResponse *rs, int dom
     memcpy(m, out, IPC_MSG_BYTES);
 }
 
-// CMIF control requests (domains: mlbts-native).
+// CMIF control requests (domains: fastball).
 static void control(IpcSession *s, const IpcRequest *rq, IpcResponse *rs) {
     switch (rq->cmd) {
     case 0: {   // ConvertToDomain -> object id of the session's own object
@@ -376,7 +376,7 @@ static void dispatch(IpcSession *s, uint32_t *m) {
 
 // ---- sm: service manager (CMIF, and TIPC as the SDK's sm client speaks it since 12.0.0)
 
-// mlbts-native: the first open of each service is logged, later ones only with TOTK_TRACE=ipc (MLB opens audin:u
+// fastball: the first open of each service is logged, later ones only with TOTK_TRACE=ipc (MLB opens audin:u
 // about once a second while it looks for a microphone). Names are the table's own strings, so pointers compare.
 static void log_open(const char *name) {
     static const char *seen[96];
@@ -395,7 +395,7 @@ static void sm_handler(IpcSession *s, const IpcRequest *rq, IpcResponse *rs) {
     case 1: {         // GetServiceHandle(name)
         char name[9] = {0};
         memcpy(name, ipc_arg(rq, 0, 8), 8);
-        if (!rt_service_allowed(name)) {   // mlbts-native: the NPDM's service access list, as sm enforces it
+        if (!rt_service_allowed(name)) {   // fastball: the NPDM's service access list, as sm enforces it
             rt_log("ipc: sm: %s is not in the game's service list: NotAllowed", name);
             rs->result = IPC_R_SM_NOT_ALLOWED;
             // The TIPC reply keeps its move-handle slot on failure: SDK 19.3.11's nn::sm::GetServiceHandle reads
@@ -410,7 +410,7 @@ static void sm_handler(IpcSession *s, const IpcRequest *rq, IpcResponse *rs) {
                 return;
             }
         const char *stable = NULL;
-        IpcHandler extra = rt_service_handler(name, &stable);   // mlbts-native: services the game layer adds
+        IpcHandler extra = rt_service_handler(name, &stable);   // fastball: services the game layer adds
         if (extra) {
             rs->move[rs->nmove++] = ipc_session_new(stable, extra, NULL, NULL);
             log_open(stable);

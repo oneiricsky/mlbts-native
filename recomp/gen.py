@@ -363,7 +363,7 @@ class Emitter:
         # The same holds for registers in locals (recomp/regs.py): fb_<entry> keeps them in the Cpu too.
         local = not all_labels
         spill, reload, reload_call = (regs.SPILL, regs.RELOAD, regs.RELOAD_CALL) if local else ('', '', '')
-        spill_call = regs.SPILL_CALL if local else ''   # mlbts-native: a call keeps X19-X28 in locals (regs.LAZY)
+        spill_call = regs.SPILL_CALL if local else ''   # fastball: a call keeps X19-X28 in locals (regs.LAZY)
         succ = self.flow(insns, entry, end, tables) if local else None
         fp = self.flag_plan(insns, entry, end, tables, succ) if local else None
         if fp and fp.used:
@@ -419,7 +419,7 @@ class Emitter:
             code = fx(i, code)
             if regs.ESCAPE.search(code):
                 return f'{spill}{code}{reload}{fpcr.RELOAD}'
-            return f'{code}{fpcr.RELOAD}' if fpcr.MSR in code else code   # mlbts-native: MSR FPCR (recomp/fpcr.py)
+            return f'{code}{fpcr.RELOAD}' if fpcr.MSR in code else code   # fastball: MSR FPCR (recomp/fpcr.py)
 
         def one(i, r, a):
             """C of one lifted word of a patched site."""
@@ -449,7 +449,7 @@ class Emitter:
         body = []   # (instruction index or None for a label, line); a line belongs to the instruction it lifts
 
         def emit(i, line):
-            body.append((i, vregs.rewrite(line)))   # mlbts-native: V registers on VB (recomp/vregs.py)
+            body.append((i, vregs.rewrite(line)))   # fastball: V registers on VB (recomp/vregs.py)
 
         k = None
         for i, ins in enumerate(insns):
@@ -517,7 +517,7 @@ class Emitter:
             if any('VB' in line or vregs.MACRO.search(line) for _, line in body):   # fb_<entry>: on the Cpu's
                 out.insert(out.index(f'static void {fb}(Cpu *c) {{') + 1, '    vreg *const VB = (vreg *)c->v;')
             out += [line for _, line in body]
-        out, uses_fpcr = fpcr.finish(out)   # mlbts-native: the FP helpers on a local FPCR (recomp/fpcr.py)
+        out, uses_fpcr = fpcr.finish(out)   # fastball: the FP helpers on a local FPCR (recomp/fpcr.py)
         if uses_fpcr:
             at = out.index(f'static void {fb}(Cpu *c) {{') + 1 if all_labels else 2
             out.insert(at, fpcr.DECL)

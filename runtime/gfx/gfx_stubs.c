@@ -50,7 +50,7 @@ void vk_dump_present(uint64_t frame) { (void)frame; }
 void vk_pass_mark_cmd(VkCommandBuffer cb, uint32_t id, int end) { (void)cb, (void)id, (void)end; }
 void vk_pass_marks_report(void) {}
 int vk_pass_marks_want_nv(void) { return 0; }
-// mlbts-native, our own: an RGBA8 PNG with stored (uncompressed) deflate blocks. Big files, no zlib needed; for
+// fastball, our own: an RGBA8 PNG with stored (uncompressed) deflate blocks. Big files, no zlib needed; for
 // test shots only.
 static uint32_t png_crc(uint32_t c, const uint8_t *p, size_t n) {
     static uint32_t t[256];
@@ -160,7 +160,7 @@ void vk_hdr_ui_compose(VkCommandBuffer cb, VkImageView dst_view, VkFormat fmt, u
 void vk_hdr_to_srgb8(const uint8_t *in, uint8_t *out, size_t px, int a2r) { (void)a2r; memcpy(out, in, px * 4); }
 
 // ---- keyboard/mouse input (input_win.c): not ported; the in-game settings menu is ui/menu.cpp.
-// mlbts-native: MLB_SHOT=<frame>[,<frame>...] saves the presented picture of those frames as
+// fastball: MLB_SHOT=<frame>[,<frame>...] saves the presented picture of those frames as
 // <profile>/shot-<frame>.png through gfx_present.c's capture path (the one TotK's menu test shots use).
 void vk_drawlog_arm_at(long frame);   // vk_exec_draw.c
 // One frame's capture, `ahead` presents from now: its draws in the log (MLB_DRAWLOG format) and its picture as
@@ -178,7 +178,7 @@ int mlb_capture_tick(uint64_t frame, const char **shot) {
     static char path[1100];
     static int f12_was;
     // Under RenderDoc F12 (and Print Screen) is its frame capture: ours moves to F9, so one key takes one capture.
-    // mlbts-native: without RenderDoc, F12 only with MLB_CAPTURE_KEY=1. Players press F12 for a screenshot (Steam's
+    // fastball: without RenderDoc, F12 only with MLB_CAPTURE_KEY=1. Players press F12 for a screenshot (Steam's
     // key), and the capture writes every render target as a PNG and the frame's draws into mlb.log: a long stall.
     static int key;
     if (!key) {
@@ -214,7 +214,7 @@ int mlb_capture_tick(uint64_t frame, const char **shot) {
     }
     if (f12 && !f12_was) gfx_capture_arm(2);
     f12_was = f12 != 0;
-    void mlb_state_dump_tick(uint64_t frame);   // mlbts-native: F8, statedump.c (diagnostic)
+    void mlb_state_dump_tick(uint64_t frame);   // fastball: F8, statedump.c (diagnostic)
     mlb_state_dump_tick(frame);
     if ((long)frame == __atomic_load_n(&capture_at, __ATOMIC_RELAXED)) {
         snprintf(path, sizeof path, "%s/shot-%llu.png", rt_config()->profile, (unsigned long long)frame);

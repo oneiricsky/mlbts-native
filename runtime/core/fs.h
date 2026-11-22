@@ -1,7 +1,7 @@
 // Adapted from MacNativeGames games/totk/runtime/fs_host.h @ b75be8cf (MIT, Copyright (c) 2026 MacNativeGames
 // contributors).
 // The nn::fs host layer (fs_host.c): the read-only RomFS and writable save, temporary and cache storage under the
-// profile directory, registered as nn::fs overrides with HOST_OVERRIDE. mlbts-native: TotK's romfs.c interface is
+// profile directory, registered as nn::fs overrides with HOST_OVERRIDE. fastball: TotK's romfs.c interface is
 // gone (the RomFS is a mount kind of fs_host.c), fs_title added.
 #pragma once
 #include <stddef.h>
@@ -23,7 +23,7 @@
 enum { FS_OPEN_READ = 1, FS_OPEN_WRITE = 2, FS_OPEN_APPEND = 4 };   // nn::fs::OpenMode
 enum { FS_ENTRY_DIRECTORY = 0, FS_ENTRY_FILE = 1 };                 // nn::fs::DirectoryEntryType
 
-// ---- mlbts-native: the title's figures from its NACP, which the game layer supplies (runtime/mlb/game.c)
+// ---- fastball: the title's figures from its NACP, which the game layer supplies (runtime/mlb/game.c)
 typedef struct {
     uint64_t program_id;                   // save data owner: IsSaveDataExisting, MountSaveDataReadOnly
     int64_t save_size, save_journal;       // user account save data, before any ExtendSaveData
@@ -39,7 +39,7 @@ void fs_host_set_profile(const char *dir);                 // profile directory;
                                                            // (default rt_config()->profile)
 int fs_save_busy(void);                                    // a save is being written: a save file open for writing,
                                                            // or save data changed in the last 3 s and not committed
-// mlbts-native: --import-save. The committed save becomes a copy of the files in src (another emulator's save folder);
+// fastball: --import-save. The committed save becomes a copy of the files in src (another emulator's save folder);
 // the save it replaces goes to out->backup. 0 on success, else -1 with out->why (fs_host.c).
 // stuck: it failed halfway and why says where each copy is.
 typedef struct { int files, stuck; uint64_t bytes; char backup[1100], why[1400]; } FsImport;

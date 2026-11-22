@@ -95,7 +95,7 @@ static void update_voice(AudioRenderer *r, const AudrenVoiceIn *in) {
     v->in = *in;
     v->use_float_biquads = 0;
     if (!in->in_use) return;
-    if (rt_trace & RT_TRACE_AUDIO) {   // mlbts-native: each sample format and channel count, once (audio_mixer.c sample_at)
+    if (rt_trace & RT_TRACE_AUDIO) {   // fastball: each sample format and channel count, once (audio_mixer.c sample_at)
         static volatile uint32_t seen[16];
         unsigned f = in->sample_format < 16 ? in->sample_format : 15, bit = in->channel_count < 32 ? 1u << in->channel_count : 1;
         if (!(__atomic_fetch_or(&seen[f], bit, __ATOMIC_RELAXED) & bit))

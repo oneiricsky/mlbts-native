@@ -4,7 +4,7 @@
 // MLB_TRACE=sched).
 //
 // Ported from TotK Recomp runtime/perf.c @ ae30a61 (MIT, Copyright (c) 2026 Valiantsin Dzerakh;
-// LICENSE.totk-recomp). mlbts-native leaves out the flight recorder (flight.c), the A/B blocks and TOTK_ONE_PER_CORE:
+// LICENSE.totk-recomp). fastball leaves out the flight recorder (flight.c), the A/B blocks and TOTK_ONE_PER_CORE:
 // rt_ab is 0 and rt_knob is TotK's. The performance overlay's numbers (perfmon.c, the settings menu's
 // MLB_PERF_OVERLAY) came back with the menu on 2026-11-13.
 #include <stdio.h>
@@ -212,7 +212,7 @@ static void perf_gpu_line(uint64_t frame, double interval_ms, double pace_share,
                (double)g.idle_gaps / n, g.max_gap_ns / 1e6, g.gpu_parts ? g.queued_ns / 1e6 / g.gpu_parts : 0.0);
 }
 
-int rt_ab(void) { return 0; }   // no A/B blocks in mlbts-native
+int rt_ab(void) { return 0; }   // no A/B blocks in fastball
 
 int rt_knob(const char *name, const char *def) {   // "ab" -> 2, "0" -> 0, anything else -> 1
     char key[64];

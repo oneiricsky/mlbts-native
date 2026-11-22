@@ -1,4 +1,4 @@
-// mlbts-native, our own: RenderDoc captures of whole game frames (replaces the gfx_stubs.c no-ops of TotK's rdoc.c).
+// fastball, our own: RenderDoc captures of whole game frames (replaces the gfx_stubs.c no-ops of TotK's rdoc.c).
 //
 // Under RenderDoc (renderdoc.dll injected, e.g. tools/renderdoc.cmd), its own capture keys capture from one host
 // present to the next. In menus the game presents some frames without drawing anything new, so such a capture held only

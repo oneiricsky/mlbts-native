@@ -1,4 +1,4 @@
-// mlbts-native: from TotK Recomp runtime/perfmon.h @ ae30a61 (MIT, Copyright (c) 2026 Valiantsin Dzerakh), for the settings
+// fastball: from TotK Recomp runtime/perfmon.h @ ae30a61 (MIT, Copyright (c) 2026 Valiantsin Dzerakh), for the settings
 // menu (ui/menu.cpp). Unchanged.
 // Performance overlay numbers (perfmon.c): the game's frame rate and frame times, the render thread's waits
 // from the perf counters, and the machine's CPU, memory and GPU load and temperatures. A value the machine does not give

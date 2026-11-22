@@ -16,13 +16,13 @@
 #include "cpu.h"
 
 typedef __uint128_t u128;
-// mlbts-native: the FP helpers take the guest FPCR as a value (their parameter keeps the name c), not the
+// fastball: the FP helpers take the guest FPCR as a value (their parameter keeps the name c), not the
 // Cpu: generated code passes its local copy FPCR (recomp/gen.py), which guest stores cannot alias, so the
 // rounding-mode check of every FP op is a register test instead of a load from the Cpu (5 % of the samples in
 // game code during a match).
 typedef uint64_t Fpcr;
 #define SI static inline __attribute__((always_inline))
-// mlbts-native: the slow paths keep every register (preserve_all): each FP op of the lifted code has a rarely taken
+// fastball: the slow paths keep every register (preserve_all): each FP op of the lifted code has a rarely taken
 // call to one, and under the Win64 convention those calls clobber XMM0-5, so clang spilled the guest's V registers
 // (recomp/vregs.py keeps them in XMM registers) around every op of a loop.
 #define SN static __attribute__((noinline, preserve_all, cold))
@@ -39,11 +39,11 @@ typedef uint64_t __attribute__((may_alias)) sa64;
 typedef float __attribute__((may_alias)) saf32;
 typedef double __attribute__((may_alias)) saf64;
 typedef u128 __attribute__((aligned(1), may_alias)) u128u;
-typedef uint64_t vreg __attribute__((vector_size(16), may_alias));   // mlbts-native: one V register in VB
+typedef uint64_t vreg __attribute__((vector_size(16), may_alias));   // fastball: one V register in VB
 
 // ---- registers: VREG = whole V register as a vector type; VQ = source with the upper half cleared when
 // Q=0; VW = write, zeroing the upper half when Q=0. Scalar views of lane 0: VS8..VS64, VSF32/VSF64.
-// mlbts-native: on VB, the V register file of the generated function: a local `vreg VB[32]` the function syncs with
+// fastball: on VB, the V register file of the generated function: a local `vreg VB[32]` the function syncs with
 // c->v (recomp/vregs.py), or c->v itself. The helpers that take register numbers take VB after the Cpu. Every access
 // is a whole-register vector access (VGET/VSET for the 128-bit integer, element reads for the scalar views, vector
 // lanes for INS/UMOV): pointer views of 4 or 8 bytes into a register made clang keep it as a 128-bit integer in two
