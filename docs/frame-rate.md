@@ -63,6 +63,101 @@ perf: frame rate: game time 4.72 s in 4.72 s (1.000), 127.2 fps, unlocked
 RTX 3060 Ti): at a limit of 144, 123-141 fps and 0.99-1.02; at 60, 59-60 fps and 1.00-1.14 (the windows above 1 also
 appear at 60: the averaged step catching up after long frames).
 
+## What limits the frame rate in heavy scenes
+
+Measured on 2026-11-22 (1.0.20, Ryzen 5 5600X, RTX 3060 Ti, DLAA on, `MLB_FPS_LIMIT=240`), from `MLB_TRACE=perf` logs,
+F12 captures and sampler profiles of an exhibition match and the attract match. Scenes like the outfield fan cam run at
+about 78 fps while lighter ones look the same and run much faster; this is why.
+
+### The frame is a sum, not an overlap
+
+The game hands a frame over (`nvnQueueSubmitCommands`) and right away waits for that same frame's GPU work: its main
+thread polls an event word (`nvnEventGetValue`, 1.0.20 `f_70005a1a90`) until the GPU signal at the end of the frame
+arrives. Only then does it start the next frame. On the Switch that wait is the GPU's own time. Here it is everything the
+port does after the submit. The `nvn: game GPU wait burst` lines time one wait from its start:
+
+| step | ms from the submit |
+|---|---|
+| the replay thread starts translating the frame | +0.2 |
+| replay done, last part submitted | +7.2 to +10.1 |
+| the GPU reaches the signal | +9.3 to +12.2 |
+| the game sees it and goes on | +9.6 to +12.2 |
+
+Then the game runs its own code for the next frame for 5.3 to 6.8 ms. So a heavy frame costs roughly
+**game code (5-7 ms) + replay (7-10 ms) + the GPU's tail after the replay (about 2 ms)**, one after another. The GPU
+itself is busy only about 3.7 ms per frame and idle the rest, waiting for the next submission. In the fan cam (about 3,000
+draws) the replay alone is 8.2 ms of a 12.7 ms frame. A scene with fewer draws gets a shorter replay, hence the large
+frame rate differences between scenes that look alike.
+
+Selecting a pitch raises the frame rate by about 10 fps every time: the pitch overlay goes away with its draws, and the
+replay and the GPU's tail get shorter by that much. It is not a port bug.
+
+### Where the replay's time goes
+
+In gameplay the replay handles about 25,000 commands per frame. Most of its time is draws: about 665 indexed draws at
+about 6.4 us each (`perf: frame N: replay by command`). Per draw it resolves the shaders and pipeline, checks feedback
+between the targets and the textures, finds every texture and uniform block in the caches and builds the descriptors.
+In the sampler profile of the attract match (replay thread only):
+
+| part | share of replay time |
+|---|---|
+| `prepare_draw` (shaders, pipeline, resources) | 48 % |
+| `bind_resources` (descriptors; inside `prepare_draw`) | 20 % |
+| the uniform snapshot at the start of a submission (`vk_usnap_begin`) | 10 % |
+| the VRAM mirror check at the start (`vk_mem_mirror_begin`, mostly `GetWriteWatch`) | 8 % |
+| feedback checks (`feedback_prepare`) | 8 % |
+| shader lookups (`shader_for`) | 7 % |
+
+The rest is spread thin. These functions were already heavily tuned; much of what is left is the CPU waiting for memory.
+
+DLAA costs 1.17 ms of GPU time per frame (`MLB_DLSS_TIMES=1`), most of the GPU's tail after the replay.
+
+### What was done (dev, November 2026)
+
+| change | effect in the attract match |
+|---|---|
+| the replay reads the clock less often when it decides where to split a submission (`c9fdcd7`) | `QueryPerformanceCounter` was 7.6 % of the replay's busy time |
+| finished parts go to the recorder thread without waiting; the compute shader dump is off unless `MLB_DISPATCH_DUMP` is set; the last program lookups are remembered (`d5cf456`) | replay 3.41/3.53 -> 3.31/3.25 ms per frame; time spent waiting for the recorder 624 -> 212 ms per log period; fps unchanged within noise |
+| the runtime is compiled with a profile of the attract match (`573f132`, `docs/runtime-port.md`) | replay 3.22 -> 2.92 ms per frame, 149.6 -> 155.8 fps |
+
+Tried and reverted: splitting submissions inside a pass as well as between passes (the GPU's tail stayed at about
+2.7 ms).
+
+### Options considered and not taken
+
+- **Translating one frame on several threads at once.** Each draw depends on what earlier draws in the same frame did:
+  whether a texture exists yet and whether another image just drew over its memory (which decides copying or clearing
+  its content; the aliasing behind most "image from another menu" bugs), whether an earlier GPU write changed a uniform
+  block (later draws then read the new values, not the snapshot), whether a barrier between compute jobs can be skipped,
+  and a dozen small records that let a draw skip work when it matches the previous one. Splitting the replay would mean
+  rebuilding about 15,000 lines into a serial "decide" pass and a parallel "build" pass; the work free of these
+  dependencies is too small and scattered to hand to other threads on its own.
+- **Letting the game prepare the next frame while the port replays this one** (the port would end the game's wait
+  before the GPU is done, one frame ahead). Frames would overlap: about 7.5 ms apart instead of 15 ms in the
+  heavy scenes. The input delay grows by about 2 ms (one frame, but a frame half as long), not by a frame of today's
+  length. Not done: the user prefers no added delay, and the game may read GPU results after its wait that would not be
+  ready yet; that would have to be checked first.
+- **Starting the replay while the game is still recording the frame.** Same order problem as above, and the game writes
+  uniform data up to the submit.
+
+### Smaller options still open (no added delay)
+
+- The uniform snapshot and the mirror check at the start of each submission (about 18 % of the replay in the attract
+  match) on helper threads: roughly 0.5-1 ms per heavy frame.
+- A profile for the game's own code (5-7 ms of a heavy frame; typically 10-20 % faster) would help only the dev build:
+  its counts are data taken from the game's code, which a release must not carry. General lessons about the translator's
+  own output (its rarely taken error paths) could go into `recomp/` instead.
+- DLAA off or a cheaper AA (F1 menu) shortens the GPU's tail by up to 1.2 ms.
+
+### Measuring
+
+- Compare builds with the same settings and alternate the runs: the attract match differs from run to run, and the
+  sampler (`MLB_SAMPLER=on`, the dev `mlb.cfg`) slows the game noticeably. Turn it off for frame rate comparisons.
+- `perf: frame N: replay by command` covers 600 frames; a block with an F12 capture in it (draw logs, screenshots) shows
+  per-draw costs twice as high. Skip those blocks.
+- The sampler writes `work/profile/prof.txt` only when the game exits normally (close the window, or `taskkill` without
+  `/F`), and a profile must be read with the `mlb.map` of the build that made it.
+
 ## Supporting another game version
 
 `k_addrs[]` in `framerate.c` lists, per version, the GOT slots of the vsync count and the averaging flag, and the

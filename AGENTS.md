@@ -201,6 +201,9 @@ keeps that name until it is renamed (GitHub then redirects the old URLs, the upd
   keeps in its data. `MLB_FPS_LIMIT` (F1 → Display) other than 60 sets that count to 0 at each present and the
   present pacer holds the limit (`runtime/mlb/framerate.c`, `docs/frame-rate.md`). No game code is patched.
   `MLB_TRACE=perf` logs game time against wall time (`perf: frame rate:`).
+- Heavy scenes (fan cam) are slow because the game waits for each frame's GPU signal before starting the next: game
+  code + replay + the GPU's tail add up. What was measured, done and ruled out: `docs/frame-rate.md`, "What limits the
+  frame rate in heavy scenes".
 
 ## Audio notes
 
