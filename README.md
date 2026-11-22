@@ -19,8 +19,13 @@ What has changed so far:
   `AIvAI` + `GameOnly` boot straight into an AI-vs-AI game with no input. The full option table,
   hashes and the mechanism are in [docs/dev-config.md](docs/dev-config.md).
 - **PS5 textures (optional).** With an index made by `tools/make_hd_index.py` from your own PS5 dump,
-  players' face normal maps (one player or all 2,370 that match) are the PS5 ones instead of the Switch ones
-  (`MLB_HD_TEXTURES`); the colour maps are left out for now. How it works and its limits are in [docs/ps5-textures.md](docs/ps5-textures.md).
+  players' face textures are the sharper PS5 ones instead of the Switch ones: the normal maps (skin detail, stubble)
+  for all 2,370 matching heads, and, with `--color`, the colour maps too. A PS5 colour map used to turn faces bright
+  yellow; that is fixed, but it is checked on only a few heads, so colour maps stay opt-in for now. In six 400 s test
+  runs on one PC (RX 6700 XT) the frame rate stayed at about 59 fps with HD textures on, with no memory growth and
+  about 0.5 to 0.8 s of one-time loading per match. Set `MLB_HD_TEXTURES=off` to turn it off. The textures are read from
+  your own dump; nothing from it is distributed. How it works, its limits and the measurements are in
+  [docs/ps5-textures.md](docs/ps5-textures.md) and [docs/reports](docs/reports/).
 
 
 <details>
