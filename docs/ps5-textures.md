@@ -7,7 +7,7 @@ maps are left out because they break the face (see Known limits).
 ## Using it
 
 ```
-python -I tools/make_hd_index.py --ps5 E:/PPSA30630/PPSA30630-app --romfs work/build/game/romfs \
+python -I tools/make_hd_index.py --ps5 <PS5 dump folder> --romfs work/build/game/romfs \
     --out work/build/hdtex/index.txt --heads OHTANI_SHOHEI
 ```
 
