@@ -86,7 +86,8 @@ def switch_variants(path):
 
 
 def ps5_info(path):
-    d = path.read_bytes()
+    with open(path, "rb") as f:
+        d = f.read(0x200)
     if d[:8] != b"TX12PS5\0":
         sys.exit(f"{path}: not a PS5 TX12 file")
     return struct.unpack_from("<HH", d, 0x84), u32(d, 0x8c), u32(d, 0x15c) & 0xFFFF
@@ -102,18 +103,31 @@ def main():
     ap.add_argument("--heads", nargs="*", default=[], help="player folders under CHARACTERS/HEADS (their NORMAL maps)")
     ap.add_argument("--color", action="store_true",
                     help="--heads also takes the COLOR maps: the face then renders bright yellow (docs/ps5-textures.md)")
+    ap.add_argument("--all-heads", action="store_true",
+                    help="every player folder under CHARACTERS/HEADS that has a NORMAL map in both the Switch files and the PS5 dump")
     ap.add_argument("tex", nargs="*", help="paths under NSW/ (and PS5/)")
     a = ap.parse_args()
     paths = list(a.tex)
-    for n in a.heads:
+    heads = list(a.heads)
+    if a.all_heads:
+        base = Path(a.romfs) / "NSW" / "CHARACTERS" / "HEADS"
+        for d in sorted(x.name for x in base.iterdir() if x.is_dir()):
+            if (base / d / f"{d}-NORMAL.TEX").exists() and (Path(a.ps5) / "PS5" / "CHARACTERS" / "HEADS" / d / f"{d}-NORMAL.TEX").exists():
+                heads.append(d)
+    for n in heads:
         paths += [f"CHARACTERS/HEADS/{n}/{n}-NORMAL.TEX"] + ([f"CHARACTERS/HEADS/{n}/{n}-COLOR.TEX"] if a.color else [])
     lines = []
     for rel in paths:
-        (pw, ph), pn, code = ps5_info(Path(a.ps5) / "PS5" / rel)
+        try:
+            (pw, ph), pn, code = ps5_info(Path(a.ps5) / "PS5" / rel)
+            variants = switch_variants(Path(a.romfs) / "NSW" / rel)
+        except (SystemExit, OSError) as e:
+            print(f"{rel}: skipped ({e})")
+            continue
         if code not in (13, 22):
             print(f"{rel}: PS5 format code {code} is not BC1 or BC7, skipped")
             continue
-        for w, h, nm, pre in switch_variants(Path(a.romfs) / "NSW" / rel):
+        for w, h, nm, pre in variants:
             drop = 0
             while drop + 1 < pn and (pw >> (drop + 1)) >= w * a.scale:
                 drop += 1
@@ -122,6 +136,15 @@ def main():
             hd = (max(1, pw >> drop), max(1, ph >> drop))
             lines.append(f"{fnv64(pre):016x} {w} {h} {nm} {drop} PS5/{rel}")
             print(f"{rel}: Switch {w}x{h} ({nm} levels) -> PS5 {hd[0]}x{hd[1]} (drop {drop})")
+    seen = {}
+    for ln in lines:
+        key = tuple(ln.split()[:4])
+        seen.setdefault(key, set()).add(ln.split()[5])
+    dup = {k for k, v in seen.items() if len(v) > 1}
+    if dup:
+        n0 = len(lines)
+        lines = [ln for ln in lines if tuple(ln.split()[:4]) not in dup]
+        print(f"{n0 - len(lines)} entries dropped: their Switch textures share a hash, so the PS5 file could not be told apart")
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(f"root {a.ps5}\n" + "\n".join(lines) + "\n")
