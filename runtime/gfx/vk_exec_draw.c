@@ -630,6 +630,12 @@ static VkFormat sampled_view_format(const VkTexImage *img, const view_t *v, int 
     return b.vk != img->format && b.vk == srgb_twin(img->format) ? b.vk : img->format;
 }
 
+// mlbts-native: set while a compute dispatch is recorded. Compute passes address a texture by integer texel in the game's own
+// coordinates (the face skin-tone measurement fetches a rectangle of the colour map and normalises by the size it queries),
+// so a PS5 image, which is larger than the Switch texture the game sized them for, is bound from the level that has the
+// Switch's size: the full level made it average the wrong quarter of the map, and the face shader divided by that and
+// rendered bright yellow. Fragment shaders sample by normalised coordinates and keep the full-size image.
+static int cur_texel;
 static VkImageView get_view(VkExec *ex, const VkTexImage *img, const view_t *v, int hv, uint16_t rtype, int storage) {
     VkImageViewType vt = res_view_type(rtype);
     int ms = (rtype & 0x200) != 0;
@@ -649,6 +655,7 @@ static VkImageView get_view(VkExec *ex, const VkTexImage *img, const view_t *v, 
     }
     if (!ok) return VK_NULL_HANDLE;
     uint32_t l0 = hv && v->set_levels ? v->base_level : 0;
+    if (img->hd_shift && cur_texel && !storage) l0 += img->hd_shift < img->levels ? img->hd_shift : img->levels - 1u;
     if (l0 >= img->levels) return VK_NULL_HANDLE;
     uint32_t nl = hv && v->set_levels && v->nlevels ? v->nlevels : img->levels - l0;
     if (l0 + nl > img->levels) nl = img->levels - l0;
@@ -1866,7 +1873,7 @@ static void tex_info_lookup(VkExec *ex, const GfxShaderRes *r, uint64_t h, int s
                             VkDescriptorImageInfo *out) {
     int td_on = td_mode();
     VkImage image;
-    if (!h || storage || !td_on) return tex_info_full(ex, r, h, storage, separate, out, &image);
+    if (!h || storage || !td_on || cur_texel) return tex_info_full(ex, r, h, storage, separate, out, &image);   // the memo is not per stage
     uint32_t gen = vk_texture_slots_gen(), ep = vk_texture_epoch(), sg = vk_sampler_gen();   // before any lookup
     typeof(TD[0]) *m = &TD[td_index(h, r->type, separate)];
     if (m->valid && m->h == h && m->type == r->type && m->separate == separate && m->sgen == sg &&
@@ -5570,9 +5577,9 @@ void vk_exec_op_draw(VkExec *ex, uint32_t op, const void *payload) {
     case OP_UPDATE_UB: op_update_ub(ex, payload); break;
     case OP_DRAW: op_draw(ex, payload); break;
     case OP_DRAW_IDX: op_draw_idx(ex, payload); break;
-    case OP_DISPATCH: op_dispatch(ex, payload); break;
+    case OP_DISPATCH: cur_texel = 1, op_dispatch(ex, payload), cur_texel = 0; break;
     case OP_DRAW_IDX_IND: op_draw_idx_ind(ex, payload); break;
-    case OP_DISPATCH_IND: op_dispatch_ind(ex, payload); break;
+    case OP_DISPATCH_IND: cur_texel = 1, op_dispatch_ind(ex, payload), cur_texel = 0; break;
     default: rt_fatal("vk: op %s is not a draw op", nvn_op_name(op));
     }
 }

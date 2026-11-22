@@ -1,26 +1,25 @@
 # MLB The Show 26: native Windows port (fork)
 
-This is a personal fork of [sam110411/mlbts-native](https://github.com/sam110411/mlbts-native), the static
-recompilation of MLB The Show 26 (Nintendo Switch) into a native Windows program. The upstream README is kept
-unchanged in the collapsed section below. Its download links and release instructions point to upstream, not to this
-fork.
+A personal fork of [sam110411/mlbts-native](https://github.com/sam110411/mlbts-native), a static recompilation of
+MLB The Show 26 (Nintendo Switch) into a native Windows program. The upstream README is in the collapsed section
+below, unchanged. Its download links and release instructions point to upstream, not to this fork.
 
 ## What this fork is for
 
-Performance improvements on an AMD Radeon RX 6700 XT
+Making the game run and look better on an AMD Radeon RX 6700 XT. Changes so far:
 
-What has changed so far:
+| Feature | Behavior | Usage | Depends On |
+| --- | --- | --- | --- |
+| Background pipeline builds | Shader pipelines build on background workers, and ones recorded by earlier runs are built at boot, so a draw doesn't wait on a shader compile. | Built-In | Nothing |
+| Skip boot intro | Skips the two boot intro movies, so the game goes from the loading screen to the title. | `MLB_SKIP_INTRO`, or F1 → Game → Skip intro logos | Nothing |
+| Dev options | The game's own hidden dev options work. `AIvAI` plus `GameOnly` boots straight into an AI-vs-AI game with no input. | Option table and hashes: [docs/dev-config.md](docs/dev-config.md) | Nothing |
+| PS5 face normal maps | Swaps each player's face normal map (skin detail, stubble) for the PS5 one, for 2,370 heads. | Build an index with `tools/make_hd_index.py`; `MLB_HD_TEXTURES=off` turns it off | Your own PS5 dump |
+| PS5 face colour maps | The same swap for colour maps. They used to turn faces yellow; that is fixed, but only a few faces have been checked, so they stay off unless asked for. | Add `--color` when building the index | Your own PS5 dump |
+| Run summary | Turns one test run's log into a JSON summary of frame rate, slow frames and PS5 texture loads. | `python -I tools/perf_summary.py <log>` | A run log |
 
-- **Pipeline builds moved off the replay thread.** Pipelines build on background workers and the ones
-  recorded by earlier runs are prebuilt at boot, so a draw never waits on a fresh shader compile.
-- **Boot intro skip.** `MLB_SKIP_INTRO` (F1 → Game → *Skip intro logos*) leaves out the two boot
-  intro movies; the game goes from the loading screen straight to the title.
-- **Dev-config harness.** The game's own hidden dev options work in this build:
-  `AIvAI` + `GameOnly` boot straight into an AI-vs-AI game with no input. The full option table,
-  hashes and the mechanism are in [docs/dev-config.md](docs/dev-config.md).
-- **PS5 textures (optional).** With an index made by `tools/make_hd_index.py` from your own PS5 dump,
-  players' face normal maps (one player or all 2,370 that match) are the PS5 ones instead of the Switch ones
-  (`MLB_HD_TEXTURES`); the colour maps are left out for now. How it works and its limits are in [docs/ps5-textures.md](docs/ps5-textures.md).
+In six 400-second test runs on an RX 6700 XT the game ran at about 59 fps with and without PS5 textures, memory did not
+grow, and loading the faces took 0.5 to 0.8 seconds once per match. The textures are read from your own dump and are not
+part of any release. Details and numbers: [docs/ps5-textures.md](docs/ps5-textures.md) and [docs/reports](docs/reports/).
 
 
 <details>

@@ -5,7 +5,7 @@ The game creates each head texture at its own Switch size and copies the file's 
 port recognises a texture at upload by a hash of the first 16 KiB of its storage and gives it a larger image made from
 the PS5 file of the same name (docs/ps5-textures.md). This tool computes those hashes from the Switch files.
 
-  python -I tools/make_hd_index.py --ps5 E:/PPSA30630/PPSA30630-app --romfs work/build/game/romfs \
+  python -I tools/make_hd_index.py --ps5 <PS5 dump folder> --romfs work/build/game/romfs \
       --out work/build/hdtex/index.txt --heads OHTANI_SHOHEI [--scale 4] [--color] [path under NSW/ ...]
 
 One line per Switch variant of a texture: `<hash> <width> <height> <levels> <drop> <PS5 file>`; drop is how many of
@@ -102,7 +102,7 @@ def main():
     ap.add_argument("--max-dim", type=int, default=1024, help="largest HD side (default 1024)")
     ap.add_argument("--heads", nargs="*", default=[], help="player folders under CHARACTERS/HEADS (their NORMAL maps)")
     ap.add_argument("--color", action="store_true",
-                    help="--heads also takes the COLOR maps: the face then renders bright yellow (docs/ps5-textures.md)")
+                    help="--heads also takes the COLOR maps (checked on two heads so far; docs/ps5-textures.md)")
     ap.add_argument("--all-heads", action="store_true",
                     help="every player folder under CHARACTERS/HEADS that has a NORMAL map in both the Switch files and the PS5 dump")
     ap.add_argument("tex", nargs="*", help="paths under NSW/ (and PS5/)")
