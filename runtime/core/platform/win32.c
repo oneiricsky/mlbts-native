@@ -857,7 +857,7 @@ void plat_aligned_free(void *p) { _aligned_free(p); }
 // ---- process
 
 #ifdef TOTK_PGO_GEN
-// compiler-rt's profile runtime (an instrumented build, tools/build_game.py --pgo gen). It writes its counters from an
+// compiler-rt's profile runtime (an instrumented build, tools/build.py --pgo gen). It writes its counters from an
 // atexit handler, which ExitProcess skips; __llvm_profile_dump writes them once and makes later writes no-ops.
 int __llvm_profile_dump(void);
 int __llvm_profile_write_file(void);
@@ -873,7 +873,23 @@ static DWORD WINAPI pgo_flush_thread(void *arg) {
     }
 }
 
+void __llvm_profile_set_filename(const char *name);
+
 __attribute__((constructor)) static void pgo_flush_start(void) {
+    // fastball: tools/build.py --pgo gen instruments the runtime only, without a folder in the flag (its path would
+    // carry spaces into every compile): the counts go to pgo\ beside mlb.exe, one file per build (%m), which every run
+    // adds to. LLVM_PROFILE_FILE still names another.
+    static char dir[MAX_PATH + 32];   // the profile runtime keeps the pointer, not a copy
+    DWORD n = GetModuleFileNameA(NULL, dir, MAX_PATH);
+    if (!getenv("LLVM_PROFILE_FILE") && n && n < MAX_PATH) {
+        char *slash = strrchr(dir, '\\');
+        if (slash) {
+            strcpy(slash + 1, "pgo");
+            CreateDirectoryA(dir, NULL);
+            strcat(dir, "\\mlb_%m.profraw");
+            __llvm_profile_set_filename(dir);
+        }
+    }
     HANDLE h = CreateThread(NULL, 0, pgo_flush_thread, NULL, 0, NULL);
     if (h) CloseHandle(h);
 }

@@ -55,6 +55,8 @@ Run Python as `.venv/Scripts/python -I <script>`. `-I` matters: user site-packag
 work/build/mlb.exe                               # paths default to work/update/exefs, work/romfs/romfs, work/profile
 ```
 
+The runtime is built with a profile (`tools/data/runtime.profdata`, profile-guided optimisation; `--pgo off` without
+it). Retrain it after large replay changes (`tools/pgo.py`, `docs/runtime-port.md`); the game's code never gets one.
 First-time setup (only for a fresh checkout): see `docs/runtime-port.md`. In short: extract the ExeFS and RomFS with
 `tools/romfs_dump.py` and the keys, then `recomp/gen.py`, `tools/fetch_deps.py` and `tools/build_xlate.py`.
 `mlb.exe` is locked while the game runs: the link fails then, so check `tasklist` first.

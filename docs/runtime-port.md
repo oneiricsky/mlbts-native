@@ -70,6 +70,24 @@ work/build/mlb.exe
 when `work/gen` was generated from another version's `main`. The dev tree runs 1.0.20; 1.0.15's files are in
 `work/update-1.0.15` and `work/romfs-1.0.15` (AGENTS.md, "Game versions").
 
+### Profile-guided optimisation of the runtime
+
+The runtime (not the game's code) is compiled with `tools/data/runtime.profdata`, counts of which runtime functions and
+branches run most in the attract match. `tools/build.py` uses it by default (`--pgo off` leaves it out), and the
+release's `libmlbrt.a` is built with it, so players get the faster runtime without a profile of their own. It holds only
+runtime function names and counts: the game's code is never instrumented. Functions changed since the training compile
+as without a profile; train again after large changes to the replay:
+
+```bash
+.venv/Scripts/python -I tools/build.py --pgo gen        # mlb.exe whose runtime counts (slower)
+work/build/mlb.exe                                      # MLB_TRACE=none MLB_SAMPLER=off: the attract match, 3 minutes
+.venv/Scripts/python -I tools/pgo.py merge              # work/build/pgo/*.profraw -> tools/data/runtime.profdata
+.venv/Scripts/python -I tools/build.py                  # the normal build again
+```
+
+Train with the diagnostics off (`MLB_TRACE=none MLB_SAMPLER=off MLB_CAPTURE_KEY=0` in the environment), as players
+run: otherwise their branches count as the common case.
+
 The game's RomFS must be extracted first (1.0.20: 37.9 GB, 86,235 files; 1.0.15: 37.4 GB, 84,634 files; about 3.5
 minutes at 150-190 MiB/s). Extraction is
 resumable, and it writes `work/romfs/romfs.complete` only once every listed file is there at its size; `MountRom`
