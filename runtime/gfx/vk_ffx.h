@@ -25,8 +25,9 @@ void vk_ffx_ran(void);       // vk_dlaa.c, after each FSR frame (the status's "a
 // are moved to shader-read for FSR (AMD's Vulkan integration guide) and back. jx, jy: the jitter the scene was drawn
 // with, in render pixels (window x right, y down); the motion vectors are render pixels, without the jitter, pointing
 // from this frame's position to last frame's (DLSS's convention, which FSR shares).
+// reactive: FSR's reactive mask (R32F at the render size, vk_dlaa.c mask_pass), VK_NULL_HANDLE for none.
 typedef struct {
-    VkImage color, depth, mv, out;
+    VkImage color, depth, mv, out, reactive;
     VkFormat color_fmt, depth_fmt;      // the scene's light target and depth formats; mv RG16F, out RGBA16F
     uint32_t color_level, color_layer, depth_level, depth_layer;
     uint32_t w, h, ow, oh;              // render size, output size

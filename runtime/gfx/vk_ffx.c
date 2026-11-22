@@ -20,8 +20,10 @@
 //
 // The inputs (vk_dlaa.c): the scene's light (linear HDR, B10G11R11 float: FFX_UPSCALE_ENABLE_HIGH_DYNAMIC_RANGE, with
 // FSR's own exposure), its depth (D32_SFLOAT_S8_UINT here; FSR reads the depth plane of a D32S8 image itself, AMD's
-// guide; not inverted, near is 0), the camera motion vectors and the jitter. The output, RGBA16F at the output size,
-// replaces the scene for the game's composite draw, exactly as DLSS's does.
+// guide; not inverted, near is 0), the camera motion vectors, the jitter and a reactive mask of what moved on its own
+// (runtime/shaders/fsr_mask.comp: the vectors are the camera's only, which DLSS copes with and FSR 3.1 does not; without
+// the mask moving players and the ball left heavy ghost trails). The output, RGBA16F at the output size, replaces the
+// scene for the game's composite draw, exactly as DLSS's does.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -231,18 +233,21 @@ static int depth_has_stencil(VkFormat f) {
     return f == VK_FORMAT_D32_SFLOAT_S8_UINT || f == VK_FORMAT_D24_UNORM_S8_UINT || f == VK_FORMAT_D16_UNORM_S8_UINT;
 }
 
-// The three inputs between GENERAL and shader-read (to_read) for AMD's runtime, through the recorder.
+// The inputs (three, four with the reactive mask) between GENERAL and shader-read (to_read) for AMD's runtime,
+// through the recorder.
 static void inputs_layout(VkCommandBuffer cb, const VkFfxFrame *f, int to_read) {
     VkImageLayout a = to_read ? VK_IMAGE_LAYOUT_GENERAL : VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
     VkImageLayout b = to_read ? VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL : VK_IMAGE_LAYOUT_GENERAL;
-    VkImage im[3] = {f->color, f->depth, f->mv};
-    VkImageSubresourceRange sr[3] = {
+    VkImage im[4] = {f->color, f->depth, f->mv, f->reactive};
+    VkImageSubresourceRange sr[4] = {
         {VK_IMAGE_ASPECT_COLOR_BIT, f->color_level, 1, f->color_layer, 1},
         {VK_IMAGE_ASPECT_DEPTH_BIT | (depth_has_stencil(f->depth_fmt) ? VK_IMAGE_ASPECT_STENCIL_BIT : 0),
          f->depth_level, 1, f->depth_layer, 1},
+        {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
         {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}};
-    VkImageMemoryBarrier2 ib[3];
-    for (int i = 0; i < 3; i++)
+    uint32_t n = f->reactive ? 4 : 3;
+    VkImageMemoryBarrier2 ib[4];
+    for (uint32_t i = 0; i < n; i++)
         ib[i] = (VkImageMemoryBarrier2){.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
                                         .srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
                                         .srcAccessMask = VK_ACCESS_2_MEMORY_WRITE_BIT,
@@ -252,7 +257,7 @@ static void inputs_layout(VkCommandBuffer cb, const VkFfxFrame *f, int to_read) 
                                         .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
                                         .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, .image = im[i],
                                         .subresourceRange = sr[i]};
-    VkDependencyInfo di = {.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 3,
+    VkDependencyInfo di = {.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = n,
                            .pImageMemoryBarriers = ib};
     vkCmdPipelineBarrier2(cb, &di);
 }
@@ -332,6 +337,9 @@ int vk_ffx_dispatch(VkCommandBuffer cb, void **slot, const VkFfxFrame *f) {
         .frameTimeDelta = f->dt_ms, .preExposure = 1.0f, .reset = f->reset != 0,
         .cameraNear = f->near_z, .cameraFar = f->far_z, .cameraFovAngleVertical = f->fov_y,
         .viewSpaceToMetersFactor = 1.0f, .flags = 0};
+    if (f->reactive)   // what moved on its own (vk_dlaa.c mask_pass): FSR takes this frame's colour there
+        d.reactive = res(f->reactive, FFX_API_SURFACE_FORMAT_R32_FLOAT, f->w, f->h, FFX_API_RESOURCE_USAGE_READ_ONLY,
+                         FFX_API_RESOURCE_STATE_COMPUTE_READ);
     inputs_layout(cb, f, 1);
     rec_drain();   // AMD's runtime records into cb itself: the recorder must have made every call so far
     ffxReturnCode_t r = F.dispatch(&x->ctx, &d.header);

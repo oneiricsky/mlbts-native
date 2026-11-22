@@ -16,7 +16,8 @@
 // fastball: AMD FSR 3.1 and FSR 4 (MLB_FSR, vk_ffx.c) are a second backend of the same machinery. When DLSS did not
 // come up and AMD's runtime did, everything below (the scene found at its pass, the jitter, the camera, the motion
 // vectors, the work images per size, the texture LOD bias) runs as for DLSS, and the one evaluation is FSR's
-// (fsr_eval) instead of NGX's. DLSS wins when both are set; the settings menu sets only one.
+// (fsr_eval) instead of NGX's. DLSS wins when both are set; the settings menu sets only one. FSR alone also gets a
+// reactive mask (mask_pass): it cannot tell on its own where the camera-only motion vectors are wrong, as DLSS can.
 #include <math.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -34,6 +35,7 @@
 #include "vk_ffx.h"
 #include "vk_rec.h"
 #include "dlss_mv_spv.h"
+#include "fsr_mask_spv.h"
 
 typedef int NgxResult;   // NVSDK_NGX_Result: 1 success, 0xBAD00000 | n failures
 #define NGX_OK(r) (((unsigned)(r) & 0xFFF00000u) != 0xBAD00000u)
@@ -272,6 +274,12 @@ static struct {
         VkImageView out_view, mv_view;
         NgxHandle *feat;
         void *ffx;               // fastball: the FSR context of this size (vk_ffx.c), with FSR
+        // fastball, FSR only (mask_pass, made at its first FSR frame): the scene depth as clip w, this frame's into
+        // zh[zi] and last frame's in zh[zi ^ 1] (valid when zvalid), and FSR's reactive mask; all R32F at the scene size
+        VkImage zh[2], mask;
+        VmaAllocation zh_mem[2], mask_mem;
+        VkImageView zh_view[2], mask_view;
+        int zi, zvalid;
         uint64_t used;           // evals count when it last ran
     } sizes[3], *last;           // last: the one the previous DLSS frame ran with
     VkImage last_color;          // the target DLSS ran on last frame: another one means a new history
@@ -297,11 +305,19 @@ static struct {
     VkPipeline mv_pipe;
     VkSampler mv_samp;
     int mv_ok;                   // -1 not built, 0 failed, 1 ready
-    int preset, preset_dirty;    // the DLSS model features are created with (preset_value); a change pending
+    float mv_m[16];              // the matrix this frame's motion pass used (GLSL order), when mv_m_ok
+    int mv_m_ok;
+    // FSR's reactive mask (mask_pass, fastball)
+    VkDescriptorSetLayout mask_dsl;
+    VkPipelineLayout mask_layout;
+    VkPipeline mask_pipe;
+    int mask_ok;                 // -1 not built, 0 failed, 1 ready
+    float pjx, pjy;              // the jitter of the frame the mask pass last ran on
+    int preset, preset_dirty;   // the DLSS model features are created with (preset_value); a change pending
     unsigned cfg_seen;           // cfg_version when preset was read
     uint64_t last_eval_ns;       // plat_now_ns of the previous evaluation (FrameTimeDeltaInMsec)
     float bias;                  // the texture LOD bias in effect (vk_sampler_dlss_bias)
-} D = {.mv_ok = -1, .cfg_seen = ~0u};
+} D = {.mv_ok = -1, .mask_ok = -1, .cfg_seen = ~0u};
 
 const VkTexImage *vk_dlaa_swap_img;
 VkImageView vk_dlaa_swap_view;
@@ -351,9 +367,32 @@ static void free_size(struct Size *e) {
     if (e->mv_view) vkDestroyImageView(c->device, e->mv_view, NULL);
     if (e->out) vmaDestroyImage(c->vma, e->out, e->out_mem);
     if (e->mv) vmaDestroyImage(c->vma, e->mv, e->mv_mem);
+    for (int i = 0; i < 2; i++) {
+        if (e->zh_view[i]) vkDestroyImageView(c->device, e->zh_view[i], NULL);
+        if (e->zh[i]) vmaDestroyImage(c->vma, e->zh[i], e->zh_mem[i]);
+    }
+    if (e->mask_view) vkDestroyImageView(c->device, e->mask_view, NULL);
+    if (e->mask) vmaDestroyImage(c->vma, e->mask, e->mask_mem);
     if (e->feat) N.release(e->feat);
     if (e->ffx) vk_ffx_destroy(e->ffx);
     memset(e, 0, sizeof *e);
+}
+
+// New images (up to 4) from UNDEFINED to GENERAL, where the back end keeps every image.
+static void to_general(VkCommandBuffer cb, const VkImage *im, uint32_t n) {
+    VkImageMemoryBarrier2 ib[4];
+    for (uint32_t i = 0; i < n; i++)
+        ib[i] = (VkImageMemoryBarrier2){.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
+                                        .srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                                        .dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
+                                        .dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
+                                        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED, .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+                                        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+                                        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, .image = im[i],
+                                        .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}};
+    VkDependencyInfo di = {.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = n,
+                           .pImageMemoryBarriers = ib};
+    vkCmdPipelineBarrier2(cb, &di);
 }
 
 // The entry for a scene and output size: its output (RGBA16F at the output size, written by DLSS and sampled by the
@@ -378,22 +417,35 @@ static struct Size *size_for(VkCommandBuffer cb, uint32_t w, uint32_t h, uint32_
         free_size(e);
         return NULL;
     }
-    VkImageMemoryBarrier2 ib[2];
     VkImage im[2] = {e->out, e->mv};
-    for (int i = 0; i < 2; i++)
-        ib[i] = (VkImageMemoryBarrier2){.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER_2,
-                                        .srcStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-                                        .dstStageMask = VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
-                                        .dstAccessMask = VK_ACCESS_2_MEMORY_READ_BIT | VK_ACCESS_2_MEMORY_WRITE_BIT,
-                                        .oldLayout = VK_IMAGE_LAYOUT_UNDEFINED, .newLayout = VK_IMAGE_LAYOUT_GENERAL,
-                                        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-                                        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED, .image = im[i],
-                                        .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}};
-    VkDependencyInfo di = {.sType = VK_STRUCTURE_TYPE_DEPENDENCY_INFO, .imageMemoryBarrierCount = 2,
-                           .pImageMemoryBarriers = ib};
-    vkCmdPipelineBarrier2(cb, &di);
+    to_general(cb, im, 2);
     e->w = w, e->h = h, e->ow = ow, e->oh = oh;
     return e;
+}
+
+// fastball: the mask pass's images of e, at its first FSR frame (DLSS never needs them). 0: not made (no mask).
+static int mask_images(VkCommandBuffer cb, struct Size *e) {
+    VkImageUsageFlags u = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT | VK_IMAGE_USAGE_TRANSFER_SRC_BIT;
+    int ok = 1;
+    for (int i = 0; i < 2; i++)
+        ok = ok && image2d(e->w, e->h, VK_FORMAT_R32_SFLOAT, u, &e->zh[i], &e->zh_mem[i], &e->zh_view[i]);
+    ok = ok && image2d(e->w, e->h, VK_FORMAT_R32_SFLOAT, u, &e->mask, &e->mask_mem, &e->mask_view);
+    if (!ok) {
+        const VkCtx *c = vk_ctx();
+        for (int i = 0; i < 2; i++) {
+            if (e->zh_view[i]) vkDestroyImageView(c->device, e->zh_view[i], NULL);
+            if (e->zh[i]) vmaDestroyImage(c->vma, e->zh[i], e->zh_mem[i]);
+        }
+        if (e->mask_view) vkDestroyImageView(c->device, e->mask_view, NULL);
+        if (e->mask) vmaDestroyImage(c->vma, e->mask, e->mask_mem);
+        memset(e->zh, 0, sizeof e->zh), memset(e->zh_view, 0, sizeof e->zh_view);
+        e->mask = VK_NULL_HANDLE, e->mask_view = VK_NULL_HANDLE;
+        return 0;
+    }
+    VkImage im[3] = {e->zh[0], e->zh[1], e->mask};
+    to_general(cb, im, 3);
+    e->zi = 0, e->zvalid = 0;
+    return 1;
 }
 
 static void full_barrier(VkCommandBuffer cb) {
@@ -461,43 +513,52 @@ static void times_mark(VkCommandBuffer cb, int which) {
 }
 
 // ---------------------------------------------------------------- motion vectors (fastball)
+// A compute pipeline whose bindings (b[0] a combined image sampler, the others storage images) are pushed with each
+// dispatch, with push bytes of push constants. 0: it could not be made.
+static int compute_pipe(const uint32_t *spv, size_t bytes, uint32_t nb, uint32_t push, VkDescriptorSetLayout *dsl,
+                        VkPipelineLayout *layout, VkPipeline *pipe) {
+    const VkCtx *c = vk_ctx();
+    VkDescriptorSetLayoutBinding b[4];
+    for (uint32_t i = 0; i < nb; i++)
+        b[i] = (VkDescriptorSetLayoutBinding){i, i ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
+                                                   : VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                              1, VK_SHADER_STAGE_COMPUTE_BIT, NULL};
+    VkDescriptorSetLayoutCreateInfo dci = {.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
+                                           .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
+                                           .bindingCount = nb, .pBindings = b};
+    VkPushConstantRange pr = {VK_SHADER_STAGE_COMPUTE_BIT, 0, push};
+    VkShaderModuleCreateInfo mi = {.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, .codeSize = bytes,
+                                   .pCode = spv};
+    VkShaderModule m = VK_NULL_HANDLE;
+    if (vkCreateDescriptorSetLayout(c->device, &dci, NULL, dsl) != VK_SUCCESS) return 0;
+    VkPipelineLayoutCreateInfo li = {.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, .setLayoutCount = 1,
+                                     .pSetLayouts = dsl, .pushConstantRangeCount = 1, .pPushConstantRanges = &pr};
+    if (vkCreatePipelineLayout(c->device, &li, NULL, layout) != VK_SUCCESS ||
+        vkCreateShaderModule(c->device, &mi, NULL, &m) != VK_SUCCESS)
+        return 0;
+    VkComputePipelineCreateInfo ci = {.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
+                                      .stage = {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
+                                                .stage = VK_SHADER_STAGE_COMPUTE_BIT, .module = m, .pName = "main"},
+                                      .layout = *layout};
+    VkResult r = vkCreateComputePipelines(c->device, VK_NULL_HANDLE, 1, &ci, NULL, pipe);
+    vkDestroyShaderModule(c->device, m, NULL);
+    return r == VK_SUCCESS;
+}
+
 static int mv_init(void) {
     if (D.mv_ok >= 0) return D.mv_ok;
     D.mv_ok = 0;
-    const VkCtx *c = vk_ctx();
-    VkDescriptorSetLayoutBinding b[2] = {
-        {0, VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1, VK_SHADER_STAGE_COMPUTE_BIT, NULL},
-        {1, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1, VK_SHADER_STAGE_COMPUTE_BIT, NULL}};
-    VkDescriptorSetLayoutCreateInfo dci = {.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO,
-                                           .flags = VK_DESCRIPTOR_SET_LAYOUT_CREATE_PUSH_DESCRIPTOR_BIT_KHR,
-                                           .bindingCount = 2, .pBindings = b};
-    VkPushConstantRange pr = {VK_SHADER_STAGE_COMPUTE_BIT, 0, 88};
     VkSamplerCreateInfo si = {.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO, .magFilter = VK_FILTER_NEAREST,
                               .minFilter = VK_FILTER_NEAREST, .mipmapMode = VK_SAMPLER_MIPMAP_MODE_NEAREST,
                               .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
                               .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE,
                               .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE};
-    VkShaderModuleCreateInfo mi = {.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO, .codeSize = sizeof dlss_mv_spv,
-                                   .pCode = dlss_mv_spv};
-    VkShaderModule m = VK_NULL_HANDLE;
-    if (vkCreateDescriptorSetLayout(c->device, &dci, NULL, &D.mv_dsl) != VK_SUCCESS) goto fail;
-    VkPipelineLayoutCreateInfo li = {.sType = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO, .setLayoutCount = 1,
-                                     .pSetLayouts = &D.mv_dsl, .pushConstantRangeCount = 1, .pPushConstantRanges = &pr};
-    if (vkCreatePipelineLayout(c->device, &li, NULL, &D.mv_layout) != VK_SUCCESS ||
-        vkCreateSampler(c->device, &si, NULL, &D.mv_samp) != VK_SUCCESS ||
-        vkCreateShaderModule(c->device, &mi, NULL, &m) != VK_SUCCESS)
-        goto fail;
-    VkComputePipelineCreateInfo ci = {.sType = VK_STRUCTURE_TYPE_COMPUTE_PIPELINE_CREATE_INFO,
-                                      .stage = {.sType = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO,
-                                                .stage = VK_SHADER_STAGE_COMPUTE_BIT, .module = m, .pName = "main"},
-                                      .layout = D.mv_layout};
-    VkResult r = vkCreateComputePipelines(c->device, VK_NULL_HANDLE, 1, &ci, NULL, &D.mv_pipe);
-    vkDestroyShaderModule(c->device, m, NULL);
-    if (r != VK_SUCCESS) goto fail;
+    if (!compute_pipe(dlss_mv_spv, sizeof dlss_mv_spv, 2, 88, &D.mv_dsl, &D.mv_layout, &D.mv_pipe) ||
+        vkCreateSampler(vk_ctx()->device, &si, NULL, &D.mv_samp) != VK_SUCCESS) {
+        rt_log("%s: the motion-vector pass could not be set up: it runs with zero motion", tag());
+        return 0;
+    }
     return D.mv_ok = 1;
-fail:
-    rt_log("%s: the motion-vector pass could not be set up: it runs with zero motion", tag());
-    return 0;
 }
 
 // Inverse of a row-major 4x4 in double precision (Gauss-Jordan); 0 when singular. From TotK Recomp's vk_dlaa.c inv4.
@@ -576,6 +637,7 @@ static int mv_pass(VkExec *ex, struct Size *e, VkImageView zv, float jx, float j
     struct { float m[16], size[2], jitter[2], z[2]; } pc;
     for (int r = 0; r < 4; r++)
         for (int k = 0; k < 4; k++) pc.m[k * 4 + r] = (float)m[r * 4 + k];   // GLSL mat4: columns
+    memcpy(D.mv_m, pc.m, sizeof D.mv_m), D.mv_m_ok = 1;   // (FSR's mask pass takes the same motion)
     pc.size[0] = (float)w, pc.size[1] = (float)h, pc.jitter[0] = jx, pc.jitter[1] = jy;
     int mw = nvn_depth_minus_w();
     pc.z[0] = mw ? 2.0f : 1.0f, pc.z[1] = mw ? -1.0f : 0.0f;
@@ -593,6 +655,55 @@ static int mv_pass(VkExec *ex, struct Size *e, VkImageView zv, float jx, float j
     full_barrier(cb);
     D.mv_frames++;
     return 1;
+}
+
+// fastball: FSR's reactive mask for what moves on its own (runtime/shaders/fsr_mask.comp says why FSR needs it and DLSS
+// does not) into e->mask, after mv_pass, FSR only. It also keeps the scene depth for the next frame's comparison. 1:
+// the mask holds this frame (pass it to FSR); 0: no mask this frame (no camera, a new history, MLB_FSR_MASK=0).
+static int mask_pass(VkExec *ex, struct Size *e, VkImageView zv, float jx, float jy) {
+    static int on = -1;
+    if (on < 0) on = rt_knob("FSR_MASK", "1");   // MLB_FSR_MASK=0: no reactive mask (test, A/B)
+    if (!on || D.mv_ok != 1 || !D.prev_ok) return e->zvalid = 0, 0;   // (no camera this frame: no clip w)
+    if (D.mask_ok < 0) {
+        D.mask_ok = compute_pipe(fsr_mask_spv, sizeof fsr_mask_spv, 4, 108, &D.mask_dsl, &D.mask_layout, &D.mask_pipe);
+        if (!D.mask_ok) rt_log("fsr: the reactive mask pass could not be set up: FSR runs without it");
+    }
+    if (!D.mask_ok || (!e->mask && !mask_images(ex->cb, e))) return 0;
+    // this frame's clip w from ndc z: row 2 of a perspective view-projection is a * row 3 + b * (0,0,0,1) (see
+    // camera_planes), so ndc z = a + b / w; D.prev_vp holds this frame's camera after mv_pass
+    const double *c = D.prev_vp;
+    double r33 = c[12] * c[12] + c[13] * c[13] + c[14] * c[14];
+    if (r33 < 1e-24) return e->zvalid = 0, 0;
+    double a = (c[8] * c[12] + c[9] * c[13] + c[10] * c[14]) / r33, b = c[11] - a * c[15];
+    int have = D.mv_m_ok && e->zvalid && e == D.last;   // last frame's depth is this size's and m leads to it
+    struct { float m[16], size[2], jitter[2], pjitter[2], z[2], wc[2], have; } pc;
+    _Static_assert(sizeof pc == 108, "fsr_mask.comp's push constants");
+    memcpy(pc.m, D.mv_m, sizeof pc.m);
+    pc.size[0] = (float)e->w, pc.size[1] = (float)e->h, pc.jitter[0] = jx, pc.jitter[1] = jy;
+    pc.pjitter[0] = D.pjx, pc.pjitter[1] = D.pjy;
+    int mw = nvn_depth_minus_w();
+    pc.z[0] = mw ? 2.0f : 1.0f, pc.z[1] = mw ? -1.0f : 0.0f;
+    pc.wc[0] = (float)a, pc.wc[1] = (float)b, pc.have = have ? 1.0f : 0.0f;
+    VkDescriptorImageInfo ii[4] = {{D.mv_samp, zv, VK_IMAGE_LAYOUT_GENERAL},
+                                   {VK_NULL_HANDLE, e->zh_view[e->zi ^ 1], VK_IMAGE_LAYOUT_GENERAL},
+                                   {VK_NULL_HANDLE, e->zh_view[e->zi], VK_IMAGE_LAYOUT_GENERAL},
+                                   {VK_NULL_HANDLE, e->mask_view, VK_IMAGE_LAYOUT_GENERAL}};
+    VkWriteDescriptorSet wr[4];
+    for (int i = 0; i < 4; i++)
+        wr[i] = (VkWriteDescriptorSet){.sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET, .dstBinding = (uint32_t)i,
+                                       .descriptorCount = 1,
+                                       .descriptorType = i ? VK_DESCRIPTOR_TYPE_STORAGE_IMAGE
+                                                           : VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER,
+                                       .pImageInfo = &ii[i]};
+    VkCommandBuffer cb = ex->cb;
+    vkCmdBindPipeline(cb, VK_PIPELINE_BIND_POINT_COMPUTE, D.mask_pipe);
+    rec_push(vk_pipeline_push_fn(), cb, VK_PIPELINE_BIND_POINT_COMPUTE, D.mask_layout, 0, 4, wr);
+    vkCmdPushConstants(cb, D.mask_layout, VK_SHADER_STAGE_COMPUTE_BIT, 0, sizeof pc, &pc);
+    vkCmdDispatch(cb, (e->w + 7) / 8, (e->h + 7) / 8, 1);
+    full_barrier(cb);
+    e->zi ^= 1, e->zvalid = 1;
+    D.pjx = jx, D.pjy = jy;
+    return have;
 }
 
 // ---------------------------------------------------------------- jitter
@@ -699,7 +810,7 @@ static int perf_quality(uint32_t w, uint32_t ow) {
 }
 
 static int dlss_eval(VkExec *ex, struct Size *e, VkImageView zv, float jx, float jy, float dtms);
-static int fsr_eval(VkExec *ex, struct Size *e, float jx, float jy, float dtms);
+static int fsr_eval(VkExec *ex, struct Size *e, VkImageView zv, float jx, float jy, float dtms);
 
 // DLSS (or FSR) on the armed scene into an image of ow x oh; its view, VK_NULL_HANDLE when it did not run.
 static VkImageView evaluate(VkExec *ex, uint32_t ow, uint32_t oh) {
@@ -721,6 +832,7 @@ static VkImageView evaluate(VkExec *ex, uint32_t ow, uint32_t oh) {
     static int no_mv = -1;
     if (no_mv < 0) no_mv = !rt_knob("DLSS_MV", "1");   // MLB_DLSS_MV=0: zero motion (test)
     times_mark(cb, T_MV0);
+    D.mv_m_ok = 0;
     if (no_mv || !mv_pass(ex, e, zv, jx, jy)) {
         VkClearColorValue zero = {{0, 0, 0, 0}};
         VkImageSubresourceRange all = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
@@ -737,7 +849,7 @@ static VkImageView evaluate(VkExec *ex, uint32_t ow, uint32_t oh) {
     D.last_eval_ns = now;
     if (dt > 250) D.reset = 1;
     float dtms = dt > 0 && dt < 100 ? (float)dt : 16.67f;
-    if (use_fsr() ? !fsr_eval(ex, e, jx, jy, dtms) : !dlss_eval(ex, e, zv, jx, jy, dtms)) return VK_NULL_HANDLE;
+    if (use_fsr() ? !fsr_eval(ex, e, zv, jx, jy, dtms) : !dlss_eval(ex, e, zv, jx, jy, dtms)) return VK_NULL_HANDLE;
     times_mark(cb, T_DL1);   // through the recorder, after NGX's or AMD's own commands
     D.reset = 0;
     D.last = e, e->used = D.evals + 1;
@@ -860,10 +972,12 @@ static void camera_planes(float *nz, float *fz, float *fov) {
 }
 
 // fastball: AMD FSR 3.1 / 4 (vk_ffx.c) on the armed scene into e->out. 0: not run (FSR off for the run when AMD's
-// runtime failed; a scene it cannot take is only skipped).
-static int fsr_eval(VkExec *ex, struct Size *e, float jx, float jy, float dtms) {
+// runtime failed; a scene it cannot take is only skipped). With the reactive mask (mask_pass) where it has one.
+static int fsr_eval(VkExec *ex, struct Size *e, VkImageView zv, float jx, float jy, float dtms) {
     const VkExecTarget *t = &D.color, *z = &D.depth;
-    VkFfxFrame f = {.color = t->image, .depth = z->image, .mv = e->mv, .out = e->out, .color_fmt = t->format,
+    int masked = mask_pass(ex, e, zv, jx, jy);
+    VkFfxFrame f = {.color = t->image, .depth = z->image, .mv = e->mv, .out = e->out,
+                    .reactive = masked ? e->mask : VK_NULL_HANDLE, .color_fmt = t->format,
                     .depth_fmt = z->format, .color_level = t->level, .color_layer = t->base_layer,
                     .depth_level = z->level, .depth_layer = z->base_layer, .w = e->w, .h = e->h, .ow = e->ow,
                     .oh = e->oh, .jx = jx, .jy = jy, .dt_ms = dtms, .reset = D.reset || !e->ffx};
@@ -877,6 +991,18 @@ static int fsr_eval(VkExec *ex, struct Size *e, float jx, float jy, float dtms) 
         return 0;
     }
     vk_ffx_ran();
+    // MLB_FSR_MASKDEBUG=1 (test): the reactive mask in place of the picture, in red (0.9: FSR drops its history there)
+    static int maskdebug = -1;
+    if (maskdebug < 0) maskdebug = rt_knob("FSR_MASKDEBUG", "0");
+    if (maskdebug && masked) {
+        full_barrier(ex->cb);
+        VkImageBlit bl = {.srcSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                          .srcOffsets = {{0, 0, 0}, {(int32_t)e->w, (int32_t)e->h, 1}},
+                          .dstSubresource = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 0, 1},
+                          .dstOffsets = {{0, 0, 0}, {(int32_t)e->ow, (int32_t)e->oh, 1}}};
+        vkCmdBlitImage(ex->cb, e->mask, VK_IMAGE_LAYOUT_GENERAL, e->out, VK_IMAGE_LAYOUT_GENERAL, 1, &bl,
+                       VK_FILTER_NEAREST);
+    }
     return 1;
 }
 
