@@ -6,7 +6,7 @@ port recognises a texture at upload by a hash of the first 16 KiB of its storage
 the PS5 file of the same name (docs/ps5-textures.md). This tool computes those hashes from the Switch files.
 
   python -I tools/make_hd_index.py --ps5 E:/PPSA30630/PPSA30630-app --romfs work/build/game/romfs \
-      --out work/build/hdtex/index.txt --heads OHTANI_SHOHEI [--scale 4] [path under NSW/ ...]
+      --out work/build/hdtex/index.txt --heads OHTANI_SHOHEI [--scale 4] [--color] [path under NSW/ ...]
 
 One line per Switch variant of a texture: `<hash> <width> <height> <levels> <drop> <PS5 file>`; drop is how many of
 the PS5 file's largest levels are left out so the image is about --scale times the Switch one on each side.
@@ -98,14 +98,15 @@ def main():
     ap.add_argument("--romfs", required=True, help="the extracted Switch RomFS (holding NSW/)")
     ap.add_argument("--out", required=True)
     ap.add_argument("--scale", type=int, default=4, help="HD size over the Switch size, per side (default 4)")
-    ap.add_argument("--max-dim", type=int, default=1024,
-                    help="largest HD side (default 1024: a 2048 colour map rendered yellow, docs/ps5-textures.md)")
-    ap.add_argument("--heads", nargs="*", default=[], help="player folders under CHARACTERS/HEADS (COLOR and NORMAL)")
+    ap.add_argument("--max-dim", type=int, default=1024, help="largest HD side (default 1024)")
+    ap.add_argument("--heads", nargs="*", default=[], help="player folders under CHARACTERS/HEADS (their NORMAL maps)")
+    ap.add_argument("--color", action="store_true",
+                    help="--heads also takes the COLOR maps: the face then renders bright yellow (docs/ps5-textures.md)")
     ap.add_argument("tex", nargs="*", help="paths under NSW/ (and PS5/)")
     a = ap.parse_args()
     paths = list(a.tex)
     for n in a.heads:
-        paths += [f"CHARACTERS/HEADS/{n}/{n}-COLOR.TEX", f"CHARACTERS/HEADS/{n}/{n}-NORMAL.TEX"]
+        paths += [f"CHARACTERS/HEADS/{n}/{n}-NORMAL.TEX"] + ([f"CHARACTERS/HEADS/{n}/{n}-COLOR.TEX"] if a.color else [])
     lines = []
     for rel in paths:
         (pw, ph), pn, code = ps5_info(Path(a.ps5) / "PS5" / rel)

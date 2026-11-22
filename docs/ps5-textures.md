@@ -1,7 +1,8 @@
 # PS5 textures in place of the Switch ones
 
-An optional feature (`MLB_HD_TEXTURES`): a player's face textures from a PS5 dump of the game are used instead of the
-Switch ones. Nothing is shipped; it reads the user's own dump, and it does nothing without an index file.
+An optional feature (`MLB_HD_TEXTURES`): a player's face normal map from a PS5 dump of the game is used instead of the
+Switch one. Nothing is shipped; it reads the user's own dump, and it does nothing without an index file. The colour
+maps are left out because they break the face (see Known limits).
 
 ## Using it
 
@@ -10,7 +11,8 @@ python -I tools/make_hd_index.py --ps5 E:/PPSA30630/PPSA30630-app --romfs work/b
     --out work/build/hdtex/index.txt --heads OHTANI_SHOHEI
 ```
 
-`--heads` takes player folders under `CHARACTERS/HEADS` (COLOR and NORMAL), or pass paths under `NSW/` directly.
+`--heads` takes player folders under `CHARACTERS/HEADS` (their NORMAL maps; `--color` adds the COLOR maps), or pass
+paths under `NSW/` directly.
 `--max-dim` (default 1024) is the largest side of the PS5 image; `--scale` (default 4) how many times the Switch
 size it aims for. The game then picks the index up from the `hdtex` folder of its working directory.
 `MLB_HD_TEXTURES=<folder>` uses another folder, `off` or `0` turns it off. The log says `hdtex: N PS5 textures indexed`
@@ -32,7 +34,7 @@ came out as noise, the PS5 BC7 blocks read as a 512x256 BC1 texture). So the swa
    binding samples it. The Switch-sized image stays and is uploaded as always; each upload puts it back for the copy and
    `hd_apply` decides again, because the storage may by then hold another texture (the PS5 image goes, or a new one
    comes).
-3. Both textures of Ohtani's face are made at 1024x512 BC7 (0.7 MiB each) by default.
+3. Ohtani's normal map is made at 1024x512 BC7 (0.7 MiB; the Switch one is 256x128).
 
 ## The PS5 file
 
@@ -59,10 +61,13 @@ half) header, then one LZ4 block per segment. Decompressed, a texture is the NVN
 
 ## Known limits
 
-- A 2048x1024 colour map for Ohtani's face (4x the Switch size) comes out too bright and yellow in the game; 1024x512
-  is fine. The data is the same at every size (mean colour per level matches the Switch's), the draw's face shader
-  samples the colour map with others that stay at their Switch size, and nothing in the port's view or sampler code
-  changed with the size, so the cause is likely in the shader. `--max-dim` is 1024 for that reason.
+- **A PS5 colour map makes the face bright yellow and flat**, at 2048x1024 and at 1024x512 (screenshots of the same
+  scene with the feature off, with the normal map only and with both, matched by frame, showed it). Swapped at the
+  Switch's own size (512x256) it renders normally, so a bigger image changes what the face shader computes; the
+  data is the same (the mean colour of every level matches the Switch's). The face draw samples the colour map
+  together with other maps that stay at their Switch size, and nothing in the port's view or sampler code depends on
+  the size, so the cause is probably in the shader (a fixed mip level or a size it reads). Not found. Until it is,
+  `make_hd_index.py` leaves the colour maps out.
 - Only PS5 files in BC1 or BC7 are handled; others are skipped with a message.
 - The PS5 file is read on first use, about 2 to 3 ms for Ohtani's, from the replay thread.
 - Two textures with the same first 16 KiB would share an index entry.
