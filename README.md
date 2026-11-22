@@ -19,8 +19,8 @@ What has changed so far:
   `AIvAI` + `GameOnly` boot straight into an AI-vs-AI game with no input. The full option table,
   hashes and the mechanism are in [docs/dev-config.md](docs/dev-config.md).
 - **PS5 textures (optional).** With an index made by `tools/make_hd_index.py` from your own PS5 dump,
-  chosen players' face normal maps are the PS5 ones instead of the Switch ones (`MLB_HD_TEXTURES`). Ohtani's
-  is the first; the colour maps are left out for now. How it works and its limits are in [docs/ps5-textures.md](docs/ps5-textures.md).
+  players' face normal maps (one player or all 2,370 that match) are the PS5 ones instead of the Switch ones
+  (`MLB_HD_TEXTURES`); the colour maps are left out for now. How it works and its limits are in [docs/ps5-textures.md](docs/ps5-textures.md).
 
 
 <details>
