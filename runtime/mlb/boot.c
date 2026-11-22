@@ -148,7 +148,7 @@ void rt_boot(void) {
     void mlb_heap_init(void);
     mlb_heap_init();   // heap.c: the census callback (MLB_TRACE=perf, MLB_HEAP_CENSUS=1)
     hostfn_seal();
-    // mlbts-native: pipelines build on background workers (a draw whose pipeline is building is skipped or gets a
+    // fastball: pipelines build on background workers (a draw whose pipeline is building is skipped or gets a
     // fast-linked one), and the ones earlier runs recorded in pipeline-keys.bin are built before the guest starts.
     // Without this every new pipeline compiled on the replay thread: frames of 0.5 to 3.5 s on an RX 6700 XT. A
     // MLB_SHOT run needs every draw, so it keeps the synchronous builds, as TotK's --shot does. MLB_PIPE_SYNC=1 too.

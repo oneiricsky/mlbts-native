@@ -517,7 +517,7 @@ void vk_completion_story(char *b, size_t n);   // fastball diagnosis: timeline v
 // fastball diagnosis (MLB_TRACE=perf): when value v was submitted and the completion thread saw it reached (0: not
 // yet); 0 when v is no longer in the table
 int vk_sync_value_times(uint64_t v, uint64_t *sub, uint64_t *seen);
-// mlbts-native diagnosis (MLB_TRACE=perf): the replay of value v in phases (vk_sync_submit): entered beg, recorded rec,
+// fastball diagnosis (MLB_TRACE=perf): the replay of value v in phases (vk_sync_submit): entered beg, recorded rec,
 // uploads flushed fl, mirror prologue done pro, and how many commands the recording walked (ops). Same table and rules
 // as vk_sync_value_times.
 int vk_sync_phase_times(uint64_t v, uint64_t *beg, uint64_t *rec, uint64_t *fl, uint64_t *pro, uint32_t *ops);

@@ -38,7 +38,7 @@ typedef struct {
     uint8_t has_layout, layout[8], pad[7];
 } TexKey;
 
-// mlbts-native: what the image fields of VkTexImage held before a PS5 image took them (hd_apply)
+// fastball: what the image fields of VkTexImage held before a PS5 image took them (hd_apply)
 typedef struct {
     VkImage image;
     VkFormat format;
@@ -1261,7 +1261,7 @@ static inline void prompts_fresh(Tex *e) {
     if (__builtin_expect(e->prompts, 0) && e->uploaded && e->prompts_set != mlb_prompts_set()) upload(e);
 }
 
-// mlbts-native: PS5 textures in place of the Switch ones (runtime/mlb/hdtex.c, MLB_HD_TEXTURES). The game made the
+// fastball: PS5 textures in place of the Switch ones (runtime/mlb/hdtex.c, MLB_HD_TEXTURES). The game made the
 // texture at its Switch size and copies the file's storage into it, so it is recognised here, at its upload: a hash of
 // the storage finds the PS5 file, and an image made from that file takes the place of the Switch-sized one in pub (the
 // replay's views follow the image handle, so the next binding samples it). The Switch-sized image stays, uploaded as

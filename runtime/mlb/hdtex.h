@@ -1,4 +1,4 @@
-// mlbts-native: PS5 textures in place of the Switch ones (hdtex.c). No Vulkan here: vk_texture.c makes the images.
+// fastball: PS5 textures in place of the Switch ones (hdtex.c). No Vulkan here: vk_texture.c makes the images.
 #pragma once
 #include <stddef.h>
 #include <stdint.h>

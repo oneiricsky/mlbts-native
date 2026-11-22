@@ -37,7 +37,7 @@
 #ifdef _WIN32
 #define strdup _strdup   // fastball: the MSVC C library names it so
 #endif
-#include "cfg.h"   // mlbts-native: cfg_bool (MLB_SKIP_INTRO), as kernel.c
+#include "cfg.h"   // fastball: cfg_bool (MLB_SKIP_INTRO), as kernel.c
 #include "host.h"
 #include "platform/platform.h"
 

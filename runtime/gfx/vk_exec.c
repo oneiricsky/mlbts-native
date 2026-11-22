@@ -1130,7 +1130,7 @@ int vk_exec_record(VkCommandBuffer cb, const uint64_t *handles, int n, uint64_t 
     part_t0 = kern_now_ns();
     x_here = 1;
     uint64_t ops0 = 0;
-    if (op_on) {   // mlbts-native diagnosis: this submission's command count, for the wait-burst line (vk_sync_note_ops)
+    if (op_on) {   // fastball diagnosis: this submission's command count, for the wait-burst line (vk_sync_note_ops)
         for (int i = 0; i < OP_COUNT_; i++) ops0 += opn[i];
     }
     if (n) vk_mem_mirror_begin(), vk_usnap_begin(handles, n, fence);

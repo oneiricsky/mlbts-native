@@ -1,4 +1,4 @@
-// mlbts-native: PS5 textures in place of the Switch ones (MLB_HD_TEXTURES).
+// fastball: PS5 textures in place of the Switch ones (MLB_HD_TEXTURES).
 //
 // The game creates each head texture at its Switch size and copies the file's decompressed storage into it; it does not
 // take the size from the file. So a texture is recognised when it is uploaded: a hash of the first 16 KiB of its storage
