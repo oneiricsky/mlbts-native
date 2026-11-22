@@ -2,7 +2,7 @@
 // contributors): the mixing stage (voice decode and resampling, splitters, mixes, effects, sinks) and the IAudioDevice
 // service. The CoreAudio output is replaced by SDL3 audio. Effect algorithms follow
 // Ryujinx.Audio (MIT, Copyright (c) Ryujinx Team and Contributors).
-// Vendored from TotK Recomp runtime/audio_mixer.c @ ae30a61 (MIT, LICENSE.totk-recomp). mlbts-native: the SDL3 audio
+// Vendored from TotK Recomp runtime/audio_mixer.c @ ae30a61 (MIT, LICENSE.totk-recomp). fastball: the SDL3 audio
 // stream is replaced by WASAPI (platform/audio_out.h), so "the SDL audio thread" below is the output's own thread.
 //
 // Per 5 ms frame the render thread (audren.c, renderer lock held) decodes every started voice (PCM8/16/24/32, float,
@@ -54,7 +54,7 @@ typedef struct Mixer {
     float *buf; int nbuf, frame;
     int *offset;                                   // first mix buffer of each mix id
     SplitInfo *split; int nsplit; SplitDest *dest; int ndest;
-    AudioOut *stream; int device_ok, rate;   // mlbts-native: WASAPI output
+    AudioOut *stream; int device_ok, rate;   // fastball: WASAPI output
     int channels;                                  // output channels, 2 or 6 (output_channels)
     float ring[RING_FRAMES * OUT_MAX];
     _Atomic uint64_t wr, rd, underruns, overruns, missing_frames, callback_frames, callback_nonzero, skipped_frames;
@@ -72,7 +72,7 @@ typedef struct Mixer {
 } Mixer;
 
 static _Atomic float device_volume = 1.0f;
-float audio_device_volume(void) { return atomic_load(&device_volume); }   // mlbts-native: for audout.c (Astral's)
+float audio_device_volume(void) { return atomic_load(&device_volume); }   // fastball: for audout.c (Astral's)
 
 // TOTK_VOLUME: the player's volume in percent (0..100) on top of the game's own; a live setting (the
 // menu), parsed again when cfg_version changes. Render thread only.
@@ -124,7 +124,7 @@ static int output_channels(void) {
     else if (!strcmp(want, "5.1")) n = 6;
     else if (!strcmp(want, "stereo")) n = 2;
     else {
-        int dev_channels = audio_out_default_channels();   // mlbts-native: WASAPI's mix format
+        int dev_channels = audio_out_default_channels();   // fastball: WASAPI's mix format
         n = dev_channels >= 6 ? 6 : 2;
         rt_log("audio: TOTK_AUDIO_CHANNELS=auto: the default device has %d channels, output %s", dev_channels,
                n == 6 ? "5.1" : "stereo");
@@ -193,7 +193,7 @@ static void ring_pull(Mixer *m, float *out, uint32_t frames) {
     atomic_store_explicit(&m->rd, rd + n, memory_order_release);
 }
 
-// mlbts-native: the WASAPI thread's pull callback, writing straight into the endpoint buffer
+// fastball: the WASAPI thread's pull callback, writing straight into the endpoint buffer
 static void out_pull(void *user, float *out, uint32_t frames) {
     Mixer *m = user;
     atomic_store_explicit(&m->pulled_ns, kern_now_ns(), memory_order_release);
@@ -206,7 +206,7 @@ static void output_open(Mixer *m, int rate) {
         rt_log("audio: TOTK_AUDIO=none: mixing without a device");
         return;
     }
-    // mlbts-native: WASAPI in place of SDL_OpenAudioDeviceStream; the device period comes from GetDevicePeriod
+    // fastball: WASAPI in place of SDL_OpenAudioDeviceStream; the device period comes from GetDevicePeriod
     int period = 0;
     char name[128], err[160];
     m->stream = audio_out_open(rate, m->channels, out_pull, m, &period, name, sizeof name, err, sizeof err);
@@ -361,7 +361,7 @@ void audio_mixer_set_running(AudioRenderer *r, int running) {
 void audio_mixer_close(AudioRenderer *r) {
     Mixer *m = r->mixer;
     if (!m) return;
-    audio_out_close(m->stream);   // mlbts-native: stops the output thread, so the callback has finished
+    audio_out_close(m->stream);   // fastball: stops the output thread, so the callback has finished
     for (int i = 0; i < m->nsplit; i++) free(m->split[i].ids);
     for (int i = 0; i < r->param.effect_count; i++) {
         audio_reverb_free(m->effect[i].reverb);

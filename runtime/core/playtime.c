@@ -1,4 +1,4 @@
-// mlbts-native: from TotK Recomp runtime/playtime.c @ ae30a61 (MIT, Copyright (c) 2026 Valiantsin Dzerakh), for the settings
+// fastball: from TotK Recomp runtime/playtime.c @ ae30a61 (MIT, Copyright (c) 2026 Valiantsin Dzerakh), for the settings
 // menu (ui/menu.cpp). Started from main.c; its --probe-playtime test is left out.
 // Play time: how long the player has spent in the game, across runs, shown on the Game tab of the settings menu
 // (ui/menu.cpp tab_game). The game itself keeps no play time a player can see, and the Switch's own play log is not

@@ -1,0 +1,67 @@
+# Code patches for game 1.0.20 (recomp/patches.py format), passed to recomp/gen.py --patches by the setup's build
+# step (installer/steps.py). Game 1.0.15 has the same patches in patches-1.0.15.txt. Each set has a settings row
+# (runtime/mlb/cfg.c) and a toggle on the settings menu's Game tab; the row's value decides at start.
+#
+# Walk-up freeze: before every pitch (when the batter-up state starts) and at inning changes the game froze for
+# 250-380 ms. The cause and the reason each site is safe are in docs/walkup-freeze.md.
+
+# Set walkup_light: the stadium lighting at each batter-up.
+#
+# After every play the game re-bakes its stadium lighting for the new time of day in the background, one step per
+# frame, into the spare of its two lighting buffers (f_70012d20a0, flags 0xec01). When the next pitch's batter-up
+# state starts, the handler f_700108b628 asks for the lighting again with force = 1 (main+0x108bbb4, `mov w1, #1`
+# before `bl f_70012d0fcc`). Forced, f_70012d1e04 ignores the finished spare buffer and bakes everything again in one
+# frame with a GPU wait after each of its ~50 steps (flags 0xef01): the 250-380 ms freeze.
+#
+# Site 1 asks without force, the way the game's other callers do (they mark the lighting dirty, +0xc2d, and pass 0).
+# If the spare buffer holds the current time, f_70012d1e04 switches to it at once; otherwise it starts a bake, which
+# site 3 makes run in the background.
+#   mov w1, #1   ->   mov w8, #1 ; strb w8, [x0, #0xc2d] ; mov w1, wzr       (w8 is dead: the next word is a bl)
+set  walkup_light  MLB_WALKUP_LIGHT  1
+site walkup_light  main  108bbb4  52800021  52800028  3930b408  2a1f03e1
+
+# Site 2. The quick switch in f_70012d1e04 (main+0x12d1f30..0x12d1f98) bumps the counter at *PTR_DAT_700229d620 but
+# not the lighting-version counter at *PTR_DAT_7002284890 (0x7002ca9338), which the end of a bake in f_70012e0150
+# (main+0x12e0db4..0x12e0e24) bumps too. Its only reader, the indirect-light probes (f_700128d2a0, +0x770 against
+# that counter), refreshes only when it changes, so without this site they keep the lighting of an older bake
+# (screenshots 10-15 % off in brightness). The path ends in the function's return, so x8 and x9 are free.
+#   str w8, [x9]   ->   str w8, [x9] ; adrp x9, 0x7002284000 ; ldr x9, [x9, #0x890] ; ldr w8, [x9] ;
+#                       add w8, w8, #1 ; str w8, [x9]
+site walkup_light  main  12d1f74  b9000128  b9000128  f0007d89  f9444929  b9400128  11000508  b9000128
+
+# Sites 4-6. When f_70012d1e04 starts a bake it ends by tail-calling f_70019fb800 with the requested time (stadiums
+# with an entry in the table at 0x70021edca0 only, main+0x12d2018..0x12d208c): at 19.5 h (17.0 h in months 0 and 12)
+# that turns a set of stadium props off or on (f_70019fb880 / f_70019fbbb0). The quick switch returns before it, so
+# with site 1 alone the props would change only at the next fresh bake. The three exits of the quick switch go
+# through the same stadium check and tail call instead. x21, x22 and x24 are loaded on every path into the switch
+# (main+0x12d1ea8..0x12d1ebc); s8 holds the requested time.
+#   cbz x8, 0x70012d1f00   ->   cbz x8, 0x70012d2018      (no stadium object at +0x8)
+#   cbz x8, 0x70012d1f00   ->   cbz x8, 0x70012d2018      (no object at +0xed0)
+#   b 0x70012d1f00         ->   b 0x70012d2018
+site walkup_light  main  12d1f7c  b4fffc28  b40004e8
+site walkup_light  main  12d1f84  b4fffbe8  b40004a8
+site walkup_light  main  12d1f98  17ffffda  14000020
+
+# Site 3. When the clock moved since the background bake (the first batter after an inning change: the inning and the
+# simulated half add time), the unforced request starts a new bake (flags 0xef01, or 0x300 added to a bake still
+# running). Bit 9 (0x200) makes f_70012e0150 loop through every step with a GPU wait; bit 8 (0x100) alone switches
+# buffers when the bake ends. Right after the request (f_70012c54ec has just returned the lighting manager in x0) the
+# site clears bit 9, so the bake runs one step per frame (about 1.2 s) and the screen switches to it when it ends;
+# until then the lighting of the previous time stays. A scene's first bake still runs at once: f_70012e0150 sets bit 9
+# itself while +0x288 is 0. It also clears a bit 9 that another caller set earlier in the same frame (for example a
+# roof change at the same moment): that bake then runs in the background too. w9 is free: the next words overwrite it.
+#   mov w8, #0x1420   ->   ldr w9, [x0, #0xd3c] ; and w9, w9, #0xfffffdff ; str w9, [x0, #0xd3c] ; mov w8, #0x1420
+site walkup_light  main  108bbc0  52828408  b94d3c09  12167929  b90d3c09  52828408
+
+# Set walkup_leaders: league leaders built twice in a row at each inning change (and at the start of a game).
+#
+# The broadcast "moments" system keeps top-10 lists for 23 stats in 4 groups (f_7000e54c00: 92 lists, each a pass
+# over up to 1350 players and a qsort_r). Its full refresh f_7000e5640c (inning change, from the batter-up event) and
+# its game-start sequence f_7000e53620 both call f_7000e53654, which clears the whole object and builds the lists
+# (main+0xe53808), and then f_7000e543a4, which builds them again first thing (main+0xe543d0). Nothing in between
+# reads the lists (+0x1b0b8..+0x25d38): the rest of f_7000e53654 and f_7000e54080 write other fields, f_7000e54c00
+# resets every entry before it fills them, and f_7000e53654 has no other callers. The site drops the first build;
+# f_7000e543a4 still builds, also where the game calls it on its own.
+#   bl f_7000e54c00   ->   nop
+set  walkup_leaders  MLB_WALKUP_LEADERS  1
+site walkup_leaders  main  e53808  940004fe  d503201f

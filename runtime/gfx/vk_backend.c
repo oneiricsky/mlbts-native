@@ -11,7 +11,7 @@
 // the frame's display time from the pacer (nvn_api_obj.c), so present-to-present intervals stay even whatever the
 // replay took. The blit is already on the queue, so the wait blocks no submission.
 //
-// Asynchronous replay (TOTK_REPLAY_ASYNC; mlbts-native: default 1, cfg.c; 0 turns it off): nvnQueueSubmitCommands
+// Asynchronous replay (TOTK_REPLAY_ASYNC; fastball: default 1, cfg.c; 0 turns it off): nvnQueueSubmitCommands
 // and nvnQueuePresentTexture only queue. Each item gets its timeline value at enqueue (vk_sync_reserve), in queue
 // order; the replay thread runs the synchronous submit and present bodies in that order, so every value is signalled
 // by the submission it was handed out for. The game runs at most one frame ahead: queueing present N waits until the
@@ -47,12 +47,12 @@ static void wait_until(uint64_t at) {
     while (kern_now_ns() < at) plat_yield();
 }
 
-// mlbts-native: from the game's present call to the blit on the queue (the replay of the frame's work, then the blit),
+// fastball: from the game's present call to the blit on the queue (the replay of the frame's work, then the blit),
 // a maximum that decays by 1/64 of its excess each present, capped at 50 ms; the pacer leads by it (nvn_api_obj.c pace).
 static volatile uint64_t g_lag_ns;
 uint64_t gfx_present_lag_ns(void) { return __atomic_load_n(&g_lag_ns, __ATOMIC_RELAXED); }
 
-// mlbts-native diagnosis (MLB_TRACE=perf), every 60 presents: how even the host presents were and why.
+// fastball diagnosis (MLB_TRACE=perf), every 60 presents: how even the host presents were and why.
 static struct { uint64_t n, sum, sumsq, mn, mx, on_slot, late, lag_sum; } ps;
 static void present_stats(uint64_t interval, uint64_t ready, uint64_t at, uint64_t t1, uint64_t d) {
     if (interval) {
@@ -168,7 +168,7 @@ static void present_image(const tex_t *t, const int crop[4], uint64_t at_ns, uin
     pending = 1;
     plat_cond_broadcast(&pcv);
     plat_mutex_unlock(&pl);
-    // mlbts-native: no vk_present_drain here (TotK's rdoc did one): with the replay queue it held the replay thread on the
+    // fastball: no vk_present_drain here (TotK's rdoc did one): with the replay queue it held the replay thread on the
     // present thread and the game stalled at its first loading screen under RenderDoc. The frame's own submissions are
     // on the queue before this; its blit may land in the next capture instead, which nothing needs.
     if (rdoc_active()) rdoc_after_present(frame);
@@ -191,7 +191,7 @@ static const char *const dr_name[DR_N] = {
 
 static PlatMutex rl = PLAT_MUTEX_INIT;
 static PlatCond rcv = PLAT_COND_INIT;   // item queued, item taken, item done
-// mlbts-native diagnosis (hitches): per timeline value, when its item was queued and when the replay started and
+// fastball diagnosis (hitches): per timeline value, when its item was queued and when the replay started and
 // finished it (ns, kern_now_ns); read by gfx_fence_story for a long nvnSyncWait.
 #define FT_N 4096
 static struct { uint64_t value, enq, rs, re; int kind; } ft[FT_N];
@@ -276,7 +276,7 @@ static void replay_main(void *arg) {
     return;
 }
 
-// mlbts-native diagnosis (the game's GPU waits, vk_exec_xfer.c): when value v's item was queued for the replay and
+// fastball diagnosis (the game's GPU waits, vk_exec_xfer.c): when value v's item was queued for the replay and
 // when its replay started and ended (0: not yet); 0 when v is not in the table.
 int gfx_fence_times(uint64_t v, uint64_t *enq, uint64_t *rs, uint64_t *re) {
     if (!gfx_replay_async()) return 0;
@@ -583,7 +583,7 @@ static void vk_be_guest_read(uint64_t addr, uint64_t size) {
 }
 // After a fence wait: the value is done, so its replay is too; a later submission the replay records meanwhile marks
 // its targets with a later fence, which write_back_small leaves alone. No drain.
-// mlbts-native: once per fence value. A target the replay marks dirty later carries a later fence than any the CPU
+// fastball: once per fence value. A target the replay marks dirty later carries a later fence than any the CPU
 // has seen complete, so a fence at or below the last one handled has nothing left to write back. With the replay on its
 // own thread the pending flag stays up (the replay is always recording newer frames), and MLB's loading code checks its
 // syncs in a loop: each check rescanned every GPU-written texture under the texture lock, the replay thread starved on

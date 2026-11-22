@@ -7,9 +7,9 @@ How `mlb.exe` is built from the game's code and TotK Recomp's runtime, and how f
 | Path | What | Origin |
 |---|---|---|
 | `recomp/` | ARM64 → C generator (lifter, NEON/FP lowering, jump tables, flags/register caching, module layout) | TotK Recomp `ae30a61`, unmodified |
-| `runtime/core/` | Generic host: CPU/SIMD headers, dispatch, host-function table, NSO loader, guest memory, kernel/threads (3 virtual cores), SVCs, IPC, platform (Win32), audio-renderer ABI header | TotK Recomp `ae30a61`; mlbts-native changes listed below |
-| `runtime/mlb/` | MLB layer: `main.c` (log, crash reporter, runtime services of the generated code), `boot.c` (rtld replacement, `nn::init::Start`, NPDM service list), `cfg.c` (environment settings), `services.c` (service table; lm, apm, ectx:aw, pctl), `am.c` (appletOE), `aoc.c` (aoc:u), `time.c` (time:u), `game.c` (NACP figures for fs), `account.c` (local user id), `stubs.c` (named stubs) | ours (main/boot/cfg adapted from TotK, attributed in headers) |
-| `runtime/gfx/` | TotK's graphics stack: NVN front end, Vulkan back end, present and Win32 window, shader client (docs/graphics-plan.md); `gfx_stubs.c` switches off the TotK-only features; `nvn_api_more.c` has NVN procs TotK never implemented | TotK Recomp `ae30a61`; changes marked `mlbts-native` |
+| `runtime/core/` | Generic host: CPU/SIMD headers, dispatch, host-function table, NSO loader, guest memory, kernel/threads (3 virtual cores), SVCs, IPC, platform (Win32), audio-renderer ABI header | TotK Recomp `ae30a61`; Fastball changes listed below |
+| `runtime/mlb/` | MLB layer: `main.c` (log, crash reporter, runtime services of the generated code), `boot.c` (rtld replacement, `nn::init::Start`, NPDM service list), `cfg.c` (environment settings), `services.c` (service table; lm, apm, ectx:aw, pctl), `am.c` (appletOE), `aoc.c` (aoc:u), `time.c` (time:u), `game.c` (NACP figures for fs), `account.c` (local user id), `packages.c` (optional: Road to the Show's Packages from a server on this PC), `stubs.c` (named stubs) | ours (main/boot/cfg adapted from TotK, attributed in headers) |
+| `runtime/gfx/` | TotK's graphics stack: NVN front end, Vulkan back end, present and Win32 window, shader client (docs/graphics-plan.md); `gfx_stubs.c` switches off the TotK-only features; `nvn_api_more.c` has NVN procs TotK never implemented | TotK Recomp `ae30a61`; changes marked `fastball` |
 | `tools/build.py` | Writes `work/build/modules.c` and `build.ninja`, compiles with LLVM clang, links `work/build/mlb.exe` with lld | ours |
 | `tools/data/expected-<version>.json` | per game version (1.0.15, 1.0.20): ExeFS hashes the loader checks, main's image size, RomFS size | ours |
 | `tools/addrmap.py` | finds a 1.0.15 address of `main` in 1.0.20 (masked instruction or data match) | ours |
@@ -17,7 +17,7 @@ How `mlb.exe` is built from the game's code and TotK Recomp's runtime, and how f
 The generic/game split follows AGENTS.md: `runtime/core` holds nothing MLB-specific, and `runtime/mlb` holds nothing
 that another title couldn't replace.
 
-### Changes to vendored files (all marked `mlbts-native` in the source)
+### Changes to vendored files (all marked `fastball` in the source)
 
 - `runtime/core/ipc.c`, `ipc.h`: **CMIF domains** (ConvertToDomain, CopyFromCurrentDomain, domain requests and
   close, interfaces returned as object ids). TotK never needed them, because its symbol overrides catch service use
@@ -61,7 +61,7 @@ that another title couldn't replace.
 ## Building and running
 
 ```bash
-.venv/Scripts/python -I recomp/gen.py --exefs work/update/exefs --out work/gen --modules main,sdk
+.venv/Scripts/python -I recomp/gen.py --exefs work/update/exefs --out work/gen --modules main,sdk --patches tools/data/patches-1.0.20.txt
 .venv/Scripts/python -I tools/build.py
 work/build/mlb.exe
 ```
@@ -69,6 +69,24 @@ work/build/mlb.exe
 `tools/build.py` takes the game version from the SHA-256 of `work/update/exefs/main` (or `--exefs DIR`) and stops
 when `work/gen` was generated from another version's `main`. The dev tree runs 1.0.20; 1.0.15's files are in
 `work/update-1.0.15` and `work/romfs-1.0.15` (AGENTS.md, "Game versions").
+
+### Profile-guided optimisation of the runtime
+
+The runtime (not the game's code) is compiled with `tools/data/runtime.profdata`, counts of which runtime functions and
+branches run most in the attract match. `tools/build.py` uses it by default (`--pgo off` leaves it out), and the
+release's `libmlbrt.a` is built with it, so players get the faster runtime without a profile of their own. It holds only
+runtime function names and counts: the game's code is never instrumented. Functions changed since the training compile
+as without a profile; train again after large changes to the replay:
+
+```bash
+.venv/Scripts/python -I tools/build.py --pgo gen        # mlb.exe whose runtime counts (slower)
+work/build/mlb.exe                                      # MLB_TRACE=none MLB_SAMPLER=off: the attract match, 3 minutes
+.venv/Scripts/python -I tools/pgo.py merge              # work/build/pgo/*.profraw -> tools/data/runtime.profdata
+.venv/Scripts/python -I tools/build.py                  # the normal build again
+```
+
+Train with the diagnostics off (`MLB_TRACE=none MLB_SAMPLER=off MLB_CAPTURE_KEY=0` in the environment), as players
+run: otherwise their branches count as the common case.
 
 The game's RomFS must be extracted first (1.0.20: 37.9 GB, 86,235 files; 1.0.15: 37.4 GB, 84,634 files; about 3.5
 minutes at 150-190 MiB/s). Extraction is
@@ -160,7 +178,8 @@ linker. `tools/shader_smoke.py` translates a sample of MLB's FXB shaders offline
     leave their constructor flag at 2. ✔
 11. **`nnMain` runs.** ✔ Its first SDK call was `nn::fs::QueryMountRomCacheSize`, which went to `fsp-srv` until
     the `nn::fs` overrides took it.
-12. **fs**: the game mounts the RomFS as `FS_Rom` and temporary storage as `FS_Temp`, reads
+12. **fs**: the game mounts the RomFS as `FS_Rom`, temporary storage as `FS_Temp` and cache storage 0 as
+    `FS_GameData` (which exists only with `MLB_CACHE_STORAGE`, step 23), reads
     `FS_Rom:/BOOT/CONFIG_MAIN.TXT`, and logs its own start-up lines (`[lm 0] Compiler: ...`). ✔
 13. **Graphics bring-up** (docs/graphics-plan.md). The `nv::` and `nn::vi::` overrides take the place of `nvdrv`, and
     `nvnBootstrapLoader` hands out TotK's NVN procs. The game creates its device, records command buffers and presents
@@ -219,6 +238,29 @@ linker. `tools/shader_smoke.py` translates a sample of MLB's FXB shaders offline
     stop:** every presented frame is black (`MLB_SHOT` captures). Under investigation: MLB samples through separate
     texture and sampler handles (`nvnCommandBufferBindSeparateTextures`), and uploads movie frames with
     `nvnTextureWriteTexels`.
+20. **Offline packages** (optional, `MLB_OFFLINE_PACKAGES=1`, off by default; `runtime/mlb/packages.c`,
+    [tools/packages](../tools/packages/README.md)). Road to the Show hands out and opens its equipment packs through
+    the game's online service. With the setting on, the runtime starts a small server on this PC before the modules
+    are linked, serves `nn::socket` on host sockets that reach `127.0.0.1` only, answers `nifm`, `friend:u` and the
+    network service account as a console that is online, and puts the server's own certificate in place of the ones
+    the game trusts, in memory. The game's online code then logs in to that server and nowhere else. `time:u` serves
+    `LoadTimeZoneRule`, `ToCalendarTime` and `ToPosixTime`, which the game calls once it is online. With the setting
+    off none of it is installed.
+21. **Finished tutorials** (`MLB_KEEP_TUTORIALS`, on by default; `runtime/mlb/tutorials.c`). The game keeps the
+    tutorials a player has finished only in its online profile, which the server sends back after each login, so
+    offline every tutorial came back on every start. The runtime keeps the list in `<profile>/tutorials-seen.txt`
+    and gives it back to the game: it wraps the eight function pointers through which the game asks whether a
+    tutorial was seen or marks one seen. With the setting off nothing is installed.
+22. **Road to the Show hub upgrades saved** (`MLB_RTTS_AUTOSAVE`, on by default; `runtime/mlb/rtts_autosave.c`).
+    The game saves a career after a played game and on a few game events, not after hub purchases, so perk and
+    attribute upgrades bought in the hub were lost by quitting before the next game. The runtime wraps the eleven
+    menu commands that buy or refund upgrades; after one, the game's own after-game autosave (with its own checks)
+    runs at the next screen change, normally when the player leaves the Perks, Tools or pitch upgrade screen. With
+    the setting off nothing is installed.
+23. **Cache storage** (`MLB_CACHE_STORAGE`, on by default; `runtime/mlb/cache_storage.c`). The game mounts cache
+    storage 0 as `FS_GameData` and keeps custom batting cameras, Audio Unlockables, an inventory copy and other files
+    there, but never creates it and its NACP declares none, so the mount failed and those files were never kept
+    (issue 19). The runtime creates `<profile>/cache/0` at start.
 
 Commands each service has not been seen to use stop with a named fatal (`ipc_unimplemented`), so every new one is
 found where it is first needed; commands that only pass a setting are accepted and logged under `MLB_TRACE=ipc`.

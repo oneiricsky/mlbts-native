@@ -210,7 +210,7 @@ static LRESULT CALLBACK wnd_proc(HWND h, UINT m, WPARAM w, LPARAM l) {
             input_cursor_suspend(1);
             toggle_fullscreen(h);
             input_cursor_suspend(0);
-            // mlbts-native: cfg_set_saved, so cfg_save writes it into mlb.cfg (plain cfg_set was not saved)
+            // fastball: cfg_set_saved, so cfg_save writes it into mlb.cfg (plain cfg_set was not saved)
             cfg_set_saved("TOTK_FULLSCREEN", is_fullscreen(h) ? "1" : "0");   // the menu shows it; the next start keeps it
             cfg_save();
             note_applied();   // what cfg_get reads now (the environment may still override it)
@@ -318,7 +318,7 @@ static void window_main(void *arg) {
     // button flashes, and TOTK_FULLSCREEN waits for the first activation.
     // TOTK_BACKGROUND_WINDOW=1 (test runs): no flashing, never fullscreen at start, and F11 keeps the window's place.
     int background = g_background = cfg_get("TOTK_BACKGROUND_WINDOW") && atoi(cfg_get("TOTK_BACKGROUND_WINDOW"));
-    g_hwnd = CreateWindowExW(0, wc.lpszClassName, L"MLB The Show 26 (mlbts-native)", WND_STYLE, CW_USEDEFAULT, CW_USEDEFAULT, ow, oh, NULL,
+    g_hwnd = CreateWindowExW(0, wc.lpszClassName, L"MLB The Show 26 (fastball)", WND_STYLE, CW_USEDEFAULT, CW_USEDEFAULT, ow, oh, NULL,
                              NULL, inst, NULL);
     if (!g_hwnd) {
         rt_log("gfx: CreateWindowEx failed (%lu)", GetLastError());

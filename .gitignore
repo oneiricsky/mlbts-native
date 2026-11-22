@@ -11,6 +11,8 @@ gamefiles/
 
 # Local extraction / analysis output (may contain copyrighted code or data)
 work/
+# the setup window run from a checkout: an update it downloads (installer/update.py)
+/.update/
 
 # Encryption keys
 *.keys

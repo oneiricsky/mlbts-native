@@ -1,4 +1,4 @@
-// mlbts-native: the size MLB renders its 3D scene at (MLB_RENDER_SCALE, the settings menu's Graphics tab).
+// fastball: the size MLB renders its 3D scene at (MLB_RENDER_SCALE, the settings menu's Graphics tab).
 //
 // MLB draws its 3D scene into one image smaller than its 1920x1080 output and stretches it there in its final pass
 // (vk_exec_draw.c aa_composite: fragment shader daf10a59), with the HUD drawn into a separate 1080p layer. The scene's
@@ -67,8 +67,36 @@ static const char *dlss_pct(void) {
     return pct;
 }
 
+// fastball: MLB_FSR (vk_ffx.c), when DLSS does not take the scene: the same sizes per mode as DLSS (Native AA 100,
+// Quality the game's own 75 %, Balanced 58, Performance 50, Ultra Performance 33.3), when AMD's two runtime libraries
+// sit next to mlb.exe. FSR 3.1 runs on every GPU the game runs on, so nothing else is checked here. NULL: FSR off.
+static const char *fsr_pct(void) {
+    static const struct { const char *mode, *pct; } modes[] = {{"native", "100"}, {"quality", "game"},
+                                                               {"balanced", "58"}, {"performance", "50"},
+                                                               {"ultra_performance", "33.3333"}};
+    const char *m = cfg_value("FSR");
+    const char *pct = NULL;
+    for (size_t i = 0; i < sizeof modes / sizeof modes[0]; i++)
+        if (!strcmp(m, modes[i].mode)) pct = modes[i].pct;
+    if (!pct) return NULL;
+    char exe[PLAT_PATH_MAX], dll[PLAT_PATH_MAX + 64];
+    const char *sep = plat_exe_path(exe, sizeof exe) ? plat_last_sep(exe) : NULL;
+    static const char *const libs[] = {"amd_fidelityfx_loader_vk.dll", "amd_fidelityfx_upscaler_vk.dll"};
+    for (int i = 0; i < 2; i++) {
+        if (sep) snprintf(dll, sizeof dll, "%.*s/%s", (int)(sep - exe), exe, libs[i]);
+        if (!sep || !plat_file_exists(dll)) {
+            rt_log("res: MLB_FSR=%s needs %s next to mlb.exe, which is missing; MLB_RENDER_SCALE applies", m, libs[i]);
+            return NULL;
+        }
+    }
+    rt_log("res: MLB_FSR=%s: the 3D scene at %s%s (MLB_RENDER_SCALE is not used)", m, pct,
+           strcmp(pct, "game") ? " % of 1080p" : "'s own size");
+    return pct;
+}
+
 void res_apply(void) {
     const char *v = dlss_pct();
+    if (!v) v = fsr_pct();
     if (!v) v = cfg_value("RENDER_SCALE");
     if (!strcmp(v, "game")) return;
     char *end;

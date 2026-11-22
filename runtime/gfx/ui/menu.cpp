@@ -10,7 +10,7 @@
 // Copyright (c) 2026 Peiikai): dark green panels, gold accents, the tab bar with L / R or Q / E, the window over a
 // dimmed game, two-pane option rows (option_rows.cpp).
 //
-// mlbts-native: MLB's pages (Graphics, Display, Game, Sound, Controls, Advanced) over the settings this port reads,
+// fastball: MLB's pages (Graphics, Display, Game, Sound, Controls, Advanced) over the settings this port reads,
 // with TotK's performance overlay (F10) and its Advanced helpers; English text only. TotK's translated catalog, its
 // mods, cheats, amiibo and key binding pages and its TotK-only rows (resolution patches, shadows, DLSS, HDR, frame
 // limit, motion, mouse) are not ported. F1, or
@@ -284,9 +284,9 @@ static bool g_modal;            // a confirmation is open: B and Esc close it, n
 
 // Every setting the pages show, for "Reset all settings" (cfg_reset) and "Restart now".
 static const char *const kMenuKeys[] = {
-    "RENDER_SCALE", "UPSCALER", "SHARPNESS", "DLSS", "DLSS_PRESET", "AA", "AA_STRENGTH", "ANISO", "COLOR_PRESET", "COLOR_BRIGHTNESS", "COLOR_CONTRAST", "COLOR_SATURATION",
+    "RENDER_SCALE", "UPSCALER", "SHARPNESS", "DLSS", "DLSS_PRESET", "FSR", "FSR_VERSION", "FSR_SHARPNESS", "AA", "AA_STRENGTH", "ANISO", "COLOR_PRESET", "COLOR_BRIGHTNESS", "COLOR_CONTRAST", "COLOR_SATURATION",
     "COLOR_GAMMA", "FULLSCREEN", "WINDOW_SIZE", "VK_PRESENT", "FPS_LIMIT", "ASPECT", "GPU_INDEX", "PERF_OVERLAY", "FRAME_QUEUE",
-    "ASSUME_FOCUS", "VOLUME", "PAD_MAP", "PROMPTS", "RUMBLE", "RUMBLE_STRENGTH", "STICK_DEADZONE", "LSTICK_DEADZONE",
+    "ASSUME_FOCUS", "KEEP_TUTORIALS", "RTTS_AUTOSAVE", "WALKUP_LIGHT", "WALKUP_LEADERS", "VOLUME", "PAD_MAP", "PROMPTS", "RUMBLE", "RUMBLE_STRENGTH", "STICK_DEADZONE", "LSTICK_DEADZONE",
     "RSTICK_DEADZONE", "ASYNC_PREEMPT", "REPLAY_ASYNC", "PIPE_WAIT", "PIPE_SKIP", "LIB_PREBUILD",
     "LIB_PREBUILD_THREADS", "PIPE_PREBUILD", "PREWARM_XLATE", "GPL", "ASTC", "MEMORY", "TEX_ALIAS",
     "TEX_VRAM_PRESSURE", "ASTC_BC", "LOD_GUARD", "FIX_C0", "FIX_ZERO", "BIND_SKIP", "SHADER_MEMO", "PIPE_MEMO",
@@ -319,11 +319,27 @@ static bool restart_pending(void) {
 // replaces while it runs say so.
 extern "C" const char *vk_dlaa_status(void);
 extern "C" int vk_dlaa_on(void);
-static bool dlss_in_use(void) { return vk_dlaa_on() != 0; }
+extern "C" const char *vk_dlaa_name(void);
+// fastball: AMD FSR 3.1 / 4 (vk_ffx.c) runs through the same machinery as DLSS: the rows it replaces name the one
+// running.
+extern "C" const char *vk_ffx_status(void);
+// fastball: rows this PC cannot use, or that do nothing with the other settings as they are, are greyed out
+// (opt_unavailable) with the reason. DLSS and FSR rows that are set stay changeable, so they can be turned off.
+extern "C" const char *vk_dlaa_missing(void);
+extern "C" const char *vk_ffx_missing(void);
+extern "C" int vk_ffx_has4(void);
+static bool set_on(const char *key) { return strcmp(cfg_value(key), "off") != 0; }
+// The temporal upscaler the settings choose (DLSS wins), when this PC can run it: it replaces the internal
+// resolution, the upscaling and FXAA. From the settings, not the running one: a change waiting for a restart shows.
+static const char *replaced_why(void) {
+    if (set_on("DLSS") && !vk_dlaa_missing()) return "Replaced by DLSS";
+    if (set_on("FSR") && !vk_ffx_missing()) return "Replaced by FSR";
+    return nullptr;
+}
 
 // What the antialiasing pass did lately (vk_aa_status), under its value.
 static const char *aa_note(void) {
-    if (dlss_in_use()) return "replaced by DLSS";
+    if (replaced_why()) return nullptr;   // (the greyed row says it)
     switch (vk_aa_status()) {
     case 1: return "active";
     case 2: return "waiting for a 3D scene";
@@ -362,7 +378,7 @@ static void rows_color(void) {
 
 // "in use: ..." under the upscaler while FSR has nothing to do (the scene is as large as the picture or larger).
 static const char *upscaler_note(void) {
-    if (dlss_in_use()) return "replaced by DLSS";
+    if (replaced_why()) return nullptr;
     if (strcmp(cfg_value("UPSCALER"), "fsr") || !strcmp(cfg_value("RENDER_SCALE"), "game")) return nullptr;
     return "not used at this resolution";
 }
@@ -373,28 +389,34 @@ static void tab_graphics(float scale) {
     static const char *const rs[] = {"game", "100", "125", "150"};
     static const char *const rs_names[] = {"Game (1440 \xc3\x97 810)", "100 % (1920 \xc3\x97 1080)",
                                            "125 % (2400 \xc3\x97 1350)", "150 % (2880 \xc3\x97 1620)"};
+    const char *replaced = replaced_why();
+    opt_unavailable(replaced);
     opt_choice_list("RENDER_SCALE", "Internal resolution", rs, rs_names, 4,
                     "The size the game draws its 3D scene at. On the TV the game draws it at 1440 x 810 and stretches it "
                     "to 1080p, which makes it soft. 100 % draws it at full 1080p; 125 % and 150 % draw it larger and "
                     "shrink it, which also smooths edges (supersampling). The HUD and menus are always 1080p.\n\n"
                     "Costs GPU time and video memory: 150 % draws about four times the pixels of the game's size. "
                     "200 % runs the game out of its own graphics memory and crashes, so it is not offered.",
-                    -1, dlss_in_use() ? "replaced by DLSS" : nullptr);
+                    -1);
     static const char *const up[] = {"FSR 1", "Bilinear"};
+    opt_unavailable(replaced);
     opt_choice("UPSCALER", "Upscaling", up, 2,
                "How the 3D scene is stretched to 1080p when the internal resolution is the game's.\n\n"
                "Bilinear is the game's own. FSR 1 (AMD FidelityFX Super Resolution) keeps edges and detail sharper. "
                "It runs before the game draws its HUD, so text is not touched. It also scales the picture up when "
                "the window is larger than 1080p. Costs a fraction of a millisecond.",
                upscaler_note());
-    opt_slider("SHARPNESS", "FSR sharpness", 0, 100,
-               "How much FSR sharpens after scaling up; 0 turns the sharpening off.", 5, "%.0f %%");
+    opt_unavailable(replaced ? replaced : strcmp(cfg_value("UPSCALER"), "fsr") ? "Only with Upscaling on FSR 1" : nullptr);
+    opt_slider("SHARPNESS", "FSR 1 sharpness", 0, 100,
+               "How much FSR 1 sharpens after scaling up; 0 turns the sharpening off.", 5, "%.0f %%");
     opt_group("NVIDIA DLSS");
     static const char *const dlss[] = {"off", "dlaa", "quality", "balanced", "performance", "ultra_performance"};
     static const char *const dlss_names[] = {"Off", "DLAA (1920 \xc3\x97 1080)", "Quality (1440 \xc3\x97 810)",
                                              "Balanced (1114 \xc3\x97 626)", "Performance (960 \xc3\x97 540)",
                                              "Ultra Performance (640 \xc3\x97 360)"};
-    opt_choice_list("DLSS", "DLSS", dlss, dlss_names, 6,
+    const char *dlss_no = vk_dlaa_missing(), *fsr_no = vk_ffx_missing();
+    opt_unavailable(set_on("DLSS") ? nullptr : dlss_no);
+    bool dlss_set = opt_choice_list("DLSS", "DLSS", dlss, dlss_names, 6,
                     "NVIDIA DLSS on the 3D scene, for GeForce RTX graphics cards. It draws the scene at the size shown "
                     "and uses AI to rebuild a sharp, smooth 1080p picture from it and from the frames before. It "
                     "replaces the internal resolution, the upscaling and the antialiasing above. The HUD and menus are "
@@ -403,11 +425,14 @@ static void tab_graphics(float scale) {
                     "Quality draws it at the game's own 1440 x 810, as on the TV, and DLSS turns that into a sharp "
                     "1080p picture in place of the game's plain stretch. Balanced, Performance and Ultra Performance "
                     "draw less for more frame rate.\n\n"
-                    "Needs nvngx_dlss.dll (NVIDIA's DLSS library) next to mlb.exe. Applies after a restart.",
+                    "Needs nvngx_dlss.dll (NVIDIA's DLSS library) next to mlb.exe; the setup downloads it on "
+                    "GeForce RTX cards. Applies after a restart. Turning DLSS on turns AMD FSR off.",
                     -1, vk_dlaa_status());
+    if (dlss_set && strcmp(cfg_value("DLSS"), "off")) cfg_set_saved("FSR", "off");   // one temporal upscaler
     static const char *const preset[] = {"default", "k", "j", "m", "l", "e"};
     static const char *const preset_names[] = {"Default", "K (transformer)", "J (transformer)",
                                                "M (transformer 2)", "L (transformer 2)", "E (older CNN)"};
+    opt_unavailable(dlss_no ? dlss_no : !set_on("DLSS") ? "Only with DLSS on" : nullptr);
     opt_choice_list("DLSS_PRESET", "DLSS model", preset, preset_names, 6,
                     "Which of NVIDIA's DLSS models rebuilds the picture.\n\n"
                     "Default follows NVIDIA's advice per mode: K for DLAA, Quality and Balanced, M for Performance, "
@@ -417,8 +442,40 @@ static void tab_graphics(float scale) {
                     "the FP8 maths they are built for. E is the older CNN model: the cheapest, softer and with more "
                     "ghosting.\n\n"
                     "Applies at once.");
+    opt_group("AMD FSR");
+    static const char *const fsr[] = {"off", "native", "quality", "balanced", "performance", "ultra_performance"};
+    static const char *const fsr_names[] = {"Off", "Native AA (1920 \xc3\x97 1080)", "Quality (1440 \xc3\x97 810)",
+                                            "Balanced (1114 \xc3\x97 626)", "Performance (960 \xc3\x97 540)",
+                                            "Ultra Performance (640 \xc3\x97 360)"};
+    opt_unavailable(set_on("FSR") ? nullptr : fsr_no);
+    bool fsr_set = opt_choice_list("FSR", "FSR", fsr, fsr_names, 6,
+                    "AMD FidelityFX Super Resolution (FSR 3.1 or FSR 4) on the 3D scene, for any graphics card. Like "
+                    "DLSS, it draws the scene at the size shown and rebuilds a sharp, smooth 1080p picture from it and "
+                    "from the frames before. It replaces the internal resolution, the upscaling and the antialiasing "
+                    "above. The HUD and menus are not touched.\n\n"
+                    "Native AA draws the scene at full 1080p and only smooths it. Quality draws it at the game's own "
+                    "1440 x 810. Balanced, Performance and Ultra Performance draw less for more frame rate.\n\n"
+                    "Needs AMD's FSR libraries (amd_fidelityfx_loader_vk.dll and amd_fidelityfx_upscaler_vk.dll) next "
+                    "to mlb.exe; the setup downloads them. Applies after a restart. Turning FSR on turns DLSS off.",
+                    -1, vk_ffx_status());
+    if (fsr_set && strcmp(cfg_value("FSR"), "off")) cfg_set_saved("DLSS", "off");   // one temporal upscaler
+    static const char *const fsr_ver[] = {"4", "3.1"};
+    static const char *const fsr_ver_names[] = {"FSR 4 where supported", "FSR 3.1"};
+    const char *fsr_off = fsr_no ? fsr_no : !set_on("FSR") ? "Only with FSR on" : nullptr;
+    // FSR 4 is known only once AMD's runtime ran (FSR on at start): on a card without it both choices run 3.1
+    opt_unavailable(fsr_off ? fsr_off : vk_ffx_has4() == 0 ? "FSR 4 does not run on this graphics card" : nullptr);
+    opt_choice_list("FSR_VERSION", "FSR version", fsr_ver, fsr_ver_names, 2,
+                    "FSR 4 uses AI to rebuild the picture: the sharpest and steadiest, on the AMD Radeon cards AMD made "
+                    "it for (RX 9000, and RX 6000 / 7000 with AMD's newer drivers) with AMD's own driver. Everywhere "
+                    "else FSR 3.1 runs instead, which works on every graphics card (NVIDIA and Intel too).\n\n"
+                    "FSR 3.1 always uses FSR 3.1. The note under FSR says which one runs. Applies at once.");
+    opt_unavailable(fsr_off);
+    opt_slider("FSR_SHARPNESS", "FSR 3.1 / 4 sharpness", 0, 100,
+               "How much FSR sharpens its picture; 0 turns the sharpening off. Applies at once.", 5, "%.0f %%");
     opt_group("Antialiasing");
     static const char *const aa[] = {"Off", "FXAA"};
+    const char *aa_no = replaced ? replaced : vk_aa_status() == 3 ? "Not supported on this graphics card" : nullptr;
+    opt_unavailable(aa_no);
     opt_choice("AA", "Antialiasing", aa, 2,
                "Smooths the jagged, stair-stepped edges of the 3D scene (players, the field lines, the stands, the "
                "bat). The game draws its 3D scene at 1440 x 810 without any smoothing and then stretches it to "
@@ -426,6 +483,7 @@ static void tab_graphics(float scale) {
                "FXAA finds edges in the finished 3D picture and blends across them. It runs before the game draws "
                "its HUD and menus, so the score bug and text stay sharp. It costs a fraction of a millisecond.",
                aa_note());
+    opt_unavailable(aa_no ? aa_no : strcmp(cfg_value("AA"), "fxaa") ? "Only with FXAA on" : nullptr);
     opt_slider("AA_STRENGTH", "FXAA strength", 0, 100,
                "How much FXAA also softens thin details smaller than a pixel (the netting, distant lines, "
                "shimmering on the grass). Higher is smoother but a little blurrier; 0 only smooths the edges.",
@@ -538,7 +596,7 @@ static void tab_display(float scale) {
                "tearing or waiting. VSync waits for the display's refresh (more input delay). Off shows frames as soon "
                "as they are done and can tear.",
                present_note());
-    // mlbts-native: MLB_FPS_LIMIT (runtime/mlb/framerate.c)
+    // fastball: MLB_FPS_LIMIT (runtime/mlb/framerate.c)
     static const char *const fps[] = {"30", "40", "45", "60", "90", "120", "144", "165", "240", "display"};
     static const char *const fps_names[] = {"30", "40", "45", "60 (the game's own)", "90", "120", "144", "165", "240",
                                             "Monitor refresh rate"};
@@ -576,7 +634,11 @@ static void row_play_time(void) {
     opt_button("##play_time", "Play time", desc, value);
 }
 
+// The game's code patches (tools/data/patches-<version>.txt, runtime/core/patches.c): -1 when this build has no such set
+extern "C" int rt_patch_set(const char *name);
+
 static void tab_game(float scale) {
+    const char *no_patches = "Not in this build: it was made without the game's code patches";
     opt_begin("##game", scale);
     // mlbts-native: MLB_SKIP_INTRO (fs_host.c) — the boot logos answered as missing files
     opt_toggle("SKIP_INTRO", "Skip intro logos",
@@ -589,6 +651,24 @@ static void tab_game(float scale) {
                "On (the default), the game keeps running while you are in another window, and the keyboard stays "
                "quiet until the window is in front again. Off, it pauses when its window loses focus, as on the "
                "Switch when Home is pressed.");
+    opt_toggle("KEEP_TUTORIALS", "Remember finished tutorials",
+               "On (the default), a tutorial you have finished does not come back the next time you start the game. "
+               "The list is kept in tutorials-seen.txt in the profile folder; delete it while the game is closed to "
+               "see every tutorial again. Off, they come back on every start. Applies after a restart.");
+    opt_toggle("RTTS_AUTOSAVE", "Save hub upgrades",
+               "On (the default), when you buy perk or attribute upgrades in Road to the Show, the game's own "
+               "autosave runs as you leave that screen. Off, they are kept only by a manual save or the autosave "
+               "after your next game. Applies after a restart.");
+    opt_unavailable(rt_patch_set("walkup_light") < 0 ? no_patches : nullptr);
+    opt_toggle("WALKUP_LIGHT", "No freeze before each pitch",
+               "Before each pitch the game redid its stadium lighting in one frame, a freeze of about a quarter "
+               "second, though it had already prepared the same lighting in the background. On (the default), it "
+               "uses the prepared lighting, and after an inning change it prepares the new lighting in the "
+               "background (about a second). Applies after a restart.");
+    opt_unavailable(rt_patch_set("walkup_leaders") < 0 ? no_patches : nullptr);
+    opt_toggle("WALKUP_LEADERS", "Shorter pause at inning changes",
+               "At each inning change the game builds its league-leader lists for the broadcast twice in a row. On "
+               "(the default), it builds them once. Applies after a restart.");
     row_play_time();
     opt_end();
 }
@@ -842,7 +922,7 @@ static void layout_menu(uint32_t w, uint32_t h, float scale) {
                                         ImGuiWindowFlags_NoSavedSettings);
     ImGui::TextColored(ImVec4(0.93f, 0.76f, 0.33f, 1), "Settings");
     char version[96];   // right-aligned on the title line
-    snprintf(version, sizeof version, "MLB The Show 26 native %s, game %s", rt_port_version, rt_game_build);
+    snprintf(version, sizeof version, "Fastball %s, MLB The Show 26 %s", rt_port_version, rt_game_build);
     ImGui::SameLine(ImGui::GetWindowWidth() - ImGui::GetStyle().WindowPadding.x - ImGui::CalcTextSize(version).x);
     ImGui::TextDisabled("%s", version);
 
@@ -1069,7 +1149,7 @@ static void perf_full_draw(const MenuTarget *t, float scale) {
     ImGui::SetWindowFontScale(0.72f);
     const ImVec4 gpu_c(0.55f, 0.83f, 0.31f, 1), cpu_c(0.18f, 0.59f, 0.80f, 1), ram_c(0.80f, 0.45f, 0.70f, 1),
         fps_c(0.95f, 0.95f, 0.95f, 1), wait_c(0.93f, 0.76f, 0.33f, 1), pic_c(0.62f, 0.70f, 0.95f, 1);
-    ImGui::TextDisabled("MLB The Show 26 native %s, game %s", rt_port_version, rt_game_build);
+    ImGui::TextDisabled("Fastball %s, MLB The Show 26 %s", rt_port_version, rt_game_build);
     if (ImGui::BeginTable("##perft", 4, ImGuiTableFlags_SizingFixedFit)) {
         static const char *const labels[] = {"GPU", "VRAM", "CPU", "RAM", "FPS", "Frame"};
         static const PerfCol c1[] = {{"%.0f%%", 100}, {"%.1f GB", 888.8f}, {"%.0f", 888}, {"%.1f ms", 888.8f}};
@@ -1151,7 +1231,7 @@ static void perf_draw(const MenuTarget *t, float scale) {
     dl->AddText(ImVec2(p.x + pad, p.y + pad), IM_COL32(255, 255, 255, 235), g_perf_text);
 }
 
-// mlbts-native: MLB presents sRGB images, so the swapchain is sRGB (gfx_present.c create_swapchain) and the hardware
+// fastball: MLB presents sRGB images, so the swapchain is sRGB (gfx_present.c create_swapchain) and the hardware
 // encodes what the menu writes. ImGui's colours are already sRGB values: written as they are, they came out encoded
 // twice, the dark green panels a washed-out grey green (first test shot, 2026-11-13). On an sRGB target the vertex
 // colours are turned into linear values first; alpha stays.

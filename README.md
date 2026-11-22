@@ -1,7 +1,7 @@
 # MLB The Show 26: native Windows port (fork)
 
-A personal fork of [sam110411/mlbts-native](https://github.com/sam110411/mlbts-native), a static recompilation of
-MLB The Show 26 (Nintendo Switch) into a native Windows program. The upstream README is in the collapsed section
+A personal fork of [sam110411/fastball](https://github.com/sam110411/fastball) (formerly mlbts-native), a static
+recompilation of MLB The Show 26 (Nintendo Switch) into a native Windows program. The upstream README is in the collapsed section
 below, unchanged. Its download links and release instructions point to upstream, not to this fork.
 
 ## What this fork is for
@@ -25,7 +25,9 @@ part of any release. Details and numbers: [docs/ps5-textures.md](docs/ps5-textur
 <details>
 <summary>Original README (upstream)</summary>
 
-# MLB The Show 26: native Windows port
+# Fastball: MLB The Show 26, native on Windows
+
+Fastball is a native Windows port of MLB The Show 26 for Switch.
 
 <a href="https://recomplauncher.com/game/mlbts-native"><picture><source media="(prefers-color-scheme: dark)" srcset="https://recomplauncher.com/assets/press/launcher/badge-light.svg"><img alt="Get it on RecompLauncher" src="https://recomplauncher.com/assets/press/launcher/badge-dark.svg" height="48"></picture></a>
 
@@ -41,7 +43,7 @@ host runtime that stands in for the Switch's operating system, GPU API and audio
 
 ## Status
 
-Playable offline. The game boots, the menus work, and Exhibition, Road to the Show and Franchise run at 60 fps on the
+Playable offline. The game boots, the menus work, and Exhibition, Road to the Show and Franchise run at 100+ fps on the
 development machine (Ryzen 5 5600X, RTX 3060 Ti, Windows 11).
 
 **Scope:** offline play only (exhibition, Road to the Show, Franchise, menus, local saves). Online play and Diamond
@@ -52,25 +54,36 @@ Game versions 1.0.20 (the latest) and 1.0.15 are supported; other versions are n
 
 ## Playing it
 
-1. Download `MLBTS-Setup-<version>-windows.zip` from [Releases](https://github.com/sam110411/mlbts-native/releases),
-   unpack it anywhere and start **`MLBTS-Setup.exe`**.
+1. Download `Fastball-<version>-windows.zip` from [Releases](https://github.com/sam110411/fastball/releases),
+   unpack it where you want the game to live (it needs about 40 GB there) and start **`Fastball.exe`**.
 2. The setup looks for your game files and keys by itself (Ryujinx's and yuzu's folders, Downloads, Desktop, ...).
    Check what it found, pick anything missing, and press **Install**.
-3. After about 10 minutes, press **Play**. From then on, use the "MLB The Show 26" shortcut.
+3. After about 10 minutes, press **Play**. From then on, `Fastball.exe` starts the game straight away (hold Shift
+   while starting it for its window: updates, repair, save import).
+
+Everything stays in that folder: the game goes into `MLBTS\`, and deleting the folder removes the port. Flags work too:
+`Fastball.exe --fullscreen --fps-limit 120` (`MLBTS\mlb.exe --help` lists every setting).
 
 The download contains no part of the game. The setup builds the game on your PC from your own files: the base game and
 the 1.0.20 update (or 1.0.15) as NSP files dumped from your Switch, and your `prod.keys`. It needs about 40 GB free. To update the
-port, start a newer setup and press **Update**; your game files, saves and settings stay. How the setup works and how a
+port, press **Download and update** when the setup offers it (it checks once a day), or start a newer setup and press
+**Update**; your game files, saves and settings stay. How the setup works and how a
 release is made: [docs/release.md](docs/release.md).
 
 ## Features
 
 - Native Windows executable, Vulkan 1.3 renderer. Switch shaders are translated at run time.
 - Switch saves are used as they are: a Ryujinx save can be imported (the setup offers it, or `mlb.exe --import-save`).
+- Road to the Show equipment without a connection, as an option of the setup: every item, with its picture, owned
+  from the start ([`tools/equipment`](tools/equipment/README.md)).
+- Road to the Show's Packages without a connection, as another option of the setup: the game earns and opens its
+  equipment packs against a small server on the player's own PC ([`tools/packages`](tools/packages/README.md)).
+  Nothing is sent anywhere, and it is off unless turned on.
 - Xbox and PlayStation controllers (through SDL3) with rumble. The game's button prompts follow the controller in use.
 - Keyboard and mouse.
-- Resolution options: output size, render scale, FSR 1, and NVIDIA DLSS / DLAA (the DLSS library is downloaded
-  separately, not shipped here).
+- Resolution options: output size, render scale, FSR 1, NVIDIA DLSS / DLAA and AMD FSR 3.1 / FSR 4 (the setup
+  downloads the DLSS and FSR libraries for the graphics card from NVIDIA's and AMD's repositories; they are not
+  shipped here).
 - FXAA, anisotropic filtering, shadow quality options, colour presets, HDR output, field-of-view and aspect options.
 - In-game settings menu, performance overlay, fullscreen toggle (F11).
 - Frame rate limit from 30 to 240 fps or the monitor's rate, at the game's normal speed
@@ -114,8 +127,8 @@ First-time setup, once:
 ```bash
 # 1. extract the ExeFS and the RomFS from your own dumps (about 37 GB)
 .venv/Scripts/python -I tools/romfs_dump.py --keys "$APPDATA/Ryujinx/system/prod.keys" --titlekeys "$APPDATA/Ryujinx/system/title.keys" --extract-all "gamefiles/<base>.nsp" "gamefiles/<update>.nsp" work/romfs
-# 2. generate C from the game's code (about 50 s)
-.venv/Scripts/python -I recomp/gen.py --exefs work/update/exefs --out work/gen --modules main,sdk
+# 2. generate C from the game's code, with its code patches (about 50 s)
+.venv/Scripts/python -I recomp/gen.py --exefs work/update/exefs --out work/gen --modules main,sdk --patches tools/data/patches-1.0.20.txt
 # 3. fetch Vulkan headers, VMA and SDL3; build the shader translator
 .venv/Scripts/python -I tools/fetch_deps.py
 .venv/Scripts/python -I tools/build_xlate.py
@@ -160,7 +173,7 @@ prints `FATAL:` with host frames that can be symbolized with `llvm-symbolizer`.
 | `tools/` | Build, extraction and analysis scripts |
 | `docs/` | Binary reconnaissance, runtime notes, graphics plan |
 
-Changes to vendored upstream files are marked `mlbts-native` in the source with a comment explaining the case that
+Changes to vendored upstream files are marked `fastball` in the source with a comment explaining the case that
 needed them.
 
 ## Credits and reference projects

@@ -857,7 +857,7 @@ void plat_aligned_free(void *p) { _aligned_free(p); }
 // ---- process
 
 #ifdef TOTK_PGO_GEN
-// compiler-rt's profile runtime (an instrumented build, tools/build_game.py --pgo gen). It writes its counters from an
+// compiler-rt's profile runtime (an instrumented build, tools/build.py --pgo gen). It writes its counters from an
 // atexit handler, which ExitProcess skips; __llvm_profile_dump writes them once and makes later writes no-ops.
 int __llvm_profile_dump(void);
 int __llvm_profile_write_file(void);
@@ -873,13 +873,29 @@ static DWORD WINAPI pgo_flush_thread(void *arg) {
     }
 }
 
+void __llvm_profile_set_filename(const char *name);
+
 __attribute__((constructor)) static void pgo_flush_start(void) {
+    // fastball: tools/build.py --pgo gen instruments the runtime only, without a folder in the flag (its path would
+    // carry spaces into every compile): the counts go to pgo\ beside mlb.exe, one file per build (%m), which every run
+    // adds to. LLVM_PROFILE_FILE still names another.
+    static char dir[MAX_PATH + 32];   // the profile runtime keeps the pointer, not a copy
+    DWORD n = GetModuleFileNameA(NULL, dir, MAX_PATH);
+    if (!getenv("LLVM_PROFILE_FILE") && n && n < MAX_PATH) {
+        char *slash = strrchr(dir, '\\');
+        if (slash) {
+            strcpy(slash + 1, "pgo");
+            CreateDirectoryA(dir, NULL);
+            strcat(dir, "\\mlb_%m.profraw");
+            __llvm_profile_set_filename(dir);
+        }
+    }
     HANDLE h = CreateThread(NULL, 0, pgo_flush_thread, NULL, 0, NULL);
     if (h) CloseHandle(h);
 }
 #endif
 
-// mlbts-native: an installed game is a windowed program, so a fatal error that only went to stderr and the log would
+// fastball: an installed game is a windowed program, so a fatal error that only went to stderr and the log would
 // end it without a word. Topmost, because the game's full-screen window may still cover the screen.
 void plat_fatal_notice(const char *what) {
     static volatile LONG shown;
@@ -890,6 +906,30 @@ void plat_fatal_notice(const char *what) {
     wchar_t w[1200];
     if (!MultiByteToWideChar(CP_UTF8, 0, text, -1, w, 1200)) return;
     MessageBoxW(NULL, w, L"Error", MB_OK | MB_ICONERROR | MB_TOPMOST | MB_SETFOREGROUND);
+}
+
+static int std_handle_ok(DWORD which) {
+    HANDLE h = GetStdHandle(which);
+    return h && h != INVALID_HANDLE_VALUE && GetFileType(h) != FILE_TYPE_UNKNOWN;
+}
+
+int plat_console_attach(void) {
+    if (std_handle_ok(STD_ERROR_HANDLE) || GetConsoleWindow()) return 1;
+    if (!AttachConsole(ATTACH_PARENT_PROCESS)) return 0;
+    FILE *f;
+    if (!std_handle_ok(STD_OUTPUT_HANDLE)) freopen_s(&f, "CONOUT$", "w", stdout);
+    freopen_s(&f, "CONOUT$", "w", stderr);
+    setvbuf(stdout, NULL, _IONBF, 0);
+    setvbuf(stderr, NULL, _IONBF, 0);
+    fputs("\n", stderr);   // the shell's prompt is already on the line: cmd does not wait for a windowed program
+    return 1;
+}
+
+void plat_message(const char *title, const char *text) {
+    wchar_t t[128], w[4096];
+    if (!MultiByteToWideChar(CP_UTF8, 0, title, -1, t, 128) || !MultiByteToWideChar(CP_UTF8, 0, text, -1, w, 4096))
+        return;
+    MessageBoxW(NULL, w, t, MB_OK | MB_ICONINFORMATION | MB_SETFOREGROUND);
 }
 
 void plat_exit(int code) {

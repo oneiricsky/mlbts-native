@@ -198,9 +198,16 @@ def gpus():
     return names
 
 
-def nvidia_rtx():
+def nvidia_rtx(names=None):
     """An NVIDIA RTX GPU: the GPUs DLSS runs on."""
-    return any('NVIDIA' in n.upper() and 'RTX' in n.upper() for n in gpus())
+    return any('NVIDIA' in n.upper() and 'RTX' in n.upper() for n in (gpus() if names is None else names))
+
+
+def fsr_gpu(names=None):
+    """An AMD, NVIDIA or Intel GPU: AMD FSR 3.1 runs on every one the game runs on (FSR 4 on the Radeons AMD made it
+    for, which AMD's runtime picks itself). Not a basic display adapter or a remote-desktop one."""
+    return any(v in n.upper() for n in (gpus() if names is None else names)
+               for v in ('AMD', 'RADEON', 'NVIDIA', 'INTEL'))
 
 
 def avx2():

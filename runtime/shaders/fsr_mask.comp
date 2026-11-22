@@ -1,0 +1,65 @@
+// fastball, our own: FSR's reactive mask for what moves on its own (vk_dlaa.c mask_pass, FSR only).
+//
+// The motion vectors (dlss_mv.comp) carry the camera's motion only. DLSS's network notices on its own where they are
+// wrong (a running player, the ball, a swinging bat); FSR 3.1 does not: it never reads last frame's depth, it rebuilds it
+// from this frame's depth moved along the vectors (ffx_fsr3upscaler_prepare_inputs.h ReconstructPrevDepth), so with
+// camera-only vectors nothing that moves on its own ever counts as uncovered, and FSR keeps blending in where it was:
+// heavy ghost trails. AMD's answer for objects without motion vectors is the reactive mask, which this writes.
+//
+// Each pixel's surface is taken to last frame's clip space with the camera's motion (as dlss_mv.comp does) and its
+// expected depth there is compared with the depths last frame really had around that spot (this pass's own copy of
+// last frame's depth, as clip w). A static surface lands inside last frame's 3x3 range (the range absorbs the jitter and
+// depth slopes); where something moved, the expected depth is nearer (its new place, over last frame's background) or
+// farther (the background it uncovered) than everything around: that pixel is reactive, and FSR takes this frame's
+// colour there instead of its history. Clip w is linear in view depth, so the test is in relative terms and needs no
+// units.
+#version 450
+layout(local_size_x = 8, local_size_y = 8) in;
+layout(binding = 0) uniform sampler2D depth_tex;
+layout(binding = 1, r32f) uniform readonly image2D hist_prev;   // last frame's clip w, as it was drawn (its jitter)
+layout(binding = 2, r32f) uniform writeonly image2D hist_out;   // this frame's, for the next frame
+layout(binding = 3, r32f) uniform writeonly image2D mask_out;   // FSR's reactive mask, 0..0.9
+layout(push_constant) uniform P {
+    mat4 m;          // this frame's ndc to last frame's clip space
+    vec2 size;       // render size in pixels
+    vec2 jitter;     // this frame's jitter in pixels as the scene was drawn (window x right, y down)
+    vec2 pjitter;    // last frame's
+    vec2 z;          // ndc z = depth * z.x + z.y
+    vec2 wc;         // this frame's clip w from ndc z: w = wc.y / (ndc z - wc.x)
+    float have;      // 1: m and hist_prev hold last frame; 0: only this frame's depth is written
+} pc;
+
+const float WMAX = 1e9;
+
+void main() {
+    ivec2 p = ivec2(gl_GlobalInvocationID.xy);
+    ivec2 sz = ivec2(pc.size);
+    if (p.x >= sz.x || p.y >= sz.y) return;
+    float d = texelFetch(depth_tex, p, 0).r;
+    float nz = d * pc.z.x + pc.z.y;
+    float w = pc.wc.y / (nz - pc.wc.x);
+    if (!(w > 0.0 && w < WMAX)) w = WMAX;
+    imageStore(hist_out, p, vec4(w));
+    float mask = 0.0;
+    if (pc.have > 0.5) {
+        vec2 win = vec2(p) + 0.5 - pc.jitter;
+        vec4 q = pc.m * vec4(win.x / pc.size.x * 2.0 - 1.0, 1.0 - win.y / pc.size.y * 2.0, nz, 1.0);
+        if (q.w > 1e-6) {
+            vec2 pn = q.xy / q.w;
+            // last frame's texel whose (unjittered) sample sits nearest this surface's place then
+            vec2 pp = vec2((pn.x * 0.5 + 0.5) * pc.size.x, (0.5 - pn.y * 0.5) * pc.size.y) + pc.pjitter;
+            ivec2 c = ivec2(floor(pp));
+            if (c.x >= 0 && c.y >= 0 && c.x < sz.x && c.y < sz.y) {   // (off screen then: FSR has no history there)
+                float lo = WMAX, hi = 0.0;
+                for (int dy = -1; dy <= 1; dy++)
+                    for (int dx = -1; dx <= 1; dx++) {
+                        float v = imageLoad(hist_prev, clamp(c + ivec2(dx, dy), ivec2(0), sz - 1)).r;
+                        lo = min(lo, v), hi = max(hi, v);
+                    }
+                float e = max(lo - q.w, q.w - hi) / q.w;   // how far outside last frame's depths there, relative
+                mask = 0.9 * smoothstep(0.01, 0.03, e);   // FSR's own disocclusion needs about 1.1 % at 1440x810
+            }
+        }
+    }
+    imageStore(mask_out, p, vec4(mask));
+}

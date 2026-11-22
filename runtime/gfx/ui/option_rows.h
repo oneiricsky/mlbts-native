@@ -28,6 +28,10 @@ void opt_save_soon(void);
 void opt_group(const char *title);
 void opt_text(const char *text, bool warn = false);
 
+// fastball: the next row is unavailable: greyed out and not changeable (still selectable, so its description shows),
+// with why under its label and in the description ("Needs an NVIDIA GeForce RTX graphics card"). NULL: available.
+void opt_unavailable(const char *why);
+
 // The return value of every row: true when it changed the setting this frame.
 bool opt_toggle(const char *key, const char *label, const char *desc);
 // One name per value of the key's cfg_meta values list, in its order. note: a short line under the value in place of

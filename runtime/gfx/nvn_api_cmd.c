@@ -1037,7 +1037,7 @@ NVN_API(nvnCommandBufferBindStorageBuffers) { bind_buffers(c, OP_BIND_SSBO); }
 // reads the handles when the command buffer is submitted, and the game fills its material handle tables after
 // recording and before the submit (nvn_submit_prepare). hw_bytes: the hardware size of the plain variant.
 static void bind_handles(cmd_t *o, uint32_t op, int st, int first, int n, const uint64_t *h, int deferred, size_t hw_bytes) {
-    // mlbts-native: up to 128 (separate textures and samplers have 128 slots per stage; MLB's materials bind 119 at
+    // fastball: up to 128 (separate textures and samplers have 128 slots per stage; MLB's materials bind 119 at
     // once, and dropping those left every 3D draw with dummy textures)
     if (n < 0 || n > 128) { rt_log("nvn: bind of %d handles", n); return; }
     p_bind_handles *r = RECN(o, op, p_bind_handles, h, n);
@@ -1221,7 +1221,7 @@ NVN_API(nvnCommandBufferCopyTextureToTexture) {
     o->sr = *(const NVNcopyRegion *)arg_p(c, 3);
     o->dr = *(const NVNcopyRegion *)arg_p(c, 6);
     o->flags = (int)arg_x(c, 7);
-    static volatile int32_t n;   // mlbts-native diagnosis (black faces): the first 400 copies
+    static volatile int32_t n;   // fastball diagnosis (black faces): the first 400 copies
     if (plat_inc32(&n) <= 400 && o->src && o->dst)
         rt_log("texels: CopyTextureToTexture %#llx fmt %#x %ux%u -> %#llx fmt %#x %ux%u, region %dx%d at %d,%d -> %dx%d at %d,%d flags %#x",
                (unsigned long long)(uintptr_t)o->src->mem, (unsigned)o->src->d.format, (unsigned)o->src->d.width,
@@ -1283,7 +1283,7 @@ static int resolve_deferred(const uint8_t *p, int depth) {   // returns the numb
             nd += resolve_deferred((const uint8_t *)(uintptr_t)t, depth + 1);
         } else if (h.op == OP_BIND_TEX || h.op == OP_BIND_IMG || h.op == OP_BIND_SAMP) {
             p_bind_handles *b = (p_bind_handles *)(uintptr_t)(p + 8);
-            if (b->src && b->n > 0 && b->n <= 128) {   // mlbts-native: 128 (bind_handles)
+            if (b->src && b->n > 0 && b->n <= 128) {   // fastball: 128 (bind_handles)
                 nd++;
                 uint64_t cur[128];
                 memcpy(cur, (const void *)(uintptr_t)b->src, 8 * (size_t)b->n);

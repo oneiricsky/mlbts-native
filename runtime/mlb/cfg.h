@@ -11,7 +11,7 @@ const char *cfg_get(const char *name);      // environment (MLB_, TOTK_), then c
 void cfg_set(const char *name, const char *value);   // for this run
 unsigned cfg_version(void);                 // changes with every cfg_set
 int cfg_is_set(const char *name);
-// mlbts-native: the in-game menu's changes. cfg_set_saved is cfg_set plus a note that cfg_save writes the key into
+// fastball: the in-game menu's changes. cfg_set_saved is cfg_set plus a note that cfg_save writes the key into
 // mlb.cfg (its line updated in place, or added); cfg_save returns 1 when written. cfg_from_env: the environment
 // (MLB_X or TOTK_X) sets the key, so a change in the menu would not apply.
 void cfg_set_saved(const char *name, const char *value);
@@ -25,7 +25,7 @@ const CfgMeta *cfg_meta_at(int i);          // the table's rows in order; NULL p
 // Every setting with a value (mlb.cfg, the menu, the environment), for the system info text: fn(key without prefix,
 // value, set by the environment, ctx).
 void cfg_each_active(void (*fn)(const char *key, const char *value, int from_env, void *ctx), void *ctx);
-int cfg_load_file(void);                    // mlbts-native: <exe dir>/mlb.cfg into cfg_set; the settings it applied
+int cfg_load_file(void);                    // fastball: <exe dir>/mlb.cfg into cfg_set; the settings it applied
 const CfgMeta *cfg_meta(const char *key);
 const char *cfg_value(const char *name);    // cfg_get, else the table's default; fatal for a key without a row
 int cfg_int(const char *name);              // unparsable: the default

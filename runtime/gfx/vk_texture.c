@@ -29,8 +29,8 @@
 #include "vk_dlaa.h"
 #include "vk_exec.h"
 #include "platform/platform.h"
-#include "prompts.h"   // mlbts-native: runtime/mlb, the controller's button icons
-#include "hdtex.h"     // mlbts-native: runtime/mlb, PS5 textures in place of the Switch ones
+#include "prompts.h"   // fastball: runtime/mlb, the controller's button icons
+#include "hdtex.h"     // fastball: runtime/mlb, PS5 textures in place of the Switch ones
 
 typedef struct {
     uint64_t addr;
@@ -63,7 +63,7 @@ typedef struct Tex {
     uint8_t gpu_dirty;            // mirrored, and the GPU wrote the image after the last write-back to the storage
     uint32_t gpu_gen;             // page generation when the GPU write that set gpu_dirty was recorded
     uint64_t gpu_seq;             // order of that GPU write among all of them (gpu_writes)
-    uint64_t wseq, cseq;          // mlbts-native: the newest GPU write into the image (content_writes), and the write its
+    uint64_t wseq, cseq;          // fastball: the newest GPU write into the image (content_writes), and the write its
                                   // content comes from (its own, or the alias source's when it was copied)
     uint64_t gpu_fence;           // fence of the submission that made that write (0: not recorded in one)
     uint64_t run_frame;           // mirrored: the frame of the newest GPU write
@@ -78,9 +78,9 @@ typedef struct Tex {
     uint64_t use_seq;             // order of the last creation or take-back among all entries
     uint64_t rel_seq;             // while released: use_seq of the newest entry placed before this release; an entry
                                   // with a later use_seq on overlapping storage replaced this one's bytes
-    uint8_t prompts;              // mlbts-native: the game's button icons (prompts_apply)
-    int8_t prompts_set;           // mlbts-native: the icon set copied over them at the last upload, -1 none
-    uint8_t hd_active;            // mlbts-native: pub holds the PS5 image (hd_apply); the upload suspends it
+    uint8_t prompts;              // fastball: the game's button icons (prompts_apply)
+    int8_t prompts_set;           // fastball: the icon set copied over them at the last upload, -1 none
+    uint8_t hd_active;            // fastball: pub holds the PS5 image (hd_apply); the upload suspends it
     uint64_t hd_hash;             // the index entry it was made from
     VkImage hd_image;             // the PS5 image, while there is one
     VmaAllocation hd_alloc;
@@ -129,7 +129,7 @@ static Tex **owned;
 static int nowned, cowned;
 static uint64_t max_owned;   // largest storage size in owned[]
 static uint64_t gpu_writes;  // GPU writes into mirrored textures so far: Tex.gpu_seq
-static uint64_t content_writes;   // mlbts-native: GPU writes into any texture so far: Tex.wseq
+static uint64_t content_writes;   // fastball: GPU writes into any texture so far: Tex.wseq
 // Bumped whenever the entry a slot resolves to can change: an entry created or destroyed, released or taken back into
 // use (the slot lookup and the follow of a finalized slot read only by_key, by_addr and the released flags).
 static uint32_t tex_gen = 1;
@@ -358,11 +358,11 @@ static int shadow_scale_of(const nvn_texdesc *d, const TexVkFormat *f, uint32_t 
 }
 
 // defer_init: the caller records the image's first transition (init_image or alias_copy).
-// mlbts-native diagnosis (black faces): an address range whose texture creations and GPU writes are logged, the first
+// fastball diagnosis (black faces): an address range whose texture creations and GPU writes are logged, the first
 // 300. MLB_WATCH=<hex address>[,<hex size>]; default: player #76's face texture of the exhibition match (0x163906800,
 // a 256x128 BC7 image), which stays zero in guest memory.
 // MLB_WATCH=<hex address>,<hex size>[;<hex address>,<hex size>...] (up to 8 ranges; "off" for none).
-#define WATCH_N 64   // mlbts-native: ranges vk_watch_add adds too
+#define WATCH_N 64   // fastball: ranges vk_watch_add adds too
 static uint64_t w_lo[WATCH_N], w_hi[WATCH_N];
 static volatile int w_n = -1;
 int vk_watch_hit(uint64_t a, uint64_t n) {
@@ -392,7 +392,7 @@ int vk_watch_hit(uint64_t a, uint64_t n) {
         }
     return 0;
 }
-// mlbts-native diagnosis: adds a range to the address watch (the stale hairstyle chain: the encoder's source and output,
+// fastball diagnosis: adds a range to the address watch (the stale hairstyle chain: the encoder's source and output,
 // the textures the draws into a watched target sample). Replay thread.
 void vk_watch_add(uint64_t lo, uint64_t size) {
     if (w_n < 0) vk_watch_hit(0, 0);
@@ -663,8 +663,8 @@ static void dropped_check(const TexKey *k) {
     dropped[i].hash = 0;
 }
 
-static void cube_unqueue(const Tex *e);   // mlbts-native, below
-static void hd_drop(Tex *e);              // mlbts-native, below
+static void cube_unqueue(const Tex *e);   // fastball, below
+static void hd_drop(Tex *e);              // fastball, below
 static void destroy_tex(Tex *e) {
     hd_drop(e);
     own_remove(e);
@@ -915,7 +915,7 @@ static void astc_check(const Tex *e, const uint8_t *raw, const VkAstcRegion *ar,
 #define UPLOAD_HELD_MAX (48ull << 20)
 
 static int upload_gpu(Tex *e);
-// mlbts-native: the levels an upload copies (bit per level; all by default). make_fresh_snap narrows it to the levels
+// fastball: the levels an upload copies (bit per level; all by default). make_fresh_snap narrows it to the levels
 // whose storage the CPU rewrote in a GPU-owned image.
 static uint32_t up_lvmask = ~0u;
 
@@ -935,7 +935,7 @@ static void upload_cpu(Tex *e) {
     VkDeviceSize total = 0, decoded = 0;
     for (uint32_t lv = 0; lv < levels; lv++)
         for (uint32_t ly = 0; ly < layers; ly++) {
-            if (lv < 32 && !(up_lvmask >> lv & 1)) continue;   // mlbts-native: a level the upload leaves alone
+            if (lv < 32 && !(up_lvmask >> lv & 1)) continue;   // fastball: a level the upload leaves alone
             uint32_t w = mip(d->width, lv), h = one_d ? 1 : mip(d->height, lv), sl = is3d ? mip(d->depth, lv) : 1;
             uint64_t texels = (uint64_t)w * h * sl, raw = (uint64_t)(w + bw - 1) / bw * bpb * ((h + bh - 1) / bh) * sl;
             uint64_t out = agpu ? raw : astc ? texels * 4 : rgb ? texels * (uint64_t)bpb / 3 * 4 : raw;
@@ -944,7 +944,7 @@ static void upload_cpu(Tex *e) {
             total += (out + 15) & ~15ull;
             decoded += texels * 4;
         }
-    n = k;   // mlbts-native: up_lvmask may have left levels out
+    n = k;   // fastball: up_lvmask may have left levels out
     VkBuffer sb, rbuf = VK_NULL_HANDLE;
     VmaAllocation ralloc = NULL;
     uint8_t *rmap = NULL, *raw_copy = NULL;
@@ -1066,7 +1066,7 @@ static int upload_gpu(Tex *e) {
     VkDeviceSize max_dst = DESWZ_CHUNK;
     for (uint32_t lv = 0; ok && lv < levels; lv++)
         for (uint32_t ly = 0; ok && ly < layers; ly++) {
-            if (lv < 32 && !(up_lvmask >> lv & 1)) continue;   // mlbts-native: a level the upload leaves alone
+            if (lv < 32 && !(up_lvmask >> lv & 1)) continue;   // fastball: a level the upload leaves alone
             uint32_t row_bytes, rows, slices, gbpb;
             uint64_t base;
             unsigned th, td;
@@ -1092,7 +1092,7 @@ static int upload_gpu(Tex *e) {
             if (agpu) ar[k] = (VkAstcRegion){.w = w, .h = h, .slices = sl, .level = lv, .layer = ly};
             k++;
         }
-    if (ok && up_lvmask != ~0u) n = k;   // mlbts-native: up_lvmask left levels out
+    if (ok && up_lvmask != ~0u) n = k;   // fastball: up_lvmask left levels out
     if (!ok || k != n || !vk_deswz_fits(sp.offset, t->L.size, dr, (int)n, max_dst)) {
         free(dr), free(rg), free(ar);
         return up_why = !ok || k != n ? UP_GEOM : UP_LIMITS, 0;
@@ -1211,7 +1211,7 @@ static int upload_gpu(Tex *e) {
 
 // Copies the whole storage into the image (every level and layer the image has): on the GPU where it can
 // (upload_gpu), else on the CPU.
-// mlbts-native: the controller's button icons over the game's Switch ones (runtime/mlb/prompts.c). MLB draws the
+// fastball: the controller's button icons over the game's Switch ones (runtime/mlb/prompts.c). MLB draws the
 // buttons of its prompts from one 1024x1024 BC7 texture and those of its play HUD from one 128x128 BC7 texture each;
 // after each upload of a texture of such a shape whose storage is one of them (e->prompts: 1 + the target), the
 // blocks of the icon set in use are copied over the image (the storage keeps the Switch icons). prompts_fresh uploads
@@ -1440,11 +1440,11 @@ static int storage_rewritten(const Tex *e, uint32_t since, uint32_t *now) {
 }
 
 // A mirrored texture is uploaded on first use and again when its storage pages carry a newer write generation.
-static int cpu_rewrite_refresh(Tex *e);   // mlbts-native, below
+static int cpu_rewrite_refresh(Tex *e);   // fastball, below
 static void make_fresh(Tex *e) {
     if (!e->pub.mirrored) return;
-    prompts_fresh(e);   // mlbts-native
-    if (e->pub.gpu_owned) {   // mlbts-native: CPU data written over its GPU content (cpu_rewrite_refresh)
+    prompts_fresh(e);   // fastball
+    if (e->pub.gpu_owned) {   // fastball: CPU data written over its GPU content (cpu_rewrite_refresh)
         cpu_rewrite_refresh(e);
         return;
     }
@@ -1466,9 +1466,9 @@ static void make_fresh(Tex *e) {
 // after it, during this replay) keeps its write-watch bit and is caught by the next submission's snapshot.
 static volatile int32_t n_rewrite_log;
 static uint64_t n_rewrite_up;      // GPU-owned textures uploaded again after a CPU rewrite (perf line in the cube flush)
-// mlbts-native: for a GPU-owned mirrored image, the levels the CPU rewrote take the storage again; 1 when it uploaded.
+// fastball: for a GPU-owned mirrored image, the levels the CPU rewrote take the storage again; 1 when it uploaded.
 static int cpu_rewrite_refresh(Tex *e) {
-    // mlbts-native: the CPU rewrote storage of an image that holds GPU content: the levels it rewrote take the
+    // fastball: the CPU rewrote storage of an image that holds GPU content: the levels it rewrote take the
     // storage again, the others keep what the GPU made. A GPU-owned image was never uploaded again, so new CPU
     // data at the same storage kept the old content: MLB loads each created-player hairstyle's full-size layer
     // into the same buffer and makes its smaller levels on the GPU (scaled copies) before its BC encoder
@@ -1530,8 +1530,8 @@ static void make_fresh_snap(Tex *e) {
                    (unsigned long long)e->pub.addr, (unsigned)e->t.d.format, e->pub.width, e->pub.height);
         return;
     }
-    prompts_fresh(e);   // mlbts-native
-    if (!e->pub.gpu_owned && vk_watch_hit(e->pub.addr, e->t.L.size)) {   // mlbts-native diagnosis
+    prompts_fresh(e);   // fastball
+    if (!e->pub.gpu_owned && vk_watch_hit(e->pub.addr, e->t.L.size)) {   // fastball diagnosis
         uint32_t now;
         int ch = vk_mem_changed_snap(e->pub.addr, e->t.L.size, e->uploaded ? e->wgen : 0, submit_epoch, &now);
         rt_log("watch: binding of %#llx fmt %#x %ux%u (CPU data): written since generation %u: %d (now %u)%s",
@@ -1573,7 +1573,7 @@ static uint32_t level_blocks(uint32_t v, unsigned lv, int b) { return (mip(v, lv
 // The new entry e can take src's content: colour, one sample, the same type and storage layout. Returns the levels to
 // copy, 0 when it cannot.
 // - Same shape: image formats of one block size, all levels.
-// - Block view (mlbts-native): one format block-compressed, the other uncompressed with a texel as large as a block,
+// - Block view (fastball): one format block-compressed, the other uncompressed with a texel as large as a block,
 //   one texel per block. MLB's created-player faces: a compute shader encodes BC7 into a 64x32 R32G32B32A32_UINT image
 //   and the face samples the same storage as a 256x128 BC7 texture. Both VkFormats are the guest's own (no ASTC
 //   transcode, no RGB expansion), so the guest bytes are the image bytes; the levels from 0 on that have the same
@@ -1670,8 +1670,8 @@ static int alias_copy(Tex *e, const Tex *src, uint32_t levels) {
     return 1;
 }
 
-static int is_cube(const Tex *e);   // mlbts-native, below
-static int cube_log(void);           // mlbts-native, below
+static int is_cube(const Tex *e);   // fastball, below
+static int cube_log(void);           // fastball, below
 static Tex *entry_of(const tex_t *t) {
     TexKey k;
     make_key(t, &k);
@@ -1693,7 +1693,7 @@ static Tex *entry_of(const tex_t *t) {
         for (Tex *p = nvn_hm_get(&by_addr, &k.addr), *nx; p; p = nx) {
             nx = p->next_at;
             if (p->released) {
-                // mlbts-native: a released entry whose image holds GPU content the storage does not (never written
+                // fastball: a released entry whose image holds GPU content the storage does not (never written
                 // back) can still give it to the new one, newest first; it goes after the copy is recorded. MLB fills
                 // the RTTS room's irradiance probe through a 2D-array storage image, releases it and samples the same
                 // storage as a cube: the cube read the empty storage, and the room went dark and banded.
@@ -1704,7 +1704,7 @@ static Tex *entry_of(const tex_t *t) {
                     rt_log("watch:   released candidate fmt %#x %ux%u: compatible levels %u, gpu content %d",
                            (unsigned)p->t.d.format, (unsigned)p->t.d.width, (unsigned)p->t.d.height, alias_compatible(e, p),
                            alias_has_gpu_content(p));
-                // mlbts-native: one whose GPU content the new entry cannot take stays (released): a later entry of its
+                // fastball: one whose GPU content the new entry cannot take stays (released): a later entry of its
                 // shape can. MLB recreates its BC encoder's descriptors on every created-player hairstyle; the 1x1 block
                 // image of the last level, created at the texture's storage, dropped the BC7 hair texture whose new
                 // blocks were in its image only, and the hair texture recreated next uploaded the previous style.
@@ -1752,7 +1752,7 @@ static Tex *entry_of(const tex_t *t) {
                 }
             }
         }
-        if (is_cube(e) || alias) {   // mlbts-native diagnosis: lighting cubes and the arrays under them
+        if (is_cube(e) || alias) {   // fastball diagnosis: lighting cubes and the arrays under them
             int cube_there = is_cube(e);
             for (Tex *p = nvn_hm_get(&by_addr, &k.addr); p && !cube_there; p = p->next_at) cube_there = !p->released && is_cube(p);
             if (cube_there && cube_log())
@@ -1795,7 +1795,7 @@ void vk_texture_debug(const VkTexImage *img, uint32_t *uploads, int *last_change
     unlock();
 }
 
-static void alias_overwritten(Tex *e);   // mlbts-native, below
+static void alias_overwritten(Tex *e);   // fastball, below
 const VkTexImage *vk_texture_get(const tex_t *t) {
     if (!t || !t->mem) return NULL;
     lock();
@@ -1831,8 +1831,8 @@ static void wb_cfg_init(void) {
 static int wb_wanted(const Tex *e) { return e->t.L.size <= wb_limit || e->run < WB_RUN; }
 
 static void gpu_wrote(Tex *e);
-static int cube_behind(const Tex *src);   // mlbts-native, below
-static void cube_queue(const Tex *src);   // mlbts-native, below
+static int cube_behind(const Tex *src);   // fastball, below
+static void cube_queue(const Tex *src);   // fastball, below
 void vk_texture_gpu_written(const tex_t *t) {
     if (!t || !t->mem) return;
     if (vk_watch_hit((uint64_t)(uintptr_t)t->mem, t->L.size))
@@ -1915,7 +1915,7 @@ void vk_texture_range_gone(uint64_t lo, uint64_t size, VmaAllocation alloc) {
 }
 
 // ---------------------------------------------------------------- descriptor slots
-// mlbts-native: the descriptor registered at pool slot id (vk_exec_draw.c texel_view); 0 when none.
+// fastball: the descriptor registered at pool slot id (vk_exec_draw.c texel_view); 0 when none.
 int vk_texture_slot_desc(int id, tex_t *out) {
     lock();
     int ok = id >= 0 && id < ntslots && tslots[id].used;
@@ -1924,7 +1924,7 @@ int vk_texture_slot_desc(int id, tex_t *out) {
     return ok;
 }
 
-// mlbts-native: whether the descriptor registered at pool slot id is a buffer texture; the texture lock is held.
+// fastball: whether the descriptor registered at pool slot id is a buffer texture; the texture lock is held.
 int vk_texture_slot_is_buffer_locked(int id) {
     return id >= 0 && id < ntslots && tslots[id].used && tslots[id].t.d.target == NVN_TEXTURE_TARGET_BUFFER;
 }
@@ -1958,7 +1958,7 @@ void vk_texture_register(int id, const tex_t *t, const view_t *v) {
     unlock();
 }
 
-// mlbts-native: a cube entry over the storage of a 2D array a compute shader fills (MLB's environment and irradiance
+// fastball: a cube entry over the storage of a 2D array a compute shader fills (MLB's environment and irradiance
 // probes) takes the array's content when it is created (entry_of), and then nothing refreshed it: a gpu-owned image is
 // never uploaded from storage again (make_fresh). When a scene rewrote its probes through the array, the cube kept
 // the previous scene's (the RTTS locker room lit like the bedroom). The array's write bumps its address's generation
@@ -1968,7 +1968,7 @@ static int is_cube(const Tex *e) {
 }
 static volatile int32_t n_cube_log;   // diagnosis: cube events logged (cube_log)
 static int cube_log(void) { return plat_inc32(&n_cube_log) <= 600; }
-// mlbts-native: and a block-compressed entry over the storage of an uncompressed image with one texel per block (a
+// fastball: and a block-compressed entry over the storage of an uncompressed image with one texel per block (a
 // block view, alias_compatible) takes that image's newer content the same way. MLB's GPU BC7 encoder (compute
 // acd11752) writes the post-game stats screen's player portrait as a 192x192 R32G32B32A32_UINT image over the storage of
 // the 768x768 BC7 texture the screen samples; the BC7 entry took the content once, when it was created, and the
@@ -2019,7 +2019,7 @@ static void cube_refresh(Tex *e) {
     e->pub.gpu_owned = 1;
     if (e->pub.mirrored) vk_mem_changed(e->pub.addr, e->t.L.size, 0, &e->wgen), e->uploaded = 1;
     if (!cube && e->pub.mirrored) {
-        // mlbts-native: a block view's new content is GPU content the storage may not hold (the block image may never
+        // fastball: a block view's new content is GPU content the storage may not hold (the block image may never
         // be written back): marked as such, so an entry created over this one when the game recreates the descriptor
         // takes it (entry_of, alias_has_gpu_content) instead of the storage's older blocks
         e->gpu_dirty = 1;
@@ -2031,7 +2031,7 @@ static void cube_refresh(Tex *e) {
                e->pub.width, e->pub.height, src->pub.width, src->pub.height, cube ? "array" : "block image", lv);
 }
 
-// mlbts-native: GPU content another image over the same storage overwrote. On the console an image is its memory: a
+// fastball: GPU content another image over the same storage overwrote. On the console an image is its memory: a
 // render into another image at the same address (any shape) replaces its bytes. Here each image is its own, and one the
 // GPU last wrote kept its content after an image of another shape rendered over the storage. MLB's menus share scratch
 // render-target memory: the post-game screen draws its team logos into an 820x824 target at 0x139810000 without
@@ -2170,7 +2170,7 @@ static Tex *slot_resolve(TexSlot *s, view_t *view, int *has_view) {
         // thumbnail of the fused object, RGBA8 at the same storage, was the live entry, and the menu drew it behind
         // the wheel (the object's silhouette, or garbled colours). Without such an entry the released one keeps the
         // slot: its image holds what was last written through that descriptor.
-        // mlbts-native: a cube slot follows only a cube entry. Vulkan makes cube views of cube-compatible images only
+        // fastball: a cube slot follows only a cube entry. Vulkan makes cube views of cube-compatible images only
         // (get_view), so a cube slot that followed the 2D array a compute shader filled bound nothing: MLB writes the
         // RTTS room's environment cubes through 2D-array storage images and samples them as cubes, and the room's
         // lighting and some objects stayed black until something else created the cube entry (an F12 capture). Without
@@ -2183,7 +2183,7 @@ static Tex *slot_resolve(TexSlot *s, view_t *view, int *has_view) {
         int want_cube = k.d.target == NVN_TEXTURE_TARGET_CUBEMAP || k.d.target == NVN_TEXTURE_TARGET_CUBEMAP_ARRAY;
         Tex *own = e, *any = NULL;
         e = NULL;
-        // mlbts-native: and only an entry with the levels the slot can select. MLB's GPU BC encoder writes each mip
+        // fastball: and only an entry with the levels the slot can select. MLB's GPU BC encoder writes each mip
         // level of a BC7 texture through a view of one level of an R32G32B32A32_UINT block image (64x32, 7 levels for
         // a 256x128 hair texture), whose descriptor the game finalizes right away; the slot followed a live 1x1, one-
         // level image of that format at the same storage, the views of levels 1 and up could not be made (placeholder
@@ -2194,7 +2194,7 @@ static Tex *slot_resolve(TexSlot *s, view_t *view, int *has_view) {
             uint32_t vl = (uint32_t)s->v.base_level + (s->v.nlevels ? s->v.nlevels : 1);
             if (vl > need) need = vl;
         }
-        // mlbts-native: and an entry of another geometry only for GPU content the storage does not have (a render
+        // fastball: and an entry of another geometry only for GPU content the storage does not have (a render
         // target, the case above). A texture the game loaded into the storage is in the storage: the slot gets its own
         // entry from it. MLB loads UI images into memory a 1920x1080 BC7 menu background left (still live, never
         // released): the RTTS rating badges' BC7 circle mask at its address followed the background, and the badges
@@ -2230,7 +2230,7 @@ static Tex *slot_resolve(TexSlot *s, view_t *view, int *has_view) {
     return e;
 }
 
-// mlbts-native diagnosis: every entry at a storage address, one line each (which image, its format, usage, whether it
+// fastball diagnosis: every entry at a storage address, one line each (which image, its format, usage, whether it
 // is released, GPU-owned, and the order of its newest GPU write and of the write its content comes from), so a draw
 // that samples one image while a dispatch or pass wrote another at the same address shows it.
 void vk_texture_log_at(uint64_t addr, const char *who) {
@@ -2282,7 +2282,7 @@ const VkTexImage *vk_texture_by_id_locked(int id, view_t *view, int *has_view) {
     // replay race the GPU read on hardware too). After one check an entry is either uploaded or never uploads (not
     // mirrored, GPU-owned or no CPU layout), so a slot that checked its entry in this submit has nothing left to do.
     if (e && s->cepoch != submit_epoch) {
-        alias_overwritten(e);   // mlbts-native
+        alias_overwritten(e);   // fastball
         if (!e->uploaded || e->checked != submit_epoch) {
             make_fresh_snap(e);
             e->checked = submit_epoch;
@@ -2552,12 +2552,12 @@ int vk_texture_read_image(const tex_t *t, const view_t *v, const NVNcopyRegion *
     return ok;
 }
 
-// mlbts-native diagnosis (sliced menu and HUD images, hard to reproduce): a texture with CPU content (mirrored, not
+// fastball diagnosis (sliced menu and HUD images, hard to reproduce): a texture with CPU content (mirrored, not
 // GPU-owned) that a draw of the F12 frame samples is read back from its image and compared with its storage, level 0
 // layer 0. A difference means the image missed CPU writes (an upload the write tracking did not ask for); equal bytes
 // with a sliced image on screen mean the storage itself holds them (the game's data, or its loading). Each address once
 // per capture; at most 8 MiB.
-// mlbts-native diagnosis (sliced menu images whose image matched the storage): how the zero bytes of a large texture's
+// fastball diagnosis (sliced menu images whose image matched the storage): how the zero bytes of a large texture's
 // storage lie. A load that stopped part way leaves the storage's tail (block-linear: the last rows, and the right part of
 // the last band) zero; dark image content leaves zero blocks spread out. The texture is saved as a PNG with the capture
 // (vk_watch_note_tex: shot-2<frame>-*.png) and its storage checked again 2 and 10 s later: whether the game filled it in.
@@ -2786,7 +2786,7 @@ static void write_back_n(Tex **v, int n) {
         free(buf);
     }
     free(p);
-    // mlbts-native: the write-back's own stores are not CPU rewrites of the GPU content (make_fresh_snap): a new
+    // fastball: the write-back's own stores are not CPU rewrites of the GPU content (make_fresh_snap): a new
     // generation for them
     for (int i = 0; i < n; i++) v[i]->gpu_dirty = 0, vk_mem_changed(v[i]->pub.addr, v[i]->t.L.size, 0, &v[i]->gpu_gen);
 }
@@ -2810,7 +2810,7 @@ void vk_texture_storage_bound_locked(const VkTexImage *img, int written) {
     Tex *e = (Tex *)img;   // pub is the first member
     uint64_t f = vk_exec_recording_fence();
     if (f > e->wr_fence) e->wr_fence = f;
-    // mlbts-native: an image store makes the image the content, as a render does: alias copies take it, a mirrored
+    // fastball: an image store makes the image the content, as a render does: alias copies take it, a mirrored
     // one is written back. Before, a storage image of mirrored storage was re-uploaded from its unwritten storage
     // bytes and a texture aliasing it read zeros (MLB's BC7-encoded created-player faces: black heads).
     if (written) {

@@ -12,7 +12,7 @@ A profile taken with MLB_SAMPLER_RENDER=1 or MLB_SAMPLER_CHAINS=1 also has call 
 inclusive time per function (a function counted once per chain), and for each module outside the exe the exe
 functions that call into it and the longest common chains down to it.
 
-Ported from TotK Recomp tools/prof_report.py @ ae30a61 (MIT, Copyright (c) 2026 Valiantsin Dzerakh); mlbts-native
+Ported from TotK Recomp tools/prof_report.py @ ae30a61 (MIT, Copyright (c) 2026 Valiantsin Dzerakh); fastball
 reads the lld-link map instead of the ld.lld one.
 """
 import argparse

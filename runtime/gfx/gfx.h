@@ -35,10 +35,10 @@ typedef struct {                                           // the translator's a
                                                            // img_format is Ryujinx TextureFormat
     uint8_t attr_type[32], frag_out_type[8];               // GFX_TYPE_*
     uint16_t local[3];
-    uint16_t alpha_ref_lo;                                 // FS alpha test reference, float bits 0-15 (mlbts-native; in
+    uint16_t alpha_ref_lo;                                 // FS alpha test reference, float bits 0-15 (fastball; in
     uint32_t shared_bytes;                                 // padding, so the layout of stored inputs is unchanged)
     uint8_t alpha_func;                                    // FS: NVNalphaFunc of an active alpha test (2-7, 1 never),
-                                                           // 0 none (mlbts-native; was depth_minus_w, never set)
+                                                           // 0 none (fastball; was depth_minus_w, never set)
     uint8_t mvprev;                                        // VS: also write last frame's position (patch 0015,
                                                            // vk_mvprev.c); packed as bit 7 of the alpha_func byte
     uint16_t alpha_ref_hi;                                 // FS alpha test reference, float bits 16-31 (padding)
@@ -100,18 +100,18 @@ typedef struct {
     uint8_t flags;              // SSBO: 1 written; TEX/IMG: Ryujinx TextureUsageFlags (4 image store, 8 coherent)
     int8_t cbuf_slot;           // TEX/IMG: constant buffer of the handle (-1: bound texture buffer); SSBO: of its address
     uint32_t handle;            // TEX/IMG: Ryujinx packed handle (texture word | sampler word << 14 | handle type << 28);
-                                // SSBO: address offset. mlbts-native: 32 bits; 16 dropped the sampler word and the type
+                                // SSBO: address offset. fastball: 32 bits; 16 dropped the sampler word and the type
     uint16_t count;             // descriptors (array length)
     uint8_t separate;           // TEX: texture and sampler handles are separate
-    // mlbts-native: TEX whose sampler handle is in its own c2 word (Ryujinx TextureHandleType 1 SeparateSamplerHandle,
+    // fastball: TEX whose sampler handle is in its own c2 word (Ryujinx TextureHandleType 1 SeparateSamplerHandle,
     // 2 SeparateSamplerId, 3 SeparateConstantSamplerHandle; 0 combined). samp_slot: separate sampler slot (handle at
     // 0x568 + 8 slot) for 1 and 2, the sampler id itself for 3, -1 outside the separate sampler range.
     uint8_t samp_type;
     int16_t samp_slot;
-    // mlbts-native: a texture array read from the c2 handle table (Ryujinx BindlessToArray): element k is c2 entry
+    // fastball: a texture array read from the c2 handle table (Ryujinx BindlessToArray): element k is c2 entry
     // slot + k (8 bytes each from c2 byte 0), not texture slot slot + k (vk_exec_draw.c tex_slot_of)
     uint8_t table;
-    // mlbts-native: TEX whose handle is an image slot's c2 word (0x120 + 8 slot): a size query of a bound image (MLB's
+    // fastball: TEX whose handle is an image slot's c2 word (0x120 + 8 slot): a size query of a bound image (MLB's
     // BC7 encoder of created-player faces asks the size of the level it writes). slot is that image slot.
     uint8_t img_handle;
 } GfxShaderRes;

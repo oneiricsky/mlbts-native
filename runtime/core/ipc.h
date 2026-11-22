@@ -24,7 +24,7 @@ typedef struct {
     unsigned nx, na, nb, nw, nc;
     const uint8_t *data;                   // command arguments after the CMIF header (TIPC: after the HIPC header)
     uint32_t data_size;
-    uint32_t in_objects[8];                // mlbts-native: domain object ids passed in (CMIF domain requests)
+    uint32_t in_objects[8];                // fastball: domain object ids passed in (CMIF domain requests)
     unsigned nin_objects;
 } IpcRequest;
 
@@ -49,13 +49,13 @@ struct IpcSession {
     void *state;
     void (*close)(void *state);
     int32_t refs;
-    struct IpcDomain *domain;   // mlbts-native: set once ConvertToDomain made this session a CMIF domain
+    struct IpcDomain *domain;   // fastball: set once ConvertToDomain made this session a CMIF domain
 };
 
-// mlbts-native: services beyond ipc.c's own table (audren:u, nfp:user). The game layer defines it; NULL: unknown.
+// fastball: services beyond ipc.c's own table (audren:u, nfp:user). The game layer defines it; NULL: unknown.
 // *stable_name gets a copy of name that lives as long as the process (session names are kept, not copied).
 IpcHandler rt_service_handler(const char *name, const char **stable_name);
-// mlbts-native: 1 when the game's NPDM lets it open the service; sm answers NotAllowed otherwise.
+// fastball: 1 when the game's NPDM lets it open the service; sm answers NotAllowed otherwise.
 int rt_service_allowed(const char *name);
 #define IPC_R_SM_NOT_ALLOWED 0x1015u   // sm (module 21), description 8
 

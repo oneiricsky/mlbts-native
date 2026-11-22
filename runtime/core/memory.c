@@ -58,7 +58,7 @@ typedef struct { uint64_t dst, src, size; } StackMap;
 static StackMap stack_maps[MAX_STACK_MAPS];
 static unsigned nstack_maps;
 static uint8_t *module_perm[MOD_COUNT];   // per data page of each module: perm | ATTR_PERMISSION_LOCKED
-// mlbts-native: guest mappings of shared memory (svc 0x13), each a committed copy of its block (see mem_shmem_*).
+// fastball: guest mappings of shared memory (svc 0x13), each a committed copy of its block (see mem_shmem_*).
 #define MAX_SHARED_MAPS 64
 struct RtSharedMem { const char *name; uint8_t *data; uint64_t size; };
 typedef struct { uint64_t addr, size; uint32_t perm; RtSharedMem *mem; } SharedMap;
@@ -252,7 +252,7 @@ void mem_init(void) {
     cfg_init();
     const char *pool = cfg_get("TOTK_APP_POOL");
     L = (RtGuestLayout){
-        // mlbts-native: the ASLR region ends with the alias region, not at 2^39. SDK 19.3.11's os::MapSharedMemory
+        // fastball: the ASLR region ends with the alias region, not at 2^39. SDK 19.3.11's os::MapSharedMemory
         // (AslrSpaceManager) picks random addresses across the whole region and gives up after a fixed number of
         // tries; with [low, 2^39) only the ~2 GiB of the block outside the heap reads Free, so about one run in
         // eight failed (time's SharedMemoryClient, NotNull). Heap and alias are its forbidden regions [H: per
@@ -412,7 +412,7 @@ uint32_t mem_set_attribute(uint64_t a, uint64_t n, uint32_t mask, uint32_t at) {
 }
 
 // ---- 0x04/0x05 MapMemory, UnmapMemory: thread stacks move from heap or alias into the stack region by copy; the
-// source is inaccessible while moved and gets the contents back on unmap. mlbts-native: a module's writable data is a
+// source is inaccessible while moved and gets the contents back on unmap. fastball: a module's writable data is a
 // valid source too (Horizon lets CodeData alias); SDK 19.3.11's system worker thread has its stack in sdk's .bss.
 // Those pages read as no-access in the module permission table while moved.
 static int module_rw_pages(int i, uint64_t a, uint64_t n) {   // under lock: every page exactly PERM_RW, unlocked
@@ -545,7 +545,7 @@ uint32_t mem_unmap_physical(uint64_t a, uint64_t n) { return alias_map(1, a, n);
 
 // ---- 0x06 QueryMemory
 // The region around a that no known region covers: everything else below 2^39 belongs to the host and is reported
-// as taken, so the SDK never picks it. mlbts-native: as Inaccessible, not TotK's Code/RX. SDK 19.3.11's
+// as taken, so the SDK never picks it. fastball: as Inaccessible, not TotK's Code/RX. SDK 19.3.11's
 // nn::ro::detail::GetExceptionInfo (process name for log observers, from nnMain's address) walks back from a code
 // address while the regions read Code with R or X, so a Code gap below main made main's "module" start at the gap's
 // base and FindModuleHeader read host memory there.
@@ -670,7 +670,7 @@ uint32_t mem_query(uint64_t a, RtMemoryInfo *out) {
     return R_OK;
 }
 
-// ---- 0x13/0x14 MapSharedMemory, UnmapSharedMemory (mlbts-native)
+// ---- 0x13/0x14 MapSharedMemory, UnmapSharedMemory (fastball)
 // A host service owns each block (mem_shmem_new). Guest addresses are host addresses and the guest regions are plain
 // reservations, so a mapping cannot alias the block's pages: it is committed and filled with a copy, and
 // mem_shmem_write updates the block and every mapping. That serves blocks the host writes and the guest reads (time,

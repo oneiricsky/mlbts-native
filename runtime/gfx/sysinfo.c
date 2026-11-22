@@ -1,4 +1,4 @@
-// mlbts-native: from TotK Recomp runtime/sysinfo.c @ ae30a61 (MIT, Copyright (c) 2026 Valiantsin Dzerakh), for the settings
+// fastball: from TotK Recomp runtime/sysinfo.c @ ae30a61 (MIT, Copyright (c) 2026 Valiantsin Dzerakh), for the settings
 // menu (ui/menu.cpp). MLB's name in the text, MLB_ keys.
 // What a bug report needs about the machine (sysinfo.h). The OS calls sit behind platform.h; the GPU and driver come
 // from the Vulkan device the game renders on.

@@ -1,12 +1,14 @@
-/* MLBTS-Setup.exe: starts python\pythonw.exe -m installer.gui with this exe's folder as the working directory, without
+/* Fastball.exe: starts python\pythonw.exe -m installer.gui with this exe's folder as the working directory, without
    a console window. tools/make_release.py builds it with the release's llvm-mingw:
        llvm/bin/llvm-windres -I runtime/mlb -O coff launcher.rc -o launcher_rc.o
-       llvm/bin/clang -O2 -mwindows launcher.c launcher_rc.o -o MLBTS-Setup.exe
+       llvm/bin/clang -O2 -mwindows launcher.c launcher_rc.o -o Fastball.exe
    After TotK Recomp installer/launcher/launcher.c @ v0.4.0 (MIT), English only.
    System DPI aware, like the window's Python process (installer/gui.py): the error box is drawn at the display's
    scale instead of stretched.
    Its own arguments are passed on to the window (installer/gui.py): the updater (installer/update.py) starts the new
-   setup with --update <install folder>. */
+   setup with --update <install folder>; --menu opens the window; any other argument goes to mlb.exe.
+   It is the one program a player runs: once the game is built, installer/gui.py starts mlb.exe at once without a
+   window (straight_to_game). */
 #include <windows.h>
 #include <wchar.h>
 
@@ -32,8 +34,8 @@ static void fail(const wchar_t *what)
     wchar_t text[PATH_CHARS + 256];
     swprintf(text, sizeof text / sizeof *text,
              L"The setup could not start: %ls.\n\nUnpack the whole download into an empty folder (not inside the zip "
-             L"viewer) and start MLBTS-Setup.exe from there.", what);
-    MessageBoxW(NULL, text, L"MLB The Show 26 - PC port setup", MB_OK | MB_ICONERROR);
+             L"viewer) and start Fastball.exe from there.", what);
+    MessageBoxW(NULL, text, L"Fastball - MLB The Show 26 for PC", MB_OK | MB_ICONERROR);
 }
 
 int WINAPI WinMain(HINSTANCE instance, HINSTANCE previous, LPSTR command_line, int show)

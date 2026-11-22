@@ -1,4 +1,4 @@
-// mlbts-native, our own: the render targets of the capture frame (gfx_stubs.c gfx_capture_arm: F12, MLB_DRAWLOG=game)
+// fastball, our own: the render targets of the capture frame (gfx_stubs.c gfx_capture_arm: F12, MLB_DRAWLOG=game)
 // as PNGs, <profile>/shot-<frame>-<n>-<w>x<h>-fmt<NVN format>.png, so a frame's intermediate pictures (an HDR scene,
 // exposure targets, UI layers) can be looked at, not just the presented one. Each colour target is blitted into an
 // RGBA8 image (the blit converts float and packed formats; values above 1 clamp), copied to a host buffer and written.
@@ -186,12 +186,12 @@ int vk_capture_read(uint64_t addr, void *out, uint32_t n) {
     return ok;
 }
 
-// mlbts-native diagnosis: the newest texture object of each image the address watch saw created (vk_texture.c
+// fastball diagnosis: the newest texture object of each image the address watch saw created (vk_texture.c
 // create_tex), saved with the capture frame's targets as shot-<2000000+frame>-*.png (vk_drawq_report).
 static tex_t wt[24];
 static int nwt;
 void vk_watch_note_tex(const tex_t *t) {
-    static int next_out;   // mlbts-native: when full, the oldest goes (the newest scene's images are the ones saved)
+    static int next_out;   // fastball: when full, the oldest goes (the newest scene's images are the ones saved)
     for (int i = 0; i < nwt; i++)
         if (wt[i].mem == t->mem && wt[i].d.format == t->d.format && wt[i].d.target == t->d.target) {
             wt[i] = *t;
@@ -202,7 +202,7 @@ void vk_watch_note_tex(const tex_t *t) {
 }
 void vk_capture_targets(const tex_t *const *ts, int n, uint64_t frame);
 void vk_watch_capture(uint64_t frame) {
-    static uint64_t done_at;   // mlbts-native: once per capture (vk_drawq_report and vk_exec_frame_log both call it)
+    static uint64_t done_at;   // fastball: once per capture (vk_drawq_report and vk_exec_frame_log both call it)
     if (done_at && frame - done_at < 3) return;
     done_at = frame;
     const tex_t *p[24];
@@ -215,7 +215,7 @@ void vk_watch_capture(uint64_t frame) {
     if (nwt) vk_capture_targets(p, nwt, 2000000 + frame);
 }
 
-// mlbts-native diagnosis (black heads): images the address watch keeps (vk_watch_keep) are saved as PNGs at the
+// fastball diagnosis (black heads): images the address watch keeps (vk_watch_keep) are saved as PNGs at the
 // present of the frame WK_DELAY frames after the one that armed it, once per run.
 enum { WK_DELAY = 30 };
 enum { WK_N = 10 };
@@ -239,7 +239,7 @@ void vk_watch_frame(uint64_t frame) {
     vk_capture_targets(ts, n, frame);
 }
 
-// mlbts-native: layer 0, level 0 of a D16 / D32 / X8_D24 depth image as a grayscale PNG, stretched from the smallest
+// fastball: layer 0, level 0 of a D16 / D32 / X8_D24 depth image as a grayscale PNG, stretched from the smallest
 // depth to the largest below 1 (a cleared 1.0 is white); the range goes to the log.
 static void save_depth(VkCtx *c, VkCommandPool pool, const VkTexImage *im, const char *path) {
     uint32_t w = im->width, h = im->height, bpt;
@@ -319,7 +319,7 @@ static int cmpf_cap(const void *a, const void *b) {
     return x < y ? -1 : x > y;
 }
 
-// mlbts-native: level 0 of an R11G11B10F or RGBA16F image decoded from its raw bits: value statistics of the brightest
+// fastball: level 0 of an R11G11B10F or RGBA16F image decoded from its raw bits: value statistics of the brightest
 // channel per texel to the log, and a PNG scaled so the 99th percentile is white (sRGB-encoded), no 8-bit blit first.
 static void save_hdr_layer(VkCtx *c, VkCommandPool pool, const VkTexImage *im, const char *path, uint32_t layer);
 static void save_hdr(VkCtx *c, VkCommandPool pool, const VkTexImage *im, const char *path) {
@@ -408,7 +408,7 @@ static void save_hdr_layer(VkCtx *c, VkCommandPool pool, const VkTexImage *im, c
     vmaDestroyBuffer(c->vma, buf, ba);
 }
 
-// mlbts-native: a BC6H image's real values: each layer (up to 8) of level 0 blitted into an RGBA16F image (no clamp)
+// fastball: a BC6H image's real values: each layer (up to 8) of level 0 blitted into an RGBA16F image (no clamp)
 // and decoded by save_hdr_layer.
 static void save_bc6h(VkCtx *c, VkCommandPool pool, const VkTexImage *im, const char *path) {
     uint32_t w = im->width, h = im->height, nl = im->layers < 8 ? im->layers : 8;
@@ -497,7 +497,7 @@ void vk_capture_targets(const tex_t *const *ts, int n, uint64_t frame) {
             im->type != VK_IMAGE_TYPE_2D || !blit_src_ok(c->phys, im->format))
             continue;
         uint32_t nl = im->layers < 8 ? im->layers : 8;
-        for (uint32_t l = 0; l < nl; l++) {   // mlbts-native: every layer (up to 8) of an array or cube
+        for (uint32_t l = 0; l < nl; l++) {   // fastball: every layer (up to 8) of an array or cube
             char path[1200];
             if (l)
                 snprintf(path, sizeof path, "%s/shot-%llu-%d-%ux%u-fmt%#x-layer%u.png", rt_config()->profile,

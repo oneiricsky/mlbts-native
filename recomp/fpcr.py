@@ -1,4 +1,4 @@
-"""Function-local FPCR for recomp/gen.py (mlbts-native).
+"""Function-local FPCR for recomp/gen.py (fastball).
 
 Every FP op of the SIMD lowering (runtime/core/simd.h) checks the guest FPCR for a directed rounding mode, flush to
 zero or default NaN. It read c->fpcr each time, and since guest stores may alias the Cpu, that was a load per op: 5 %

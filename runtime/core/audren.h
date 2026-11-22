@@ -169,8 +169,8 @@ typedef struct AudioRenderer {
 // IAudioRendererManager, served under "audren:u" (ipc.c's service table).
 void audren_manager_handler(IpcSession *s, const IpcRequest *rq, IpcResponse *rs);
 long audren_renderers_live(void);
-float audio_device_volume(void);      // mlbts-native: IAudioDevice's output volume (audio_mixer.c), for audout.c
-void audout_manager_handler(IpcSession *s, const IpcRequest *rq, IpcResponse *rs);   // mlbts-native: audout:u      // renderers whose render tick runs
+float audio_device_volume(void);      // fastball: IAudioDevice's output volume (audio_mixer.c), for audout.c
+void audout_manager_handler(IpcSession *s, const IpcRequest *rq, IpcResponse *rs);   // fastball: audout:u      // renderers whose render tick runs
 
 // Mixer interface (audio_mixer.c). Every call but open/close/set_running runs with r->lock held.
 void audio_mixer_open(AudioRenderer *r);

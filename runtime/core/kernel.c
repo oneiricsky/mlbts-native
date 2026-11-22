@@ -1388,7 +1388,7 @@ static void lock_acquire_for(RtThread *t, uint64_t addr, uint32_t tag) {
         }
         if (cas32(addr, &v, v | WAITERS_BIT)) break;
     }
-    // mlbts-native: the signal ended the condvar wait (TOTK_TRACE=sched names the waker; it read "cv on ..." with no
+    // fastball: the signal ended the condvar wait (TOTK_TRACE=sched names the waker; it read "cv on ..." with no
     // waker when the signaller still held the lock, as if a timeout or a host thread had ended it).
     t->waker = tcur ? tcur->handle : 0;
     acct(t, S_LOCK);
@@ -1592,6 +1592,24 @@ int kern_thread_state(uint32_t h) {
     return r;
 }
 
+// fastball (diagnostic, MLB heap census): the threads whose stack top lies in (lo, hi], described into out.
+int kern_threads_with_stack_in(uint64_t lo, uint64_t hi, char *out, int n) {
+    int found = 0, len = 0;
+    out[0] = 0;
+    lock();
+    for (RtThread *t = g_all; t; t = t->all) {
+        if (t->stack_top <= lo || t->stack_top > hi) continue;
+        char d[96];
+        len += snprintf(out + len, len < n ? (size_t)(n - len) : 0, "%sthread %#x entry %s %s wait %d", found ? "; " : "",
+                        t->handle, ldr_describe(t->entry, d, sizeof d),
+                        t->exited ? "exited" : t->started ? "running" : "not started", t->wkind);
+        found++;
+        if (len >= n) break;
+    }
+    unlock();
+    return found;
+}
+
 // CloseHandle: an event goes with its last end; a thread object once it has also exited.
 static uint32_t handle_close(uint32_t h) {
     unsigned i = h - 0x1000;
@@ -1609,7 +1627,7 @@ static uint32_t handle_close(uint32_t h) {
             kind = type;
             ipc = o;
             ok = 1;
-        } else if (type == O_SHMEM) {   // mlbts-native: the block belongs to its service; mappings stay
+        } else if (type == O_SHMEM) {   // fastball: the block belongs to its service; mappings stay
             ok = 1;
         } else if (type == O_THREAD) {
             RtThread *t = o;
@@ -2058,7 +2076,7 @@ void *kern_handle_get(uint32_t h, int kind) {
     return o;
 }
 
-uint32_t kern_shmem_handle(RtSharedMem *m) { return kern_handle_new(KERN_SHMEM, m); }   // mlbts-native
+uint32_t kern_shmem_handle(RtSharedMem *m) { return kern_handle_new(KERN_SHMEM, m); }   // fastball
 
 uint32_t kern_event_new(void) {
     Event *e = calloc(1, sizeof *e);
@@ -2090,7 +2108,7 @@ void kern_event_signal(uint32_t hw) {
     unlock();
 }
 
-// mlbts-native: host services that keep a level-triggered event (am's message queue) clear it themselves.
+// fastball: host services that keep a level-triggered event (am's message queue) clear it themselves.
 void kern_event_clear(uint32_t hw) {
     lock();
     Event *e = h_peek(hw, O_EVENT_W);

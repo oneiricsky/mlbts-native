@@ -147,7 +147,7 @@ typedef struct { int32_t first, n; vs_st st[16]; } p_bind_vstream;
 typedef struct { int32_t first, n; NVNbufferRange r[16]; } p_bind_vbuf;
 typedef struct { int32_t stage, index; uint64_t addr, size; } p_bind_buf;  // UBO / SSBO
 // src: NVN 55 *Deferred binds keep the game's handle array pointer (read at submit into h, see hle_nvn.c resolve_deferred); 0 = immediate
-typedef struct { int32_t stage, first, n, pad_; uint64_t src; uint64_t h[128]; } p_bind_handles;   // mlbts-native: 128, the separate texture / sampler slots per stage (c2 0x168 / 0x568) // Separate texture / sampler handles
+typedef struct { int32_t stage, first, n, pad_; uint64_t src; uint64_t h[128]; } p_bind_handles;   // fastball: 128, the separate texture / sampler slots per stage (c2 0x168 / 0x568) // Separate texture / sampler handles
 typedef struct { int32_t face, value_mask, mask, ref, which; } p_stencil;  // which: 0 value mask 1 write mask 2 reference value
 typedef struct { float factor, units, clamp; } p_poly_offset;
 typedef struct { int32_t prim, first, count, base_instance, instances; } p_draw;   // TOTK: instances 0 = one instance (DrawArrays)

@@ -276,7 +276,7 @@ static void xlate_identity(void) {
            xlate_id[3], xlate_id[4], xlate_id[5], xlate_id[6], xlate_id[7], how);
 }
 
-// The repository root is the nearest parent of totk.exe that holds work/xlate/totk_xlate.exe (mlbts-native: our
+// The repository root is the nearest parent of totk.exe that holds work/xlate/totk_xlate.exe (fastball: our
 // tools/build_xlate.py output, TotK's build/xlate). The shader cache lives
 // next to totk.exe, so every build dir has its own (as the pipeline cache, vk_pipeline.c cache_path_init).
 static void use_preload_start(void);
@@ -691,7 +691,7 @@ static int fmt_code(const char *name) {
 
 // c2 slot of a texture or image handle (Service.cs of MNG's totk_xlate: combined handles at 0x20, 32 slots; images at
 // 0x120; separate textures at 0x168), -1 outside those ranges or for a handle in another constant buffer.
-// mlbts-native: MLB samples through separate texture and sampler words (Ryujinx handle types 1-3, bits 28+; the
+// fastball: MLB samples through separate texture and sampler words (Ryujinx handle types 1-3, bits 28+; the
 // hardware ORs the two c2 words, Ryujinx TextureHandle.ReadPackedId). The two words come in the order the shader
 // read them, so either one may be the texture: each is placed by its range, separate textures at 0x168 + 8 slot,
 // separate samplers at 0x568 + 8 slot. A combined handle (type 0) read from the separate texture range is a texture
@@ -724,7 +724,7 @@ static int handle_slot(int kind, int cbuf_slot, int handle, int separate, int16_
     return sep_tex_slot(bytes);
 }
 
-// mlbts-native: a texture array whose handles Ryujinx reads from c2 at a dynamic index (BindlessToArray.RunPass):
+// fastball: a texture array whose handles Ryujinx reads from c2 at a dynamic index (BindlessToArray.RunPass):
 // texture word at c2 byte 0 plus the element index in 8-byte entries. Its first c2 entry, or -1 when it is not one.
 static int table_entry(int kind, int cbuf_slot, int handle, int count) {
     if (kind != GFX_RES_TEX || count < 2 || (cbuf_slot >= 0 && (cbuf_slot & 0xffff) != 2)) return -1;
@@ -759,7 +759,7 @@ static void add_res(GfxShader *s, int kind, const char *o, const char *e) {
     r->separate = sep && *sep == 't';
     // cbuf_slot from the JSON in full: r->cbuf_slot keeps only its low byte
     r->slot = (int16_t)handle_slot(kind, (int)json_int(o, e, "cbuf_slot", -1), handle, r->separate, &r->samp_slot);
-    // mlbts-native: a combined texture handle read from the image range (Maxwell: an image handle is a texture pool id,
+    // fastball: a combined texture handle read from the image range (Maxwell: an image handle is a texture pool id,
     // and a TXQ on it reads the image's size). Before, it resolved to no slot and read a dummy's size, 0x0: MLB's BC7
     // encoder then wrote zero blocks and created players' faces were black.
     int hb = (handle & 0x3fff) * 4, cs = (int)json_int(o, e, "cbuf_slot", -1);
@@ -1205,7 +1205,7 @@ static size_t build_request(char *o0, const char *hex, const char *stage, const 
         for (int i = 0; i < 8; i++)
             if (a->frag_out_type[i]) o += sprintf(o, "%s\"%d\":\"%s\"", sep, i, attr_name(a->frag_out_type[i])), sep = ",";
         o += sprintf(o, "},\"shared\":%u", a->shared_bytes);
-        if (a->alpha_func)   // mlbts-native: the fragment stage's alpha test, compiled into the shader (Program.cs)
+        if (a->alpha_func)   // fastball: the fragment stage's alpha test, compiled into the shader (Program.cs)
             o += sprintf(o, ",\"alpha_test\":%u,\"alpha_ref\":%u", a->alpha_func,
                          (unsigned)((uint32_t)a->alpha_ref_hi << 16 | a->alpha_ref_lo));
     }
@@ -1970,7 +1970,7 @@ static void ans_note(const Req *r, int stage, const uint8_t *control, const uint
     if (set_add(&RC.pairs, hash8(s->iid))) {
         uint8_t rec[ANS_REC + 8] = {0};
         memcpy(rec, &st, 4), memcpy(rec + 4, r->code_hash, 32), memcpy(rec + 36, s->iid, 32);
-        if (pack_answers(rec + 68, a) > ANS_PACKED) {   // mlbts-native: alpha-test answers do not fit the record;
+        if (pack_answers(rec + 68, a) > ANS_PACKED) {   // fastball: alpha-test answers do not fit the record;
             plat_mutex_unlock(&RC.lock);                // the stored inputs (in/) still prewarm them
             return;
         }

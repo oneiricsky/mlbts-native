@@ -4,7 +4,7 @@
 // from SavageWindRecomp's runtime/ui/option_rows.mm (https://github.com/Revivedx/SavageWindRecomp @
 // 575ad88e02f9a89a9a885d90039d48af33c982f4, MIT, Copyright (c) 2026 Revivedx and the Savage Wind Recomp contributors,
 // Copyright (c) 2026 Peiikai): the row look, the two panes, the left / right stepping and the hold speed-up.
-// mlbts-native: plain strings instead of TotK's translated catalog, mlb.cfg instead of totk.ini, and the binding,
+// fastball: plain strings instead of TotK's translated catalog, mlb.cfg instead of totk.ini, and the binding,
 // movable and text rows left out.
 #include <math.h>
 #include <stdio.h>
@@ -36,13 +36,23 @@ static float g_bottom;                   // opt_reserve_bottom: kept free under 
 static char g_focus_key[64];             // opt_focus_key: the row that takes the cursor when it is next drawn
 
 // The description pane: this frame's hovered and selected rows, the page's first row, and the last one shown.
-struct Desc { char text[1024]; };
+// fastball: na, an unavailable row's reason, is drawn in red under the text.
+struct Desc { char text[1024]; char na[192]; };
 static Desc g_hover, g_focus, g_first, g_shown;
 
-static void desc_set(Desc &d, const char *desc, const char *key, const CfgMeta *m) {
+static const char *g_na;   // fastball: opt_unavailable, for the next row
+static const ImU32 kNa = IM_COL32(235, 95, 85, 255);   // fastball: an unavailable row's reason
+
+void opt_unavailable(const char *why) { g_na = why; }
+
+static void desc_set(Desc &d, const char *desc, const char *key, const CfgMeta *m, const char *na) {
+    d.na[0] = 0;
+    if (na) snprintf(d.na, sizeof d.na, "Not available now: %s.", na);
     int n = snprintf(d.text, sizeof d.text, "%s", desc);
     if (n < 0 || n >= (int)sizeof d.text) return;
-    if (cfg_from_env(key))
+    if (na)
+        ;   // (the reason in red, opt_end)
+    else if (cfg_from_env(key))
         snprintf(d.text + n, sizeof d.text - n, "\n\n%s MLB_%s", kSetByEnv, key);
     else if (m && !m->live)
         snprintf(d.text + n, sizeof d.text - n, "\n\n%s.", kAfterRestart);
@@ -84,6 +94,12 @@ void opt_end(void) {
     ImGui::PopStyleVar();
     ImGui::PushTextWrapPos(0);
     ImGui::TextUnformatted(g_shown.text);
+    if (g_shown.na[0]) {
+        ImGui::Dummy(ImVec2(0, ImGui::GetFontSize() * 0.5f));
+        ImGui::PushStyleColor(ImGuiCol_Text, kNa);
+        ImGui::TextUnformatted(g_shown.na);
+        ImGui::PopStyleColor();
+    }
     ImGui::PopTextWrapPos();
     ImGui::EndChild();
     ImGui::PopID();
@@ -98,10 +114,14 @@ struct RowView {
 };
 
 // One row: draws it, handles A / click and left / right while selected. Returns 2 (A / click), -1 / +1 (left / right)
-// or 0; always 0 for a row the environment fixes (greyed out, still selectable so its description shows).
+// or 0; always 0 for a row the environment fixes or opt_unavailable marked (greyed out, still selectable so its
+// description shows).
 static int row(const char *key, const char *label, const char *desc, const RowView &v) {
     const CfgMeta *m = cfg_meta(key);
-    bool off = m && cfg_from_env(key) != 0;   // a button's id has no row and no environment variable
+    const char *na = g_na;
+    g_na = NULL;
+    bool env = m && cfg_from_env(key) != 0;   // a button's id has no row and no environment variable
+    bool off = env || na;
     ImGui::PushID(key);
     ImVec2 p = ImGui::GetCursorScreenPos();
     // h whole pixels: ImGui truncates cursor positions, which rounds a fractional height the other way above the window's
@@ -134,9 +154,9 @@ static int row(const char *key, const char *label, const char *desc, const RowVi
             ImGui::SetKeyOwner(k, ImGui::GetItemID());
         }
     }
-    if (foc) desc_set(g_focus, desc, key, m);
-    if (hov) desc_set(g_hover, desc, key, m);
-    if (!g_first.text[0]) desc_set(g_first, desc, key, m);
+    if (foc) desc_set(g_focus, desc, key, m, na);
+    if (hov) desc_set(g_hover, desc, key, m, na);
+    if (!g_first.text[0]) desc_set(g_first, desc, key, m, na);
 
     ImDrawList *dl = ImGui::GetWindowDrawList();
     ImFont *font = ImGui::GetFont();
@@ -171,13 +191,19 @@ static int row(const char *key, const char *label, const char *desc, const RowVi
     if (v.note || v.is_default) {   // under the value, right-aligned with it
         const char *t = v.note ? v.note : "default";
         float tw = font->CalcTextSizeA(small, FLT_MAX, 0, t).x;
-        dl->AddText(font, small, ImVec2(right - tw, ny), v.note ? IM_COL32(220, 170, 100, 255) : kDim, t);
+        dl->AddText(font, small, ImVec2(right - tw, ny), off ? kGrey : v.note ? IM_COL32(220, 170, 100, 255) : kDim, t);
     }
     // the label and its note, clipped before the value
     ImVec4 clip(p.x, p.y, value_left - fs * 0.6f, p.y + h);
     dl->AddText(font, fs, ImVec2(p.x + pad, ty), off ? kGrey : IM_COL32(240, 236, 224, 255), label, NULL, 0, &clip);
-    const char *note = off ? "Set by the environment" : m && !m->live ? kAfterRestart : NULL;
-    if (note) dl->AddText(font, small, ImVec2(p.x + pad, ny), off ? IM_COL32(200, 150, 90, 255) : kDim, note);
+    const char *note = env ? "Set by the environment" : na ? na : m && !m->live ? kAfterRestart : NULL;
+    if (note) {   // (an unavailable row's reason may be long: clipped before the value's note)
+        float nr = v.note || v.is_default ? right - font->CalcTextSizeA(small, FLT_MAX, 0, v.note ? v.note : "default").x
+                                          : right;
+        ImVec4 nclip(p.x, p.y, nr - fs * 0.6f, p.y + h);
+        dl->AddText(font, small, ImVec2(p.x + pad, ny), env ? IM_COL32(200, 150, 90, 255) : na ? kNa : kDim, note,
+                    NULL, 0, &nclip);
+    }
     ImGui::PopID();
     return off ? 0 : step;
 }

@@ -1,4 +1,4 @@
-# Contributing to mlbts-native
+# Contributing to Fastball
 
 Thank you for your interest in contributing to the native Windows port of **MLB The Show 26** (Nintendo Switch, version **1.0.20**; 1.0.15 is still supported).
 
@@ -37,7 +37,7 @@ See [README.md](README.md) and [docs/runtime-port.md](docs/runtime-port.md) for 
   - `runtime/core/` holds generic host runtime code (nothing MLB-specific).
   - `runtime/mlb/` holds MLB-specific services, boot, input, settings, and logging.
   - `recomp/` is kept unmodified from TotK Recomp (`ae30a61`).
-- **Mark upstream changes:** Any edits to vendored files (`runtime/core/`, `runtime/gfx/`) must include a `mlbts-native` comment explaining the observed case (screen, texture, address, or SDK behavior) that required the change.
+- **Mark upstream changes:** Any edits to vendored files (`runtime/core/`, `runtime/gfx/`) must include a `fastball` comment explaining the observed case (screen, texture, address, or SDK behavior) that required the change.
 - **Performance first:** Never regress frame rate. Diagnostic code must cost nothing during normal play—gate it behind `F12` (or `F9` under RenderDoc), a `mlb.cfg` / `MLB_*` setting, or RenderDoc. Remove temporary slow test code before committing.
 - **Fix root causes with evidence:** Trace issues using RenderDoc (`tools/renderdoc.cmd`), frame captures, `mlb.log`, or profiler dumps (`tools/prof_report.py`) rather than adding per-screen workarounds.
 - **Document discoveries:** Record significant findings in code comments and `docs/` (tagging confirmed binary/machine facts `[C]` and hypotheses `[H]` where appropriate). Avoid unnecessary abstractions.

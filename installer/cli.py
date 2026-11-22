@@ -1,17 +1,21 @@
 """Command line: python -m installer --dest DIR [--base NSP --update NSP --keys prod.keys] [--titlekeys FILE]
-                                     [--root DIR] [--dlss] [--shortcut] [--import-save] [--launcher]
+                                     [--root DIR] [--dlss|--no-dlss] [--fsr|--no-fsr] [--shortcut] [--import-save] [--launcher]
 
-A first install needs the game files and the keys. On a folder with mlbts-install.json (resume after a cancel or a
+A first install needs the game files and the keys. On a folder with fastball-install.json (resume after a cancel or a
 failure, or update with a newer release) only --dest is needed, unless the extraction must run again. Prints JSON
 events on stdout (events.py). Exit code: 0 done, 1 failed, 2 bad command line, 3 cancelled (Ctrl+C or Ctrl+Break).
 
 --launcher: run by a launcher without a window (RecompLauncher, recomplauncher.json `prepare`; progress.py): prints
-`progress <0..1> <text>` lines instead of the events (events.ProgressLines), ends the tools when the launcher kills
-the setup (_arm_lifeline),
-and lets the install folder be inside the setup folder, which the launcher keeps.
+`progress <0..1> <text>` lines instead of the events (events.ProgressLines) and ends the tools when the launcher kills
+the setup (_arm_lifeline).
+
+The install folder may be inside the setup folder (the window's default is MLBTS\\ there: portable), only not the setup
+folder itself or one of its own folders (layout.reserved). --temp moves the build's temporary files (about 2 GB, gone
+after the build) out of <setup>/temp. Every option is a flag: --help lists them.
 """
 import argparse
 import ctypes
+import dataclasses
 import os
 import signal
 import sys
@@ -87,11 +91,28 @@ def main(argv=None):
     ap.add_argument('--keys', type=Path, help='prod.keys')
     ap.add_argument('--titlekeys', type=Path, help='title.keys (only when the NSPs lack their tickets)')
     ap.add_argument('--root', type=Path, help='the setup folder or a repository (default: the folder above installer/)')
-    ap.add_argument('--dlss', action='store_true', help="download NVIDIA's nvngx_dlss.dll next to the game")
-    ap.add_argument('--shortcut', action='store_true', help='desktop and Start menu shortcuts')
+    ap.add_argument('--temp', type=Path, help="the build's temporary folder (default: temp in the setup folder)")
+    ap.add_argument('--dlss', action='store_true',
+                    help="download NVIDIA's nvngx_dlss.dll next to the game on any graphics card (by default: on an "
+                         'NVIDIA GeForce RTX, found by itself)')
+    ap.add_argument('--no-dlss', action='store_true', help="never download NVIDIA's DLSS library")
+    ap.add_argument('--fsr', action='store_true',
+                    help="download AMD's FSR 3.1 / 4 runtime next to the game on any graphics card (by default: on "
+                         'an AMD, NVIDIA or Intel card, found by itself)')
+    ap.add_argument('--no-fsr', action='store_true', help="never download AMD's FSR runtime")
+    ap.add_argument('--shortcut', action='store_true', help='desktop and Start menu shortcuts (off by default)')
     ap.add_argument('--import-save', action='store_true', help="copy the game's Ryujinx save (mlb.exe --import-save)")
+    ap.add_argument('--equipment', action='store_true',
+                    help='add every Road to the Show equipment item, offline (tools/equipment)')
+    ap.add_argument('--no-equipment', action='store_true', help='take that equipment out again')
+    ap.add_argument('--packages', action='store_true',
+                    help="Road to the Show's Packages, offline: a server on this PC hands out the equipment packs "
+                         '(tools/packages); adds the equipment, not owned at the start')
+    ap.add_argument('--no-packages', action='store_true',
+                    help='take the packages out again; this unlocks all equipment items in every Road to the Show '
+                         'save')
     ap.add_argument('--launcher', action='store_true',
-                    help='run by a launcher: progress lines instead of JSON events, install folder may be inside the setup')
+                    help='run by a launcher: progress lines instead of JSON events')
     args = ap.parse_args(argv)
     out = None
     if args.launcher:
@@ -106,12 +127,14 @@ def main(argv=None):
         if hasattr(signal, name):
             signal.signal(getattr(signal, name), cancel)
     layout = layouts.find(args.root)
+    if args.temp:
+        layout = dataclasses.replace(layout, temp=args.temp.resolve())
     dest = args.dest.resolve()
-    log = layout.temp.parent / 'logs' / time.strftime('setup-%Y%m%d-%H%M%S.log')   # release: logs/ of the setup folder
+    log = layout.logs / time.strftime('setup-%Y%m%d-%H%M%S.log')   # release: logs/ of the setup folder
     rep = Reporter(out=out, log_path=log)
     t0 = time.monotonic()
     ctx = Context(layout, dest, rep, args)
-    steps = all_steps()
+    steps = [s for s in all_steps() if s.applies(ctx)]
     rep.emit('start', release=layout.release, dev=layout.dev, dest=str(dest), log=str(log),
              steps=[{'id': s.id, 'title': s.title} for s in steps])
     result = run_steps(ctx, steps)

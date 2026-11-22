@@ -47,7 +47,7 @@ static uint64_t reserved;         // asynchronous replay: newest value handed ou
 static int stop;
 static Pending *queue;            // side effects in the order they were added
 static int qhead, qn, qcap;
-// mlbts-native diagnosis (MLB_TRACE=perf; the game's GPU waits, nvn_api_core.c): per timeline value, when its
+// fastball diagnosis (MLB_TRACE=perf; the game's GPU waits, nvn_api_core.c): per timeline value, when its
 // submission went to the queue and when the completion thread saw the GPU reach it (st_lock). vk_sync_submit adds the
 // phases of the replay itself (below) for vk_sync_phase_times; read by the wait-burst line (vk_exec_xfer.c).
 #define VT_N 1024
@@ -385,7 +385,9 @@ VkCommandBuffer vk_sync_split(void) {
     VkSubmitInfo2 si = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2, .commandBufferInfoCount = pro ? 2 : 1,
                         .pCommandBufferInfos = pro ? cbi : cbi + 1};
     ts_submitted();
-    VkResult r = rec_submit(&si);   // by the recorder when it recorded the part
+    // by the recorder when it recorded the part, without waiting for it (vk_rec.h rec_submit_part); the submission's
+    // last part (vk_sync_submit) waits, so every part is in the queue when the value is issued
+    VkResult r = rec_submit_part(&si);
     if (r != VK_SUCCESS) {
         vk_device_fault_report(r);
         rt_fatal("vk: vkQueueSubmit2 of a part of value %llu failed (%d)", (unsigned long long)cur_fence, (int)r);
@@ -527,7 +529,7 @@ uint64_t vk_sync_fence_done(void) { return __atomic_load_n(&done, __ATOMIC_ACQUI
 
 uint64_t vk_sync_issued(void) { return __atomic_load_n(&issued, __ATOMIC_ACQUIRE); }
 
-// mlbts-native diagnosis (a long nvnEventGetValue wait, vk_exec_xfer.c gfx_event_story): the timeline as the GPU has
+// fastball diagnosis (a long nvnEventGetValue wait, vk_exec_xfer.c gfx_event_story): the timeline as the GPU has
 // it now, then done, issued and reserved, and the side-effect queue: its length, the value its first callback waits
 // for, its lowest value and how many callbacks the GPU has already reached. The queue runs in order, so a first
 // callback for a later value would hold back the ones behind it.

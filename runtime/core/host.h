@@ -145,7 +145,7 @@ uint32_t mem_unmap(uint64_t dst, uint64_t src, uint64_t n);                     
 uint32_t mem_query(uint64_t a, RtMemoryInfo *out);                              // 0x06
 uint32_t mem_map_physical(uint64_t a, uint64_t n);                              // 0x2C
 uint32_t mem_unmap_physical(uint64_t a, uint64_t n);                            // 0x2D
-// mlbts-native: shared memory blocks owned by host services; the guest maps them with 0x13 (copy semantics: host
+// fastball: shared memory blocks owned by host services; the guest maps them with 0x13 (copy semantics: host
 // writes reach every mapping, guest writes stay in their mapping; memory.c).
 typedef struct RtSharedMem RtSharedMem;
 RtSharedMem *mem_shmem_new(const char *name, uint64_t size);                    // zeroed; size a page multiple
@@ -201,7 +201,7 @@ extern const int rt_exefs_sha256_count;
 extern const char rt_default_exefs[], rt_default_romfs[], rt_default_profile[];
 extern const int rt_game_version;                          // the game build: 110 (1.1.0), 121 (1.2.1) or 143 (1.4.3)
 extern const char rt_port_version[];                       // VERSION at the build's root: 0.1.0, 0.1.0+973c626 in a release
-// mlbts-native: the game version this exe was built for ("1.0.15", "1.0.20"): tools/data/expected-<version>.json,
+// fastball: the game version this exe was built for ("1.0.15", "1.0.20"): tools/data/expected-<version>.json,
 // which tools/build.py picks by the hash of the ExeFS's main. TotK's rt_game_version stays 0 (its probes only).
 extern const char rt_game_build[];
 #define RT_V110 (rt_game_version == 110)                    // 1.1.0: its own boot constants and data slots
@@ -236,11 +236,11 @@ uint32_t kern_handle_new(int kind, void *obj);             // kind: KERN_SESSION
 void *kern_handle_get(uint32_t h, int kind);
 void kern_handle_close(uint32_t h);                        // CloseHandle from the host side, any thread; fatal on a
                                                            // bad handle
-enum { KERN_SESSION = 4, KERN_TMEM = 5, KERN_SHMEM = 6 };   // SHMEM: mlbts-native
+enum { KERN_SESSION = 4, KERN_TMEM = 5, KERN_SHMEM = 6 };   // SHMEM: fastball
 uint32_t kern_event_new(void);                             // writable handle
 uint32_t kern_event_readable(uint32_t writable);
 void kern_event_signal(uint32_t writable);
-void kern_event_clear(uint32_t writable);                   // mlbts-native
+void kern_event_clear(uint32_t writable);                   // fastball
 void kern_bind_system_event(Cpu *c, uint64_t ev, int autoclear);   // guest thread only
 void kern_signal_system_event(uint64_t ev);                // any thread
 int kern_svc(Cpu *c, uint32_t imm);                        // thread/sync SVCs; 1 if handled
