@@ -59,7 +59,10 @@ Compared by eye on matching crops, so treat as indicative:
 This fits the "baked at head show" reading: the two extra bake candidates (`93e02c04…`, `db0de8cd…`) matter, and
 something in the two main passes adds more warmth. The all-shifted mode is not a fix: level 1 of the PS5 file is the
 Switch's size, so there is no gain. It is the known workaround. Modes that expose only one of the two main passes
-(all shifted except `23a1dc9a…`, or except `0d34f3ae…`) were being run when this was written.
+(all shifted except `23a1dc9a…`, or except `0d34f3ae…`) were captured too. By eye, exposing `23a1dc9a…` gave pale,
+washed faces in some frames and natural ones in others, and exposing `0d34f3ae…` gave natural faces in the early
+frames and warm orange ones later. That is not clear enough to pick a shader; the lighting changes between frames.
+A matched, event-aligned capture is needed before concluding.
 
 ## Not done / not verified
 
