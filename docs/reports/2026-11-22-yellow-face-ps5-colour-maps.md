@@ -1,6 +1,25 @@
 # Report: yellow faces with PS5 colour maps
 
-Status: open. Not fixed. PS5 colour maps stay out of the default index (`make_hd_index.py --color` adds them).
+Status: FIXED for the heads checked (commit b4a839e). PS5 colour maps stay opt-in in the index tool until more heads are looked at.
+
+## Resolution (2026-11-22)
+
+A compute shader (cache key 5acda9c0, dispatch 23x10 groups of 8x8) runs when a head is shown. It reads the colour map at binding 1 with an integer
+`texelFetch` over a rectangle given in the Switch texture's texel coordinates, gated by a mask from another texture, and queries the size it
+normalises the mask lookup by. It sums the masked pixels into a skin-tone average that the lit face shaders later divide by. On a 1024x512
+image the game's rectangle is the wrong quarter of the map, so the average is wrong and the albedo blows out. Found by logging which binding
+each reader uses and disassembling the compute shader (an independent second opinion reached the same mechanism).
+
+Fix: while a compute dispatch is recorded, a PS5 image is bound from the level that has the Switch texture's size (`hd_shift`); fragment shaders
+keep the large level. Result: 0 of 101 harness shots show blown colour (no fix: 50); Ohtani's and Springer's faces are natural with skin detail.
+The earlier conclusion in this report that every reader group needs the small level was wrong: it came from comparing runs whose readers were
+shifted in combination, and only the compute group needs it.
+
+Not checked: other heads, the 2048 level, other categories.
+
+---
+
+The rest of this report is the investigation record up to the point the cause was found.
 
 ## Problem
 
