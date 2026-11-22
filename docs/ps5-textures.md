@@ -70,13 +70,12 @@ half) header, then one LZ4 block per segment. Decompressed, a texture is the NVN
   block, removes the yellow; the PS5 levels have the same mean colour, alpha and block modes as each other; forcing
   alpha to one, a UNORM view and a mipmapped sampler change nothing; and a patched face shader that outputs the raw
   colour sample shows normal skin with the first level exposed, so the blow-up happens after the sample, in the lighting
-  terms (the albedo is scaled by a value from other inputs). Two small fragment shaders (input ids 0842012c054ab3e9 and
-  a11d58f0ed0070d1) sample the colour map at level 0 when a head is shown, and the yellow is baked at least in part
-  through them; but giving only those two shaders the Switch-size level, in a build that does so per draw, did not
-  clear the yellow in the sunlit close-up of Ohtani on the mound (frames about 3560 to 3800 of the harness run). A
-  face with the colour map and no fix is bright yellow there; with the feature off it is natural brown. Matching the
-  same state across runs needs the game's own events, not frame numbers (the pacing differs by hundreds of frames).
-  Not found beyond that. Until it is, `make_hd_index.py`
+  terms (the albedo is scaled by a value from other inputs). Fixed from the first frame, shifting only some readers
+  to the Switch-size level never clears it: the main lit face pass (input id 0d34f3ae), the bake fragment shaders
+  (0842012c, a11d58f0, 93e02c04, db0de8cd) and the reads that have no fragment shader (compute or blit passes) all
+  go wrong when they see the 1024x512 level. Only the rare pass 23a1dc9a can keep it, so there is no gain over
+  the 512x256 level. Not a shader fix; the base level's content or upload is the next suspect (see
+  `docs/reports/2026-11-22-yellow-face-ps5-colour-maps.md`). Until it is found, `make_hd_index.py`
   leaves the colour maps out.
 - Only PS5 files in BC1 or BC7 are handled; others are skipped with a message.
 - The PS5 file is read on first use, from the replay thread, and only the levels the image keeps (the largest level,

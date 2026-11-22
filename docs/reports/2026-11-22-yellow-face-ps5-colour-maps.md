@@ -38,49 +38,61 @@ own size (512x256) renders normally. PS5 normal maps do not have the problem and
    confirmed applied (shifted count equals total view count in the shifted intervals). The face looked equally bright
    in both. So the live per-frame view of the colour map does not decide the yellow in that scene.
 
-## Reading of the evidence
+## Result of the fixed-from-frame-0 runs (2026-11-22, second pass)
 
-The yellow seems to be fixed in a value computed earlier and kept, probably by the bake passes when the head is first
-shown, using the colour map as it was then. A live view shift cannot undo that. Whether the bake shaders alone explain
-it is not shown: the bake-only rule did not clear the close-up, and no run has yet kept the shifted view for all
-shaders from the first frame of the head show and compared against the baseline in the same scene.
+Event-aligned capture did not work: the game's intro camera cuts differ between runs even at the same offset from the
+same event (the lit face shader's first draw), so scenes do not line up. Two things replaced it:
 
-## Fixed-mode runs (same scene, sunny shot of Ohtani, frames 3000 to 4000, one run per mode)
+- Runtime toggling of a mode mid-run (the earlier `[cyc]` runs) is discarded: the head-show bake keeps what it first
+  computed, and the results were inconsistent with the fixed runs.
+- Each configuration is now fixed from frame 0, with one shot every 10 frames from 2850 to 3850 (101 shots per run),
+  and a scene-independent count of blown-yellow skin pixels (R above 225, G/R 0.78 to 0.92, B/R 0.38 to 0.62, outside
+  the stat panel; more than 1,500 flags a blown face). It was checked against a face-to-jersey luminance ratio:
+  natural faces 0.45 to 0.58, blown faces 0.86 to 0.94.
 
-Compared by eye on matching crops, so treat as indicative:
+Timeline per run, one character per shot from frame 2850 (`.` natural, `+` borderline, `#` blown):
 
-| Mode (set from the first frame) | Face |
+| Configuration | Shots flagged blown |
 | --- | --- |
-| PS5 colour map off | natural tan |
-| every shader reads the shifted level (512x256) | natural, close to the baseline |
-| only the two known bake shaders shifted | blown out, near-white yellow |
-| every shader shifted except the two main lit ones | better, still warm orange |
+| PS5 colour map off | 0 of 101 |
+| no fix | 52 of 101 |
+| every reader shifted to level 1 (512x256) | 9 of 101, all in the first 90 frames, none after |
+| only `0d34f3ae` shifted | 25 of 101 |
+| `0d34f3ae` plus the four bake shaders shifted | 41 of 101 (up to about frame 3380) |
+| every fragment shader except `23a1dc9a` shifted | 0 until about 3400, then blown to the end |
+| `0d34f3ae`, the four bake shaders and every read that has no fragment shader (compute/blit) shifted; `23a1dc9a` and anything else left at the full level | 0 of 101 |
+| reads without a fragment shader shifted, nothing else | 0 flagged blown, 48 borderline (the baseline has 10) |
 
-This fits the "baked at head show" reading: the two extra bake candidates (`93e02c04…`, `db0de8cd…`) matter, and
-something in the two main passes adds more warmth. The all-shifted mode is not a fix: level 1 of the PS5 file is the
-Switch's size, so there is no gain. It is the known workaround. Modes that expose only one of the two main passes
-(all shifted except `23a1dc9a…`, or except `0d34f3ae…`) were captured too. By eye, exposing `23a1dc9a…` gave pale,
-washed faces in some frames and natural ones in others, and exposing `0d34f3ae…` gave natural faces in the early
-frames and warm orange ones later. That is not clear enough to pick a shader; the lighting changes between frames.
-A matched, event-aligned capture is needed before concluding.
+What this says:
+
+- Three groups of readers each go wrong when they see the 1024x512 base level: the main lit pass `0d34f3ae…`, the bake
+  fragment shaders (`0842012c…`, `a11d58f0…`, `93e02c04…`, `db0de8cd…`) and the reads that happen outside a
+  fragment shader (compute or blit passes). Shifting any two of the three is not enough.
+- The only reader that can keep the full level is `23a1dc9a…`, and it is rare: about 1,000 reads against about 6,000
+  for `0d34f3ae…` in the same run. So there is no useful gain: the visible face reads the 512x256 level of the PS5
+  file. That is the known workaround, now confirmed for each reader, not a fix.
+- None of the four face fragment shaders has a derivative or an image-size query on the colour map's binding, so
+  the earlier idea that the shader measures the texture's high-frequency detail does not hold for them.
+
+Because every kind of reader breaks, the cause is more likely in the base level itself (its decoded content or how it
+is laid out and uploaded) than in one shader's maths.
 
 ## Not done / not verified
 
-- The comparison is by eye and by frame number inside each run; pacing differs between runs, so the scenes match only
-  roughly.
-- No run compares off, no-fix and shifted at the same game moment. Needed: capture by game event, not frame number.
-- The two main lit shaders were never given the shifted view from head show onward in a clean A/B.
+- Nothing in `main` changes. Colour maps stay opt-in.
+- The counter is a pixel-colour rule; it was checked against the baseline and against ratio measurements, not against
+  a per-pixel reference. The face-to-jersey measure only works on close-ups, where the locator finds the cap.
 - Only Ohtani's colour map was tested.
+- No run decodes level 0 on the CPU and compares it with level 1. That is the next test.
 
 ## Next steps
 
-1. Fix the comparison first: a capture tied to a game event (for example a set number of frames after the stat panel
-   appears) so off, no-fix, bake-shifted and all-shifted show the same moment.
-2. Run all-shifted from the first frame (static, not cycled) and check the face against `off` at that event.
-3. If all-shifted is natural and bake-only is not, bisect over the four shader ids above (the experiment supports
-   modes that shift everything except a named set).
-4. If all-shifted is also yellow, the cause is not the colour map's base level; look at what else changes when the
-   texture is replaced (size query, image dimensions fed to a constant buffer, the bake render target size).
+1. Decode level 0 and level 1 of Ohtani's PS5 colour map on the CPU and compare them (downsample level 0 and compare
+   with level 1, look at block mode usage and edge blocks), and dump level 0 as a picture.
+2. Check the upload of level 0 in `hd_apply` (`runtime/gfx/vk_texture.c`): row length and image height per level, the
+   strip layout of the largest level, and whether level 0 needs different padding from the others.
+3. If level 0 decodes correctly, test an image whose level 0 is a CPU downsample-then-upsample of level 1 (so the
+   content is smooth but the size is 1024x512) to separate content from size.
 
 ## Where the experiment lives
 
