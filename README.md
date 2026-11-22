@@ -16,7 +16,7 @@ host runtime that stands in for the Switch's operating system, GPU API and audio
 
 ## Status
 
-Playable offline. The game boots, the menus work, and Exhibition, Road to the Show and Franchise run at 60 fps on the
+Playable offline. The game boots, the menus work, and Exhibition, Road to the Show and Franchise run at 100+ fps on the
 development machine (Ryzen 5 5600X, RTX 3060 Ti, Windows 11).
 
 **Scope:** offline play only (exhibition, Road to the Show, Franchise, menus, local saves). Online play and Diamond
