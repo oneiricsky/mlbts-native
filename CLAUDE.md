@@ -1,7 +1,7 @@
 # Rules for this fork (oneiricsky/mlbts-native)
 
 These override AGENTS.md (upstream's) wherever they conflict. Upstream's AGENTS.md says to push to the upstream
-repo and to end commits with a Co-Authored-By line; neither applies here.
+repo, which does not apply here. Its rule to end commits with a Co-Authored-By line does apply (see below).
 
 ## Commits and remotes
 
@@ -10,8 +10,10 @@ repo and to end commits with a Co-Authored-By line; neither applies here.
   (`readme:`, `tools:`); new ones follow the types.
 - Author and committer are Sky Miles <14169181+oneiricsky@users.noreply.github.com>. Every commit is SSH-signed
   through 1Password, which must be unlocked; check with `git cat-file commit HEAD | grep gpgsig`.
-- No Co-Authored-By trailer and no AI identity anywhere in a commit. The owner's personal email never appears in a
-  commit, a message or a network request.
+- Since 2026-11-22 the owner allows a Co-Authored-By trailer for the model, as upstream does: end the message with
+  the Co-Authored-By line the session gives. The model is never the author or committer (those stay Sky Miles),
+  and no other AI identity appears in a commit. Earlier commits are not rewritten to add it. The owner's personal
+  email never appears in a commit, a message or a network request.
 - Commit only. Push only when asked. Force-push only on an explicit request, with `--force-with-lease` pinned to
   the full remote tip, after saying that it rewrites published history.
 - `origin` is oneiricsky/mlbts-native. Upstream is sam110411/fastball (renamed from mlbts-native). Pass
