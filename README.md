@@ -27,7 +27,7 @@ Game versions 1.0.20 (the latest) and 1.0.15 are supported; other versions are n
 
 ## Playing it
 
-1. Download `Fastball-<version>-windows.zip` from [Releases](https://github.com/sam110411/mlbts-native/releases),
+1. Download `Fastball-<version>-windows.zip` from [Releases](https://github.com/sam110411/fastball/releases),
    unpack it where you want the game to live (it needs about 40 GB there) and start **`Fastball.exe`**.
 2. The setup looks for your game files and keys by itself (Ryujinx's and yuzu's folders, Downloads, Desktop, ...).
    Check what it found, pick anything missing, and press **Install**.

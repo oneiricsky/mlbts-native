@@ -13,7 +13,7 @@ Windows 11). Most current work is graphics correctness (wrong or missing images,
 - **Performance comes first.** The user notices any fps loss. Diagnostics must cost nothing during normal play: gate
   them behind F12, a cfg knob or RenderDoc. Remove test code that slows the game once it has done its job.
 - They want real fixes backed by evidence, not rounds of guesses. Trace the cause (RenderDoc, logs), then fix.
-- Commit to `main` and push it to GitHub (`origin`, https://github.com/sam110411/mlbts-native). Commit only the
+- Commit to `main` and push it to GitHub (`origin`, https://github.com/sam110411/fastball). Commit only the
   files of the task; the user may have uncommitted work of their own in the tree. End each commit message with the
   `Co-Authored-By:` line the session gives.
 - Write explanations in plain language. The user is not a graphics programmer.
@@ -111,8 +111,10 @@ docs/release-notes-<version>.md` (a short SHA
 is refused). Players' launchers (0.1.1 and later) find the newest release through GitHub's API and update from it
 (`installer/update.py`): the assets must keep the names `Fastball-<version>-windows.zip` and
 `MLBTS-Setup-<version>-windows.zip` (the second, with a copy of the launcher as `MLBTS-Setup.exe`, is the only one the
-updaters of setups 0.1.1 to 0.1.5 find and can start). Repository URLs still say `mlbts-native`: the GitHub repository
-keeps that name until it is renamed (GitHub then redirects the old URLs, the updaters' API request included).
+updaters of setups 0.1.1 to 0.1.5 find and can start). The GitHub repository was renamed from `mlbts-native` to `fastball`
+(2026-11-22, before 0.2.0): GitHub redirects the old URLs, so the updaters of 0.1.x (which ask
+`repos/sam110411/mlbts-native`) still find new releases. Never create a repository named `mlbts-native` under the same
+account: that would end the redirect.
 
 ## Logs and crash reports
 

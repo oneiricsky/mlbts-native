@@ -109,7 +109,7 @@ After the install, Fastball.exe starts the game straight away. Hold Shift while 
 Settings: F1 in the game, or flags: Fastball.exe --fullscreen --fps-limit 120 (MLBTS\\mlb.exe --help lists them
 all, from a console window).
 
-Source, issues and help: https://github.com/sam110411/mlbts-native
+Source, issues and help: https://github.com/sam110411/fastball
 """
 
 

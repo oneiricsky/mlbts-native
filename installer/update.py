@@ -38,7 +38,7 @@ from pathlib import Path
 
 from . import layout as layouts
 
-REPO = 'sam110411/mlbts-native'
+REPO = 'sam110411/fastball'
 API = f'https://api.github.com/repos/{REPO}/releases/latest'
 ASSET = re.compile(r'^(Fastball|MLBTS-Setup)-(\d+(?:\.\d+)*)-windows\.zip$')   # MLBTS-Setup: up to 0.1.5
 HEADERS = {'User-Agent': 'Fastball', 'Accept': 'application/vnd.github+json'}

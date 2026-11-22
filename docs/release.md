@@ -44,7 +44,9 @@ carries `MLBTS-Setup-<version>-windows.zip` (the same folder plus a copy of the 
 only zip the updaters of 0.1.1 to 0.1.5 find and the only exe they start; the window then deletes that copy. The
 updater takes either zip, Fastball's first, and an in-place update removes an old `MLBTS-Setup.exe`
 (`layout.LEGACY_ENTRIES`). An install's `mlbts-install.json` is read when there is no `fastball-install.json` and
-replaced by it at the next setup run. The install folder `MLBTS\` (the game's name) and the repository's name stay.
+replaced by it at the next setup run. The install folder `MLBTS\` (the game's name) stays. The GitHub
+repository is `sam110411/fastball` since 0.2.0; the updaters of 0.1.x still ask for `sam110411/mlbts-native`, which
+GitHub redirects.
 
 ## Portable and one executable
 

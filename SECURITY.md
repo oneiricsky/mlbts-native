@@ -44,6 +44,6 @@ Security issues affecting the user's host system, keys, or build/update supply c
 
 ### Out of Scope (for Security Advisories)
 
-- Normal game bugs, crashes, or graphics/audio issues — please report those as regular [GitHub Issues](https://github.com/sam110411/mlbts-native/issues) (with `logs/mlb.log`) rather than private security reports, unless they allow escaping the host filesystem or runtime boundary.
+- Normal game bugs, crashes, or graphics/audio issues — please report those as regular [GitHub Issues](https://github.com/sam110411/fastball/issues) (with `logs/mlb.log`) rather than private security reports, unless they allow escaping the host filesystem or runtime boundary.
 - Online play, Diamond Dynasty, or Nintendo/Sony network services (explicitly out of scope; see [README.md](README.md) and [CONTRIBUTING.md](CONTRIBUTING.md)).
 - Requests for encryption keys, game dumps, or assistance with piracy.
