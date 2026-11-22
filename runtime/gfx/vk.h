@@ -447,6 +447,8 @@ typedef struct {
     uint8_t gone;                  // the entry was dropped (vk_texture.c destroy_tex, under the texture lock): image and
                                    // record live until the submission being recorded is done, and nothing may be cached
                                    // by its image handle, which the driver can hand out again after that
+    uint8_t hd_shift;              // a PS5 image (vk_texture.c hd_apply): how many of its largest levels there are over the Switch
+                                   // texture's size; 0 for every other image
 } VkTexImage;
 // The window texture the backend presents (vk_backend.c): *image and *format become the float picture the game copied
 // into it, when the last draw into it was that copy and the swapchain is HDR10.

@@ -64,19 +64,19 @@ half) header, then one LZ4 block per segment. Decompressed, a texture is the NVN
 
 ## Known limits
 
-- **A PS5 colour map makes the face bright yellow and flat**, at 2048x1024 and at 1024x512. Swapped at the Switch's own
-  size (512x256) it renders normally. What was found: the face's colour sampler has no mip filter, so the shader reads
-  only the first level of the view; starting the view at the second level, or filling the first level with one skin
-  block, removes the yellow; the PS5 levels have the same mean colour, alpha and block modes as each other; forcing
-  alpha to one, a UNORM view and a mipmapped sampler change nothing; and a patched face shader that outputs the raw
-  colour sample shows normal skin with the first level exposed, so the blow-up happens after the sample, in the lighting
-  terms (the albedo is scaled by a value from other inputs). Fixed from the first frame, shifting only some readers
-  to the Switch-size level never clears it: the main lit face pass (input id 0d34f3ae), the bake fragment shaders
-  (0842012c, a11d58f0, 93e02c04, db0de8cd) and the reads that have no fragment shader (compute or blit passes) all
-  go wrong when they see the 1024x512 level. Only the rare pass 23a1dc9a can keep it, so there is no gain over
-  the 512x256 level. Not a shader fix; the base level's content or upload is the next suspect (see
-  `docs/reports/2026-11-22-yellow-face-ps5-colour-maps.md`). Until it is found, `make_hd_index.py`
-  leaves the colour maps out.
+- **PS5 colour maps (fixed 2026-11-22; still opt-in in the index tool).** A larger colour map used to make the face bright
+  yellow and flat. The cause: a compute pass the game runs when a head is shown measures the skin tone by `texelFetch` over a
+  rectangle of the colour map given in the Switch texture's texel coordinates (and queries the size it normalises by). On a
+  1024x512 image that rectangle is the wrong quarter of the map; the average comes out wrong and the lit face shaders
+  divide the albedo by it, so the face blows out. The fix is in `get_view` (`runtime/gfx/vk_exec_draw.c`): while a compute
+  dispatch is recorded, a PS5 image is bound from the level that has the Switch texture's size (`hd_shift`, set in
+  `hd_apply`); fragment shaders sample by normalised coordinates and keep the large level. Checked: with only that
+  rule, 0 of 101 harness shots show the blown colour (no fix: 50), and Ohtani's and Springer's faces look natural with
+  stubble and skin detail. Not checked: other heads, the 2048 level, the crowd and other categories. What was ruled out on
+  the way: the data (levels are a consistent mip chain with the same colour), alpha (forcing it to one helped only a
+  little), the sampler, the view format, game copies of the texture, and size queries in the lit shaders. See
+  `docs/reports/2026-11-22-yellow-face-ps5-colour-maps.md`. `make_hd_index.py --color` adds the colour maps; the default
+  index still leaves them out until more heads are looked at.
 - Only PS5 files in BC1 or BC7 are handled; others are skipped with a message.
 - The PS5 file is read on first use, from the replay thread, and only the levels the image keeps (the largest level,
   most of the file, is skipped). From the dump's drive that took 12 ms a file cold (31 ms read whole) and under 1 ms

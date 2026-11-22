@@ -44,7 +44,7 @@ typedef struct {
     VkFormat format;
     VkImageUsageFlags usage;
     uint32_t width, height, levels;
-    uint8_t block_views, fb_usage, bound;
+    uint8_t block_views, fb_usage, bound, hd_shift;
 } HdSaved;
 
 typedef struct Tex {
@@ -1275,7 +1275,7 @@ static int vkfmt_srgb(VkFormat f) {
 static void hd_pub_set(Tex *e, const HdSaved *s) {
     e->pub.image = s->image, e->pub.format = s->format, e->pub.usage = s->usage;
     e->pub.width = s->width, e->pub.height = s->height, e->pub.levels = s->levels;
-    e->pub.block_views = s->block_views, e->pub.fb_usage = s->fb_usage, e->pub.bound = s->bound;
+    e->pub.block_views = s->block_views, e->pub.fb_usage = s->fb_usage, e->pub.bound = s->bound, e->pub.hd_shift = s->hd_shift;
 }
 
 static void hd_drop(Tex *e) {
@@ -1353,8 +1353,10 @@ static void hd_apply(Tex *e) {
     vk_upload_end();
     free(rg);
     e->hd_sw = (HdSaved){e->pub.image, e->pub.format, e->pub.usage, e->pub.width, e->pub.height, e->pub.levels,
-                         e->pub.block_views, e->pub.fb_usage, e->pub.bound};
-    e->hd_ps5 = (HdSaved){img, fmt, usage, tx.width, tx.height, tx.levels, 0, 0, 0};
+                         e->pub.block_views, e->pub.fb_usage, e->pub.bound, 0};
+    uint32_t hd_sh = 0;   // the levels above the Switch texture's width
+    while (hd_sh + 1 < tx.levels && (tx.width >> hd_sh) > d->width) hd_sh++;
+    e->hd_ps5 = (HdSaved){img, fmt, usage, tx.width, tx.height, tx.levels, 0, 0, 0, (uint8_t)hd_sh};
     e->hd_image = img, e->hd_alloc = alloc, e->hd_hash = mlb_hd_hash(h);
     hd_pub_set(e, &e->hd_ps5);
     e->hd_active = 1;

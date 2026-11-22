@@ -102,7 +102,7 @@ def main():
     ap.add_argument("--max-dim", type=int, default=1024, help="largest HD side (default 1024)")
     ap.add_argument("--heads", nargs="*", default=[], help="player folders under CHARACTERS/HEADS (their NORMAL maps)")
     ap.add_argument("--color", action="store_true",
-                    help="--heads also takes the COLOR maps: the face then renders bright yellow (docs/ps5-textures.md)")
+                    help="--heads also takes the COLOR maps (checked on two heads so far; docs/ps5-textures.md)")
     ap.add_argument("--all-heads", action="store_true",
                     help="every player folder under CHARACTERS/HEADS that has a NORMAL map in both the Switch files and the PS5 dump")
     ap.add_argument("tex", nargs="*", help="paths under NSW/ (and PS5/)")
