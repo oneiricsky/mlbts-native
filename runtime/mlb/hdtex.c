@@ -127,10 +127,13 @@ int mlb_hd_load(const MlbHdEntry *e, MlbHdTex *out) {
     fseek(f, 0, SEEK_END);
     long len = ftell(f);
     fseek(f, 0, SEEK_SET);
-    uint8_t *d = malloc((size_t)len);
-    if (!d || fread(d, 1, (size_t)len, f) != (size_t)len) { fclose(f); free(d); fail("hdtex: cannot read %s", path); return 0; }
-    fclose(f);
+    // The header (the level table ends below 0x3a0), then only the bytes of the levels the image keeps: the largest level
+    // comes first in the file and is the bulk of it, and the drive of the dump is slow (35 ms a file read whole).
+    uint8_t d[0x400];
+    size_t hn = (size_t)len < sizeof d ? (size_t)len : sizeof d;
+    if (len < 0 || fread(d, 1, hn, f) != hn) { fclose(f); fail("hdtex: cannot read %s", path); return 0; }
     int ok = 0;
+    uint8_t *body = NULL;
     uint32_t sizes[16], offs[16];
     do {
         if (len < 0x1a0 + 32 || memcmp(d, "TX12PS5", 8)) { rt_log("hdtex: %s is not a PS5 texture", path); break; }
@@ -152,6 +155,14 @@ int mlb_hd_load(const MlbHdEntry *e, MlbHdTex *out) {
         for (uint32_t i = 2; i < nm; i++) run += sizes[i], offs[i] = t + tail - run;
         uint32_t drop = e->drop;
         if (drop >= nm) { rt_log("hdtex: %s: drop %u leaves no level", path, drop); break; }
+        size_t lo = (size_t)-1, hi = 0;
+        for (uint32_t i = drop; i < nm; i++) {
+            if (offs[i] < lo) lo = offs[i];
+            if ((size_t)offs[i] + sizes[i] > hi) hi = (size_t)offs[i] + sizes[i];
+        }
+        if (hs + hi > (size_t)len) { rt_log("hdtex: %s: levels outside the file", path); break; }
+        body = malloc(hi - lo);
+        if (!body || fseek(f, (long)(hs + lo), SEEK_SET) || fread(body, 1, hi - lo, f) != hi - lo) { fail("hdtex: cannot read %s", path); break; }
         out->width = mip(W, drop), out->height = mip(H, drop), out->levels = nm - drop, out->bpb = bpb;
         size_t total = 0;
         for (uint32_t l = 0; l < out->levels; l++) {
@@ -162,14 +173,12 @@ int mlb_hd_load(const MlbHdEntry *e, MlbHdTex *out) {
         out->data = calloc(1, total);
         if (!out->data) rt_fatal("hdtex: out of memory");
         out->size = total;
-        for (uint32_t l = 0; l < out->levels; l++) {
-            size_t o = hs + offs[drop + l];
-            if (o + sizes[drop + l] > (size_t)len) { rt_log("hdtex: %s: level %u outside the file", path, drop + l); out->levels = l; break; }
-            level_to_rows(d + o, sizes[drop + l], out->lw[l], out->lh[l], bpb, out->data + out->off[l]);
-        }
+        for (uint32_t l = 0; l < out->levels; l++)
+            level_to_rows(body + (offs[drop + l] - lo), sizes[drop + l], out->lw[l], out->lh[l], bpb, out->data + out->off[l]);
         ok = out->levels > 0;
     } while (0);
-    free(d);
+    fclose(f);
+    free(body);
     if (!ok) mlb_hd_free(out);
     return ok;
 }
