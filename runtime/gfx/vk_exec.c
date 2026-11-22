@@ -902,7 +902,14 @@ static void maybe_split(VkExec *ex) {
                us > 0 ? us : 0, split_n ? "" : " (off)");
     }
     if (!split_n || ex->in_pass || split_draws < split_n) return;
-    if (split_ns && kern_now_ns() - part_t0 < split_ns) return;   // split_draws stays: the next draw asks again
+    // fastball: too early, asked again 8 draws or dispatches later. walk calls this after every command once split_draws
+    // reached split_n, and the part's first millisecond often holds far more than 64 draws, so the clock was read for
+    // every bind of the rest of it: QueryPerformanceCounter was 7.6 % of the replay thread's busy time in a 1.0.20
+    // match (sampler, frames 4500-8500 of the attract match), more than building descriptors.
+    if (split_ns && kern_now_ns() - part_t0 < split_ns) {
+        split_draws = split_n > 8 ? split_n - 8 : 0;
+        return;
+    }
     split_draws = 0;
     if (ex->recorded == part_start) return;
     vk_exec_dispatch_run_close(ex);
