@@ -45,6 +45,12 @@ static int rec_chk;                    // TOTK_REC_CHECK (rec_check_handle)
 static uint64_t rec_delay_ns;          // TOTK_REC_DELAY_US (rec_main)
 static volatile uint64_t part_h0;      // Q.put_h at rec_begin: where the packets of the part being recorded start
 static volatile uint64_t part_fence;   // the value of the part being recorded (rec_begin)
+// fastball: submissions of parts handed over without a wait (rec_submit_part). sub_pos: the ring position right after
+// the newest such Submit packet (producer); sub_done: right after the last Submit packet the recorder made (recorder);
+// sub_err: the first of those vkQueueSubmit2 calls that failed, reported at the next submit.
+static volatile uint64_t sub_pos, sub_done;
+static volatile VkResult sub_err;
+static volatile uint32_t rec_tid;
 
 // Producer statistics, logged by rec_stats_log.
 static struct { _Alignas(64) uint64_t packets, words, drains, fallbacks, drain_ns, full_waits, parts, parts_on, submits; } RS_;
@@ -71,6 +77,7 @@ static void exec_packet(uint32_t op, void *p);
 static void rec_main(void *arg) {
     (void)arg;
     plat_thread_priority(rec_prio);
+    __atomic_store_n(&rec_tid, plat_thread_id(), __ATOMIC_RELEASE);
     uint64_t t = 0;
     for (;;) {
         uint64_t h = __atomic_load_n(&Q.head, __ATOMIC_ACQUIRE);
@@ -92,6 +99,7 @@ static void rec_main(void *arg) {
             uint32_t op = (uint32_t)(w & 0xffff), n = (uint32_t)(w >> 32);
             if (op != R_PAD) exec_packet(op, &ring[t % RING_WORDS + 1]);
             t += n;
+            if (op == R_Submit) __atomic_store_n(&sub_done, t, __ATOMIC_RELEASE);   // rec_wait_submits
             if ((k & 63) == 63) __atomic_store_n(&Q.tail, t, __ATOMIC_RELEASE);
         }
         __atomic_store_n(&Q.tail, t, __ATOMIC_RELEASE);
@@ -279,7 +287,7 @@ int rec_end_cb(VkCommandBuffer cb, int crumb, uint64_t n) {
 
 // At most two command buffers and one signal: the shape vk_sync.c submits.
 typedef struct { uint32_t ncb, nsig; VkCommandBufferSubmitInfo cbi[2]; VkSemaphoreSubmitInfo sig; } A_Submit;
-VkResult rec_submit(const VkSubmitInfo2 *si) {
+static VkResult submit(const VkSubmitInfo2 *si, int wait) {
     if (!sub_pending) {
         vk_queue_lock();
         VkResult r = vkQueueSubmit2(vk_ctx()->gfx_queue, 1, si, VK_NULL_HANDLE);
@@ -295,12 +303,37 @@ VkResult rec_submit(const VkSubmitInfo2 *si) {
     a->ncb = si->commandBufferInfoCount, a->nsig = si->signalSemaphoreInfoCount;
     for (uint32_t i = 0; i < a->ncb; i++) a->cbi[i] = si->pCommandBufferInfos[i];
     if (a->nsig) a->sig = si->pSignalSemaphoreInfos[0];
+    RS_.submits++;
+    if (!wait) {   // rec_submit_part: the packet goes out now; whoever uses the queue next waits for it (vk_queue_lock)
+        __atomic_store_n(&sub_pos, Q.put_h, __ATOMIC_RELEASE);
+        pub_now();
+        return __atomic_load_n(&sub_err, __ATOMIC_ACQUIRE);
+    }
     pub();
     // Waited for here, so the queue holds every earlier submission when the caller goes on, as with the recorder off:
     // the present, uploads, readbacks and device waits on other threads rely on that order.
     rec_drain();
-    RS_.submits++;
-    return r_sub_res;
+    VkResult e = __atomic_load_n(&sub_err, __ATOMIC_ACQUIRE);
+    return e != VK_SUCCESS ? e : r_sub_res;
+}
+
+VkResult rec_submit(const VkSubmitInfo2 *si) { return submit(si, 1); }
+
+// fastball: a part that does not end its submission. rec_submit waited for the recorder to make every call of the
+// part and submit it, so the replay stood still at each split while the recorder caught up: rec_drain was 13 % of
+// the replay thread's busy time in a 1.0.20 match (sampler, tracing off). The order other submitters rely on is kept
+// where they take the queue (vk_queue_lock waits in rec_wait_submits); the replay itself takes it for its uploads.
+VkResult rec_submit_part(const VkSubmitInfo2 *si) { return submit(si, 0); }
+
+// Until the recorder made every Submit packet handed over without a wait, unless called by the recorder itself (its
+// own submit takes the queue lock: vk_queue_lock calls this only for a thread's outermost lock).
+void rec_wait_submits(void) {
+    uint64_t want = __atomic_load_n(&sub_pos, __ATOMIC_ACQUIRE);
+    if (__atomic_load_n(&sub_done, __ATOMIC_ACQUIRE) >= want || plat_thread_id() == __atomic_load_n(&rec_tid, __ATOMIC_ACQUIRE))
+        return;
+    for (int i = 0; __atomic_load_n(&sub_done, __ATOMIC_ACQUIRE) < want; i++)
+        if (i < 20000) _mm_pause();
+        else plat_yield();
 }
 
 static void submit_run(const A_Submit *a) {
@@ -308,8 +341,11 @@ static void submit_run(const A_Submit *a) {
                         .pCommandBufferInfos = a->cbi, .signalSemaphoreInfoCount = a->nsig,
                         .pSignalSemaphoreInfos = a->nsig ? &a->sig : NULL};
     vk_queue_lock();
-    r_sub_res = vkQueueSubmit2(vk_ctx()->gfx_queue, 1, &si, VK_NULL_HANDLE);
+    VkResult r = vkQueueSubmit2(vk_ctx()->gfx_queue, 1, &si, VK_NULL_HANDLE);
     vk_queue_unlock();
+    if (r != VK_SUCCESS && __atomic_load_n(&sub_err, __ATOMIC_RELAXED) == VK_SUCCESS)
+        __atomic_store_n(&sub_err, r, __ATOMIC_RELEASE);
+    r_sub_res = r;
 }
 
 void rec_stats_log(void) {

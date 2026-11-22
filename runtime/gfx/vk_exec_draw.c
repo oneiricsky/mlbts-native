@@ -4860,13 +4860,15 @@ static void op_dispatch(VkExec *ex, const p_dispatch *d) {
     bind_resources(ex, info);
     twin_dispatch = 0;
     if (LT.cand) lt_end(ex, lt_rec + (B.pipe[1] != lt_pipe) + 1);
-    // fastball diagnosis: the lighting-probe shaders (MLB_DISPATCH_DUMP, hex FNV hashes; default the RTTS room's
-    // probe and cube generators) get the dump below whatever addresses they use, their first 8 dispatches each.
+    // fastball diagnosis: the lighting-probe shaders (MLB_DISPATCH_DUMP, hex FNV hashes, e.g. the RTTS room's probe
+    // and cube generators 6dfb3fe0,1760ce02,96b26045,029166ea,0e0c2eb9,257c230d,2ef7a42a) get the dump below whatever
+    // addresses they use, their first 8 dispatches each. Off unless set: that list was the default, and hashing each
+    // dispatch's shader code (its 64-entry cache misses with MLB's hundreds of compute programs) took about 2 % of the
+    // replay thread in a 1.0.20 match, besides the watch: lines and storage scans in every player's log.
     static uint32_t dd_want[16];
     static int dd_n = -1;
     if (dd_n < 0) {
         const char *e = cfg_get("MLB_DISPATCH_DUMP");
-        if (!e) e = "6dfb3fe0,1760ce02,96b26045,029166ea,0e0c2eb9,257c230d,2ef7a42a";
         dd_n = 0;
         while (e && *e && dd_n < 16) {
             char *end;
@@ -5446,6 +5448,19 @@ static const prog_t *graphics_program(const VkExec *ex) {
         const prog_t *p = ex->stage_prog[s];
         h = (h ^ (uint64_t)(uintptr_t)p ^ (p ? p->serial << 17 : 0)) * 0x9E3779B97F4A7C15ull;
     }
+    // fastball: the combinations found last, per hash, on this thread: MLB binds its stages' programs separately
+    // about 800 times a frame, and the lock and the walk over the bucket's list (each node a cache miss) were about
+    // 3 % of the replay thread in a 1.0.20 match. A hit is the same {program, serial} per stage, as below.
+    static _Thread_local Combo *memo[256];
+    Combo *m = memo[h >> 56];
+    if (m) {
+        int same = 1;
+        for (int s = 0; s < 5 && same; s++) {
+            const prog_t *p = ex->stage_prog[s];
+            same = m->src[s] == p && m->serial[s] == (p ? p->serial : 0);
+        }
+        if (same) return &m->p;
+    }
     Combo **head = &combos[h >> 52 & (COMBO_BUCKETS - 1)];
     plat_mutex_lock(&combo_lock);
     Combo *c = *head;
@@ -5478,6 +5493,7 @@ static const prog_t *graphics_program(const VkExec *ex) {
                    (unsigned long long)c->p.serial, c->p.nstage, (unsigned long long)combo_count);
     }
     plat_mutex_unlock(&combo_lock);
+    memo[h >> 56] = c;   // combinations live as long as the process
     return &c->p;
 }
 

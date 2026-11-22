@@ -384,7 +384,9 @@ VkCommandBuffer vk_sync_split(void) {
     VkSubmitInfo2 si = {.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO_2, .commandBufferInfoCount = pro ? 2 : 1,
                         .pCommandBufferInfos = pro ? cbi : cbi + 1};
     ts_submitted();
-    VkResult r = rec_submit(&si);   // by the recorder when it recorded the part
+    // by the recorder when it recorded the part, without waiting for it (vk_rec.h rec_submit_part); the submission's
+    // last part (vk_sync_submit) waits, so every part is in the queue when the value is issued
+    VkResult r = rec_submit_part(&si);
     if (r != VK_SUCCESS) {
         vk_device_fault_report(r);
         rt_fatal("vk: vkQueueSubmit2 of a part of value %llu failed (%d)", (unsigned long long)cur_fence, (int)r);

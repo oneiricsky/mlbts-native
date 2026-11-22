@@ -26,6 +26,11 @@ int rec_end_cb(VkCommandBuffer cb, int crumb, uint64_t n);
 // vkQueueSubmit2 of si (at most two command buffers, one signal, no wait, no fence) under vk_queue_lock: by the
 // recorder after a part it ended, waited for, else at once.
 VkResult rec_submit(const VkSubmitInfo2 *si);
+// fastball: the same for a part that does not end its submission (vk_sync.c vk_sync_split), without the wait: the
+// recorder submits it in ring order, and vk_queue_lock (rec_wait_submits) holds every other use of the queue until it
+// did. Returns the first failure of such a submit so far.
+VkResult rec_submit_part(const VkSubmitInfo2 *si);
+void rec_wait_submits(void);          // until the recorder made the submits rec_submit_part handed over
 void rec_drain(void);                 // waits until the recorder made every call queued so far
 void rec_stats_log(void);             // TOTK_TRACE=perf: packets, bytes, drains and waits since the last call
 // TOTK_REC_CHECK=1 (debug, recorder on): vk_memory.c reports each object it defers (destroy 0, stamped tl) or destroys

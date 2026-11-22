@@ -33,9 +33,20 @@
 #define VSYNC_HZ 60
 
 // ---- queue lock
+// fastball: a thread's outermost lock first waits for the parts the replay handed to the recorder without a wait
+// (vk_rec.c rec_submit_part), so every submission, present and idle wait still comes after them in queue order. Not
+// for a lock the thread already holds: the recorder's own submit would wait for this thread's lock.
 static PlatRMutex g_ql;
-void vk_queue_lock(void) { plat_rmutex_lock(&g_ql); }
-void vk_queue_unlock(void) { plat_rmutex_unlock(&g_ql); }
+static _Thread_local int ql_depth;
+void vk_queue_lock(void) {
+    if (!ql_depth) rec_wait_submits();
+    plat_rmutex_lock(&g_ql);
+    ql_depth++;
+}
+void vk_queue_unlock(void) {
+    ql_depth--;
+    plat_rmutex_unlock(&g_ql);
+}
 
 // ---- window state shared with the back end
 static VkSurfaceKHR g_surface;

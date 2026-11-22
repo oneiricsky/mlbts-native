@@ -362,6 +362,7 @@ static int image2d(uint32_t w, uint32_t h, VkFormat f, VkImageUsageFlags usage, 
 
 static void free_size(struct Size *e) {
     const VkCtx *c = vk_ctx();
+    rec_wait_submits();   // fastball: parts handed to the recorder are in the queue first (vk_rec.h rec_submit_part)
     vkDeviceWaitIdle(c->device);   // a fourth size (rare): the evicted images may still be in flight
     if (e->out_view) vkDestroyImageView(c->device, e->out_view, NULL);
     if (e->mv_view) vkDestroyImageView(c->device, e->mv_view, NULL);
