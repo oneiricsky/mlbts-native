@@ -50,6 +50,7 @@
 static struct {
     AudioOut *stream;   // fastball: WASAPI output
     int device_ok, opened;
+    int fake_clock;   // fastball: no device, TOTK_AUDIO=paced: a thread plays the ring out in real time
     float ring[AUDOUT_RING_FRAMES * 2];
     _Atomic uint64_t played, queued;
     PlatMutex push;
@@ -159,12 +160,34 @@ static void audout_pull(void *user, float *dst, uint32_t total) {
     }
 }
 
+// fastball: a stand-in for the device when there is none and TOTK_AUDIO=paced (unattended test runs, the dev harness).
+// Without it every queued buffer counts as played at once, the game's audio thread recycles without any pacing, and a run
+// on a PC with no playback device (log: "audout: no output device") sat at the loading screen and never started the
+// match. This thread advances `played` at the stream rate, like hardware, and signals the buffer events.
+static void fake_device_thread(void *arg) {
+    (void)arg;
+    uint64_t last = plat_now_ns();
+    for (;;) {
+        plat_sleep_ms(5);
+        uint64_t now = plat_now_ns();
+        uint64_t frames = (now - last) * AUDOUT_RATE / 1000000000ull;
+        if (!frames) continue;
+        last += frames * 1000000000ull / AUDOUT_RATE;
+        uint64_t played = atomic_load_explicit(&out.played, memory_order_acquire);
+        uint64_t queued = atomic_load_explicit(&out.queued, memory_order_acquire);
+        uint64_t have = queued > played ? queued - played : 0;
+        atomic_store_explicit(&out.played, played + (frames < have ? frames : have), memory_order_release);
+        notify_released();
+    }
+}
+
 // Opens the output once. Without a device the service still answers and every buffer is reported played at once, so the
 // game's audio thread keeps recycling instead of stalling (the same choice audio_mixer.c makes).
 static void out_open(void) {
     if (out.opened) return;
     out.opened = 1;
     const char *mode = cfg_get("TOTK_AUDIO");
+    if (mode && !strcmp(mode, "paced")) goto paced;   // fastball: silent test runs: never open the real device
     if ((mode && !strcmp(mode, "none")) || cfg_get("TOTK_AUDIO_OFF")) {
         rt_log("audout: TOTK_AUDIO=none: buffers are recycled without a device");
         return;
@@ -176,11 +199,17 @@ static void out_open(void) {
                                 sizeof err);
     if (!out.stream) {
         rt_log("audout: no output device (%s): buffers are recycled without sound", err);
+        if (mode && !strcmp(mode, "paced")) goto paced;
         return;
     }
     out.device_ok = 1;
     rt_log("audout: WASAPI device '%s' opened, %d Hz stereo signed 16-bit in, float out, device period %d frames",
            name, AUDOUT_RATE, period);
+    return;
+paced:
+    out.fake_clock = 1;
+    plat_thread_spawn(fake_device_thread, NULL, "audout fake", 0);
+    rt_log("audout: TOTK_AUDIO=paced: a fake device plays the ring out in real time");
 }
 
 // Converts and queues guest PCM (signed 16-bit interleaved) and returns the frame counter at which it has been played.
@@ -195,7 +224,7 @@ static uint64_t out_push(const int16_t *pcm, uint64_t frames, int channels, floa
     uint64_t have = queued > played ? queued - played : 0;
     uint64_t room = have < AUDOUT_RING_FRAMES ? AUDOUT_RING_FRAMES - have : 0;
     uint64_t n = frames < room ? frames : room;
-    if (!out.device_ok) n = 0;
+    if (!out.device_ok && !out.fake_clock) n = 0;
     for (uint64_t i = 0; i < n; i++) {
         uint64_t k = (queued + i) % AUDOUT_RING_FRAMES;
         const int16_t *f = pcm + (size_t)channels * i;
@@ -219,7 +248,7 @@ static uint64_t out_push(const int16_t *pcm, uint64_t frames, int channels, floa
     atomic_store_explicit(&out.queued, queued, memory_order_release);
     if (n < frames && out.device_ok && plat_xadd64(&out.overruns, 1) == 0)
         rt_log("audout: the output ring is full (%d frames queued): dropping frames of a buffer", AUDOUT_RING_FRAMES);
-    if (!out.device_ok)   // no device: everything is already played, so the game recycles at its own pace
+    if (!out.device_ok && !out.fake_clock)   // no device: everything is already played, so the game recycles at its own pace
         atomic_store_explicit(&out.played, queued, memory_order_release);
     plat_mutex_unlock(&out.push);
     return queued;
