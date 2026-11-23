@@ -78,6 +78,63 @@ the game compares config flags against, not option names.
 Watch for fake matches when extending the table: short common words collide with the hash. One
 candidate in this set looked plausible and was not.
 
+## Run slots
+
+Every session that runs the game (a person, an agent, `tools/harness.py` in the slot `harness`, `tools/bench.py` in
+the slot `bench`) does it through `tools/game.py` in a **slot** of its own, so that several games can run at once
+without stepping on each other. Three rules:
+
+1. **Own slot.** The game runs from `work/runs/<id>/`: a copy of the exe (`mlb_<id>.exe`) and of the files it needs
+   beside it (the shader translator, `SDL3.dll`, `mlb.cfg`, the shader and pipeline caches). Each run has its own
+   folder `run-<n>/` with `mlb.log` (the game's own log: every run is given `MLB_LOG=<run folder>/mlb.log`, so runs of
+   one slot do not share a log), `game.out` (what it printed), `env.json` (the settings it got) and `result.json`
+   (exit code, how it ended, audio, window title, which other games were live, `first_run_of_slot`). A slot whose game
+   is live refuses a second run: its exe folder and its profile are shared.
+2. **Marker file.** `work/game.state/<id>.lock` is the slot's permit. `create` writes it and `release` removes it. A
+   session keeps its marker between its runs, so a marker whose game is not running is not stale: never remove one
+   you did not write. `stop` and `release` work only on slots `tools/game.py` made.
+3. **Window label.** `MLB_RUN_LABEL=<label>` puts `[label]` at the end of the game's window title (default: the id), so
+   the windows on screen can be told apart.
+
+The real saves are **copied**, never written: before each run the slot's `profile/` is refreshed from the real
+profile's `save`, `save-tx`, `playtime.txt` and `account.uid` (`--real-profile`, default `work/build/profile`), and
+`MLB_PROFILE` cannot be pointed back at the real profile. `--keep-profile` goes on from the saves the slot has.
+
+```
+python -I tools/game.py create  mytask [--label TEXT] [--exe PATH]      # a new slot and its marker; a taken id is refused
+python -I tools/game.py update  mytask [--exe PATH]                     # put the current exe into the slot when it differs
+python -I tools/game.py run     mytask [--scenario FILE] [--env KEY=VALUE ...] [--mode shared|exclusive]
+                                      [--no-wait | --wait SECONDS] [--timeout SECONDS] [--detach]
+python -I tools/game.py status                                            # live games, slots, markers, free places
+python -I tools/game.py stop    mytask                                    # ask its game to close; kill it after the grace period
+python -I tools/game.py release mytask                                    # stop its game, remove the marker; the files stay
+python -I tools/game.py clean   --id mytask | --all-finished [--dry-run]  # delete finished slots this tool made, nothing else
+```
+
+**Shared against exclusive.** `run` waits for a turn. `shared` (the default) starts when fewer than three games are
+live anywhere on the machine and no exclusive run is live. `exclusive` (a timing run) starts only when no game is
+live, and ordinary runs then wait until it ends. Games are counted from the process list: every process under
+`work/runs/` and every `mlb*.exe`, whoever started it, so another session's hand-made slot counts too. `--no-wait`
+exits with status 2 at once when there is no turn.
+
+**Times need a warm slot.** A slot's first run fills its caches: the first game after a fresh copy of the exe folder
+took 37.1 s to reach the field picture where the next three took 22.5 s (2026-11-23; the MSDF step itself was the
+same, 723 against 727 ms). `result.json` says `first_run_of_slot`; let a slot run once before timing anything in it.
+
+Exit status of `run`: 0 the game ended by itself with exit code 0, 1 it ended another way (another exit code, a
+`FATAL:` line in the log, closed on request, killed), 2 the run could not happen (no turn, the slot is missing,
+released or busy, bad input). `--timeout` and `stop` send the game what the X button sends and kill it `--grace`
+seconds later; the request is repeated until the game's window is there, because a game that is still starting has
+none (the real game's comes 5 to 6 s after launch in a fresh slot).
+
+**The log file.** `MLB_LOG=<file>` is a setting of the game itself (the row `LOG` in `runtime/mlb/cfg.c`, so
+`--log` works too): the log goes to that file and nowhere else. An absolute path is used as given, a relative one
+against the exe's folder. Without it the log is `logs/mlb.log` beside the exe, as before, and then every game started
+from that folder writes the same file. An exe without the setting still works with `tools/game.py`: the slot's log is
+copied into the run folder and `result.json` says so (`log_source`).
+
+`python -I tools/test_game_real.py` runs the real game through all of this and prints the numbers.
+
 ## Running a comparison
 
 This is upstream's method (docs/frame-rate.md, "Measuring"), with `tools/bench.py` doing the bookkeeping. The match
@@ -89,8 +146,10 @@ is the harness match above (`AIvAI` plus `GameOnly`), the one upstream calls the
    session. Add `--counterbalance` to flip the order every second round (A B B A).
 3. Run each configuration at least twice, and three times if the difference is small. Record the run count with the
    result.
-4. Play 400 s a run with the sampler off (`MLB_SAMPLER=off`: it slows the game) and `MLB_TRACE=perf`. One game at a
-   time; `bench.py` refuses to start while `mlb.exe` is running.
+4. Play 400 s a run with the sampler off (`MLB_SAMPLER=off`: it slows the game) and `MLB_TRACE=perf`. A comparison
+   run is exclusive: `bench.py` waits until no game is live anywhere (other sessions' games included), and ordinary
+   runs wait for it. Let the slot run once before the first timed run: a slot's first run fills its caches (see "Run
+   slots", "Times need a warm slot").
 5. Read the first minute separately. It holds loading and, now and then, a boot stall of 8 to 10 s. `compare`
    prints the first window's frame count and the figures from the second minute on.
 6. Call a difference real only if the min-max ranges of the runs do not overlap, and say so when there are fewer
@@ -102,10 +161,11 @@ python -I tools/bench.py compare work/bench/<date>
 python -I tools/bench.py compare off=run1.log off=run2.log colour=run3.log colour=run4.log
 ```
 
-`run` starts `work/build/mlb.exe` (change it with `--exe` or `MLB_BENCH_EXE`) from its own folder, so the game finds
-`game/romfs`, `profile/` and `mlb.cfg` beside it; put `MLB_EXEFS`, `MLB_ROMFS` or `MLB_PROFILE` in `--env` if a
-build keeps them elsewhere. It writes `work/bench/<date>/<label>-<n>.log` and `.json` (the summary from
-`tools/perf_summary.py` plus the run's settings). `--dry-run` prints the order and settings without starting
+`run` takes `work/build/mlb.exe` (change it with `--exe` or `MLB_BENCH_EXE`) and runs it through `tools/game.py` in the
+slot `work/runs/bench` (`--slot`): a copy of the exe and of the files it needs beside it, so the game finds them next to
+itself (see "Run slots"). It writes `work/bench/<date>/<label>-<n>.log` and `.json` (the summary from
+`tools/perf_summary.py` plus the run's settings, `contended` when another game was live during the run, and
+`first_run_of_slot`). `--dry-run` prints the order and settings without starting
 anything. `compare` also takes old logs with a `label=` prefix. The summary reads a log whether or not each line
 starts with a timestamp (`MLB_LOG_TIME=1` puts `[ 12.345] ` in front of every line): its patterns are not anchored
 to the start of the line.
