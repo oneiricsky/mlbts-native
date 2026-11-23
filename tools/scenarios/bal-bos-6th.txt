@@ -1,0 +1,11 @@
+# Baltimore (home) against Boston, bottom of the 6th, tied 2-2, 1 out, 0-0 count
+name = bal-bos-6th
+home = 0
+away = 1
+inning = 6
+half = bottom
+away_score = 2
+home_score = 2
+outs = 1
+balls = 0
+strikes = 0
