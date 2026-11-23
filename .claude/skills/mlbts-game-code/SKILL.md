@@ -82,6 +82,14 @@ of the state handlers (`docs/map/regions/D-*.md`), the game-mode table (`0x7000e
   (default on), a menu toggle, a doc with Cause / fix / what else changes / how it was checked.
 - **Do not trust an address in an older comment** without checking it in the index for the right version.
 
+## The wiki
+
+The same knowledge is published as the GitHub wiki of `oneiricsky/mlbts-native`. The skill is the source for the game-code pages (this page is Start-here, the
+references become How-the-port-works, The-game-binary, Known-game-functions, Tracing-playbook and History-and-open-questions, and the region notes become Region-A to
+Region-F). The findings pages (walk-up freeze, match-start freeze, load stalls, frame rate, PS5 textures, upstream bugs, dev harness) are written by hand in `docs/wiki/`.
+Rebuild every page with `python -I tools/wiki_build.py` (writes `work/wiki/`, checks that all links resolve); never edit a generated page in the wiki, edit its source
+here. Publishing is a push to `oneiricsky/mlbts-native.wiki.git`: only when the owner asks, with `GIT_TERMINAL_PROMPT=0` and a short timeout.
+
 ## Keeping this skill true
 
 If you learn a game function's meaning, add it to `references/known-functions.md` with its tag, the evidence and the
