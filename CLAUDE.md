@@ -78,17 +78,21 @@ runs, 35 s each, off and on alternated: the MSDF step 683, 706, 673 ms (mean 687
 (mean 189) with it on; the finished field texture has the same checksum in all six (sum 147739026, 587113 non-zero of
 1048576), and the owner saw the field in game and it looked right.
 
-How sure we are (2026-11-23): for the one stadium tested, the finished texture is byte for byte identical with the skip
-off and on (all 1,048,576 bytes, same SHA-256), so the output is proven equal there. It is not proven for every input:
-reading the guest code showed the pass marks a pixel only through two classifier calls (`f_70000336bc`,
-`f_7000033530`); the divide-based range tests give NaN for an infinite pixel whatever its neighbours hold, but a range
-test can pass for one and `f_70000336bc` then checks the real stadium outline, which cannot be worked out offline. So
-other stadiums, times of day and weather still need the same byte compare. How to do it: a temporary dump in
-`write_texels` (`runtime/gfx/nvn_api_obj.c`, never committed) writes the 512x512 `fmt 0x25` WriteTexels data to a folder;
-run the dump exe once with `MLB_MSDF_SKIP=0` and once with `1`, compare the files. Still to do: the other stadiums, a
-whole-match run, the 1.0.15 address (needs the 1.0.15 exefs for `tools/addrmap.py`; it is not on this machine), a
-`docs/reports/` write-up. The float fix-up (`research/float-fixup`) matters much less once the NaNs are gone; measure it
-again before merging it.
+How sure we are (2026-11-23): for the two stadiums tested, the finished texture is byte for byte identical with the
+skip off and on (all 1,048,576 bytes, same SHA-256), so the output is proven equal there. Dodger Stadium: six runs,
+three off and three on. Baltimore (BAL home, BOS away): four runs of 40 s, off and on alternated, the step 723 and
+727 ms off (mean 725) and 187 and 186 ms on (mean 187); SHA-256
+5f450eca81b533dcc436c911e5fb081f35641ccc7170588480f6d55a3bc4e6a0 and byte sum 127082744 in all four. It is not proven
+for every input: reading the guest code showed the pass marks a pixel only through two classifier calls
+(`f_70000336bc`, `f_7000033530`); the divide-based range tests give NaN for an infinite pixel whatever its neighbours
+hold, but a range test can pass for one and `f_70000336bc` then checks the real stadium outline, which cannot be worked
+out offline. So more stadiums, times of day and weather still need the same byte compare. How to do it: the dev harness
+dumps the picture (scenario key `dump = texture:fmt=0x25,size=512x512`; `tools/scenarios/bal-tor-field.txt` is the
+Baltimore one); run the scenario once with `MLB_MSDF_SKIP=0` and once with `1`, each with its own `MLB_HARNESS_OUT`,
+and compare the two `dumps` folders (`tools/harness.py compare`). Still to do: more stadiums, a whole-match run, the
+1.0.15 address (needs the 1.0.15 exefs for `tools/addrmap.py`; it is not on this machine). The report is
+`docs/reports/2026-11-23-msdf-skip.md`. The float fix-up (`research/float-fixup`) matters much less once the NaNs are
+gone; measure it again before merging it.
 
 The trace that found this (a diagnostic build kept out of commits): count NaN results by calling function from the host
 return address (symbolized with `llvm-symbolizer`), split "born" from "carried on", dump the pass's input picture, read
@@ -99,8 +103,14 @@ the guest code with `tools/disasm.py`.
 - Run a deliberately broken control before trusting a new metric (the known-yellow case proved the blown-pixel
   count could see the bug). Run each configuration fixed from frame 0; switching a setting mid-run misled us
   because head-show results are baked once.
-- Run `ninja -f work/build/build.ninja` from the repo root, not from `work/build`. Run shell scripts from the
-  folder they live in. Never run two game instances at once; they share the screenshot folder.
+- Run `ninja -f work/build/build.ninja` from the repo root, not from `work/build`. That builds with the build file as
+  it is. After `tools/build.py` itself changes, or a source file is added, run `python -I tools/build.py --exefs
+  work/build/game/exefs --portable` to write a new one. Seen 2026-11-23: `work/build/mlb.exe` had no dev harness,
+  because its build file was a day older than the switch that adds it. `grep -c -a "harness: marker" <exe>` prints 1
+  when the harness is in. Run shell scripts from the folder they live in. Never run two game instances at once; they
+  share the screenshot folder.
+- Seen once (2026-11-23): the first game run from a freshly copied exe folder took 37 s to reach the field picture and
+  the next three took 22.5 s, with the MSDF step the same. Do not take timing from the first run of a new folder.
 - In Python on Windows use `D:/` style paths. In shell heredocs backslashes get eaten, so build escape characters
   with `chr(92)`. Source files may have Windows line endings; check before a text replace.
 - Before any `gh` or push command, check the repo, the remote and the real commit hash (a wrong-repo issue and a
