@@ -152,7 +152,7 @@ def apply_runners(g, spec):
     if need == 0 and not occupied(g):
         return True
     t0 = time.time()
-    while time.time() - t0 < 120:
+    while time.time() - t0 < 240:
         if not g.alive():
             return False
         have = len(occupied(g))
@@ -162,10 +162,12 @@ def apply_runners(g, spec):
         if have > need:
             log("WARNING too many runners (%d) for %s; cannot remove them" % (have, key))
             return False
-        put(g, 0x18, 0)
-        put(g, 0x10, 3)
-        put(g, 0x14, 0)
-        time.sleep(1.2)
+        o = g.counts_obj()
+        if g.u32(o + 0x10) != 3 or g.u32(o + 0x14) != 0 or g.u32(o + 0x18) != 0:
+            put(g, 0x18, 0)
+            put(g, 0x10, 3)
+            put(g, 0x14, 0)
+        time.sleep(0.3)
     log("WARNING runners not reached in 120 s")
     return False
 

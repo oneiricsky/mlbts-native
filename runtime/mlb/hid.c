@@ -539,6 +539,29 @@ static volatile int text_entry_open;
 void input_block(int on) { __atomic_store_n(&text_entry_open, on ? 1 : 0, __ATOMIC_RELEASE); }
 
 // The merged controller state: buttons and sticks.
+// fastball: MLB_HARNESS_PRESS=<period ms>[,A|B|X|Y|PLUS] holds that button (A by default) for 120 ms every period, for
+// unattended test runs: cutscenes and prompts in a long AI-vs-AI match wait for a button and stalled such runs.
+static uint64_t harness_auto_press(void) {
+    static int init;
+    static uint64_t period_ns, bit;
+    if (!init) {
+        init = 1;
+        const char *v = cfg_get("MLB_HARNESS_PRESS");
+        long ms = v ? atol(v) : 0;
+        if (ms >= 300) {
+            period_ns = (uint64_t)ms * 1000000ull;
+            const char *c = strchr(v, ',');
+            bit = BIT(B_A);
+            if (c && (c[1] == 'B' || c[1] == 'b')) bit = BIT(B_B);
+            else if (c && (c[1] == 'X' || c[1] == 'x')) bit = BIT(B_X);
+            else if (c && (c[1] == 'Y' || c[1] == 'y')) bit = BIT(B_Y);
+            else if (c && (c[1] == 'P' || c[1] == 'p')) bit = BIT(B_PLUS);
+            rt_log("hid: MLB_HARNESS_PRESS: a button every %ld ms (test runs only)", ms);
+        }
+    }
+    return period_ns && kern_now_ns() % period_ns < 120000000ull ? bit : 0;
+}
+
 static void poll(NpadState *st) {
     uint64_t b = 0;
     int32_t lx = 0, ly = 0, rx = 0, ry = 0;
@@ -591,6 +614,7 @@ static void poll(NpadState *st) {
     hidden &= b;   // a released button counts again
     b &= ~hidden;
     if (open) lx = ly = rx = ry = 0;
+    b |= harness_auto_press();
     st->buttons = b;
     st->lx = lx, st->ly = ly, st->rx = rx, st->ry = ry;
 }
