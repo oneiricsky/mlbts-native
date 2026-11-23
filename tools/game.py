@@ -18,8 +18,9 @@ slot's permit, and MLB_RUN_LABEL=<label> puts "[label]" at the end of the game's
 A slot holds mlb_<id>.exe (a copy of --exe, default work/build/mlb.exe or MLB_GAME_EXE), the support files from
 --support-dir (default work/build), profile/ (a copy of the real profile's save, save-tx, playtime.txt and
 account.uid; the real profile is never written), slot.json (it says the slot is this tool's) and run-<n>/ per run:
-game.out, game.log, env.json, result.json (and dumps/ with --scenario). The game starts with the slot as its working
-folder and with MLB_EXEFS, MLB_ROMFS, MLB_PROFILE and MLB_RUN_LABEL set. Slots and markers live in the main
+mlb.log (the game's own log: MLB_LOG names it, so every run has its own), game.out, env.json, result.json (and dumps/
+with --scenario). The game starts with the slot as its working folder and with MLB_EXEFS, MLB_ROMFS, MLB_PROFILE,
+MLB_RUN_LABEL and MLB_LOG set. Slots and markers live in the main
 checkout's work/, also when this runs from a research worktree (MLB_GAME_ROOT overrides the checkout, for tests).
 
 Turns: `shared` (the default) starts when fewer than three games are live anywhere on the machine and no exclusive
@@ -61,6 +62,8 @@ POLL = 0.25                                   # seconds between looks at a runni
 LIVE_EVERY = 1.0                              # seconds between looks at who else is live
 GAME_NAME = re.compile(r"mlb.*\.exe", re.I)   # a game started outside work/runs/
 MARKER_LINE = re.compile(r"\[host\] harness: marker (\S+) frame (\d+) t ([\d.]+)")
+SLOT_BUSY = ("slot %s has a live game (pid %d): its exe folder and profile are shared, so a second run would write "
+             "over that game's files; stop it or wait for it")
 
 if os.name == "nt":
     import ctypes.wintypes as wt
@@ -630,14 +633,15 @@ def apply_overrides(env, overrides):
 
 def game_environment(id, overrides=None, scenario=None, run_dir=None, label=None, real_profile=None):
     """The environment the slot's game starts with: the caller's, with MLB_EXEFS, MLB_ROMFS, MLB_PROFILE (the slot's
-    profile), MLB_RUN_LABEL and, with a scenario, MLB_HARNESS and MLB_HARNESS_OUT set, and TOTK_BACKGROUND_WINDOW=1
-    unless the caller already gives it. `overrides` (--env) wins over all that, a value of None removes the variable;
-    only MLB_PROFILE may not be pointed back at the real profile."""
+    profile), MLB_RUN_LABEL, MLB_LOG (the run folder's mlb.log) and, with a scenario, MLB_HARNESS and MLB_HARNESS_OUT
+    set, and TOTK_BACKGROUND_WINDOW=1 unless the caller already gives it. `overrides` (--env) wins over all that, a
+    value of None removes the variable; only MLB_PROFILE may not be pointed back at the real profile."""
     overrides = overrides or {}
     mine = {"MLB_EXEFS": fwd(os.path.join(root(), "work", "build", "game", "exefs")),
             "MLB_ROMFS": fwd(os.path.join(root(), "work", "build", "game", "romfs")),
             "MLB_PROFILE": fwd(os.path.join(slot_path(id), "profile")),
-            "MLB_RUN_LABEL": label or id}
+            "MLB_RUN_LABEL": label or id,
+            "MLB_LOG": fwd(os.path.join(run_dir, "mlb.log"))}   # the game's own log, one per run
     if scenario:
         mine["MLB_HARNESS"] = fwd(os.path.abspath(scenario))
         mine["MLB_HARNESS_OUT"] = fwd(os.path.join(run_dir, "dumps"))
@@ -683,18 +687,6 @@ def _popen(argv, cwd, env, out, detached, startupinfo=None):
         return subprocess.Popen(argv, creationflags=subprocess.CREATE_NO_WINDOW, startupinfo=startupinfo, **kw)   # the job forbids leaving it
 
 
-def _rescue_old_log(id):
-    """The game overwrites <slot>/logs/mlb.log at every start. Before that, the newest run folder that has neither a
-    game.log nor a result.json (a detached run whose watcher died) gets a copy of the log lying there."""
-    src = os.path.join(slot_path(id), "logs", "mlb.log")
-    if not os.path.isfile(src):
-        return
-    for _n, d in reversed(run_dirs(id)):
-        if not os.path.isfile(os.path.join(d, "result.json")) and not os.path.isfile(os.path.join(d, "game.log")):
-            shutil.copy2(src, os.path.join(d, "game.log"))
-            break
-
-
 def launch(id, env=None, scenario=None, label=None, mode="shared", detach=False, real_profile=None):
     """Start the slot's game now, when it has a turn (else NoTurn), and return (the Popen, the run folder). Makes
     run-<n>/ with env.json and game.out, and puts the pid into the slot's marker. Callers that waited with admission()
@@ -709,7 +701,7 @@ def launch(id, env=None, scenario=None, label=None, mode="shared", detach=False,
     with _machine_lock():
         busy = slot_is_live(id)
         if busy:
-            raise GameError("slot %s already has a live game (pid %d): stop it or wait for it" % (id, busy[0]))
+            raise GameError(SLOT_BUSY % (id, busy[0]))
         ok, why = can_start(mode)
         if not ok:
             raise NoTurn(why)
@@ -721,7 +713,6 @@ def launch(id, env=None, scenario=None, label=None, mode="shared", detach=False,
         os.makedirs(run_dir)
         if scenario:
             os.makedirs(os.path.join(run_dir, "dumps"))
-        _rescue_old_log(id)
         _json_write(os.path.join(run_dir, "env.json"), env_record(full, overrides))
         try:
             with open(os.path.join(run_dir, "game.out"), "wb") as out:
@@ -819,19 +810,21 @@ def list_sizes(d):
     return dict(sorted(out.items()))
 
 
-def _slot_log(run_dir, id, since):
-    """The game's log for this run, copied into the run folder as game.log. The game replaces <slot>/logs/mlb.log at
-    every start, so a file older than the run is another run's and is not taken."""
+def _run_log(run_dir, id, since):
+    """(path, where it came from) of the run's log: the game writes <run folder>/mlb.log itself (MLB_LOG names it).
+    An exe without that setting still writes <slot>/logs/mlb.log; when the run folder has no log, that file is
+    copied in, provided it is this run's (not older than the run)."""
+    own = os.path.join(run_dir, "mlb.log")
+    if os.path.isfile(own):
+        return own, "run folder"
     src = os.path.join(slot_path(id), "logs", "mlb.log")
     try:
         if os.path.getmtime(src) < since - 1.0:
-            return None
+            return None, None
     except OSError:
-        return None
-    dst = os.path.join(run_dir, "game.log")
-    with open(src, "rb") as f, open(dst, "wb") as out:
-        shutil.copyfileobj(f, out)
-    return dst
+        return None, None
+    shutil.copy2(src, own)
+    return own, "slot folder, exe has no MLB_LOG"
 
 
 def watch(proc, started, id, n, timeout=None, grace=CLOSE_GRACE, quiet=False):
@@ -903,7 +896,7 @@ def watch(proc, started, id, n, timeout=None, grace=CLOSE_GRACE, quiet=False):
         asked = stop_note.get("windows_asked", asked)
     if our_marker(id):                       # no live run in this slot any more
         write_marker(id, label=marker.get("label"), exe=exe_path(id), start=marker.get("start"), mode=marker.get("mode"))
-    log = _slot_log(run_dir, id, started)   # None: this run wrote no log
+    log, log_source = _run_log(run_dir, id, started)   # None: this run wrote no log
     log, marks, audio, fatal = _log_facts(log) if log is not None else (None, [], "unknown", False)
     shared = [others[p] for p in sorted(others)]
     res = {"id": id, "label": name, "run": n, "run_dir": run_dir, "mode": mode, "pid": proc.pid, "first_run_of_slot": first,
@@ -911,7 +904,7 @@ def watch(proc, started, id, n, timeout=None, grace=CLOSE_GRACE, quiet=False):
            "seconds": round(time.time() - started, 1), "exit_code": proc.returncode, "ended": ended,
            "close_requested": close[0] if close else None, "close_reason": close[1] if close else None,
            "windows_asked": asked, "interrupted": interrupted, "audio": audio, "fatal": fatal,
-           "markers": [list(m) for m in marks], "log": log, "out": os.path.join(run_dir, "game.out"),
+           "markers": [list(m) for m in marks], "log": log, "log_source": log_source, "out": os.path.join(run_dir, "game.out"),
            "env": os.path.join(run_dir, "env.json"), "window_title": title, "window_visible": visible,
            "window_titles_seen": titles, "shared_with": shared, "contended": bool(shared)}
     dumps = os.path.join(run_dir, "dumps")
@@ -1008,6 +1001,9 @@ def run(id, env=None, scenario=None, mode="shared", wait=DEFAULT_WAIT, timeout=N
     if our_marker(id) is None:
         raise GameError("slot %s has no marker from %s (it was released, or another session holds its id): create it again" %
                         (id, TOOL))
+    busy = slot_is_live(id)                  # before anything is written into the shared slot
+    if busy:
+        raise GameError(SLOT_BUSY % (id, busy[0]))
     if not keep_profile:
         _dst, real, found = refresh_profile(id, real_profile)
         if not quiet:

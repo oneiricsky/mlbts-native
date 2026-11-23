@@ -18,7 +18,7 @@ A scenario is `key = value` lines (name, home, away, seed, fixed_clock, stop_aft
 markers, framelog). The runner gives it to the game as MLB_HARNESS=<file>, dumps go to MLB_HARNESS_OUT=<run>/dumps in
 game.py's run folder, and the game stops itself at stop_after_s. Each run leaves, in work/harness/<date>/<name>-<n>/:
 scenario.scn and summary.json (and diff/ when something differs); summary.json names game.py's run folder, which holds
-game.out, game.log, result.json and dumps/. These hold game data and are never committed.
+game.out, mlb.log, result.json and dumps/. These hold game data and are never committed.
 
 Exit status: 0 fine, 1 a difference or a failed check, 2 the run could not happen (no audio device, no turn, bad input).
 Tests: python -I -m unittest discover -s tools -p test_harness.py"""

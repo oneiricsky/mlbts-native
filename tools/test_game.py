@@ -50,15 +50,15 @@ try:
     code = int(os.environ.get("FAKE_EXIT", "7"))
     label = os.environ.get("MLB_RUN_LABEL", "")
     slot = os.path.dirname(sys.executable)          # the game's exe folder: this slot
-    log_dir = os.path.join(slot, "logs")            # the game writes its log beside its exe
-    os.makedirs(log_dir, exist_ok=True)
+    log_path = os.environ.get("MLB_LOG") or os.path.join(slot, "logs", "mlb.log")   # MLB_LOG names the file; else beside the exe
+    os.makedirs(os.path.dirname(log_path), exist_ok=True)
     lines = ["audout: no output device (asleep): buffers are recycled without sound" if mode == "nodev"
              else "audout: WASAPI device 'Speakers' opened, 48000 Hz",
              "[host] harness: marker boot frame 10 t 1.500"]
     if mode == "crash":
         lines.append("FATAL: access violation at 0x1234")
     lines.append("[host] harness: marker inning frame 610 t 11.500")
-    with open(os.path.join(log_dir, "mlb.log"), "w") as f:
+    with open(log_path, "w") as f:
         f.write("\n".join(lines) + "\n")
     print("\n".join(lines), flush=True)
     print("FAKE cwd " + os.getcwd(), flush=True)
@@ -472,8 +472,10 @@ class Run(Base):
         res = self.go(env={"MLB_X": "1", "FAKE_SECONDS": "1"})
         run_dir = Path(res["run_dir"])
         self.assertEqual(run_dir, Path(g.slot_path("alpha"), "run-1"))
-        for f in ("game.out", "game.log", "env.json", "result.json"):
+        for f in ("game.out", "mlb.log", "env.json", "result.json"):
             self.assertTrue((run_dir / f).is_file(), f)
+        self.assertEqual((res["log"], res["log_source"]), (str(run_dir / "mlb.log"), "run folder"))   # the game wrote it there
+        self.assertFalse((run_dir.parent / "logs").exists())        # not beside the exe: runs of a slot would share that
         self.assertEqual(json.loads(read(run_dir / "result.json")), res)
         self.assertEqual((res["id"], res["label"], res["run"], res["mode"]), ("alpha", "al", 1, "shared"))
         self.assertIsInstance(res["pid"], int)
@@ -485,7 +487,7 @@ class Run(Base):
         self.assertEqual((res["fatal"], res["contended"], res["shared_with"], res["window_title"]), (False, False, [], None))
         self.assertTrue(res["first_run_of_slot"])
         self.assertIsNone(res["close_requested"])
-        self.assertEqual(res["log"], str(run_dir / "game.log"))
+        self.assertEqual(res["log"], str(run_dir / "mlb.log"))
         self.assertIn("[host] harness: marker boot", read(res["log"]))
         self.assertNotIn("pid", g.read_marker("alpha"))                       # no live run any more
         self.assertEqual(read(run_dir / "game.out").count("audout: WASAPI"), 1)
@@ -533,6 +535,36 @@ class Run(Base):
         self.addCleanup(os.environ.pop, "TOTK_BACKGROUND_WINDOW", None)
         self.assertEqual(self.out_env(self.go())["TOTK_BACKGROUND_WINDOW"], "0")
         self.assertEqual(self.out_env(self.go(env={"TOTK_BACKGROUND_WINDOW": "1"}))["TOTK_BACKGROUND_WINDOW"], "1")
+
+    def test_an_exe_without_the_log_setting_gets_the_slots_log_copied_in(self):
+        self.make("alpha")
+        res = self.go(env={"MLB_LOG": None})          # as an exe without the setting: no MLB_LOG reaches the game
+        self.assertEqual(res["log_source"], "slot folder, exe has no MLB_LOG")
+        self.assertEqual(res["log"], str(Path(res["run_dir"], "mlb.log")))
+        self.assertEqual(Path(res["log"]).read_text(), Path(g.slot_path("alpha"), "logs", "mlb.log").read_text())
+        self.assertEqual([m[0] for m in res["markers"]], ["boot", "inning"])
+
+    def test_each_run_logs_into_its_own_folder(self):
+        self.make("alpha")
+        first, second = self.go(env={"FAKE_SECONDS": "0.3"}), self.go(env={"FAKE_SECONDS": "0.3"})
+        self.assertEqual([Path(r["log"]).parent.name for r in (first, second)], ["run-1", "run-2"])
+        self.assertEqual(self.out_env(second)["MLB_LOG"], second["log"].replace("\\", "/"))
+
+    def test_a_second_run_of_a_slot_with_a_live_game_is_refused_before_anything_is_written(self):
+        self.make("alpha")
+        t = self.start_run(env={"FAKE_SECONDS": "20", "FAKE_MODE": "hang"})
+        self.assertTrue(self.wait_live("alpha"))
+        playtime = Path(g.slot_path("alpha"), "profile", "playtime.txt")
+        before = playtime.read_text()                                  # "123 more": the live game's own state
+        (self.real / "playtime.txt").write_text("changed")             # a refresh would push this into the shared profile
+        with self.assertRaisesRegex(g.GameError, "live game.*shared"):
+            self.go("alpha")
+        code, out = self.cli(["run", "alpha", "--real-profile", str(self.real)])
+        self.assertEqual(code, 2)
+        self.assertIn("shared", out)
+        self.assertEqual((playtime.read_text(), [n for n, _p in g.run_dirs("alpha")]), (before, [1]))
+        g.stop("alpha", grace=1.0, quiet=True)
+        t.join(10)
 
     def test_env_wins_over_the_tool_and_none_removes_a_setting(self):
         self.make("alpha")
@@ -849,7 +881,7 @@ class RealProcesses(Base):
         g.live_source = self.ours_only
         t = self.start_run(env={"FAKE_SECONDS": "30", "FAKE_MODE": "hang"})
         self.assertTrue(self.wait_live("alpha"))
-        with self.assertRaisesRegex(g.GameError, "already has a live game"):
+        with self.assertRaisesRegex(g.GameError, "live game.*shared"):
             g.launch("alpha", real_profile=str(self.real))
         self.assertEqual([n for n, _p in g.run_dirs("alpha")], [1])
         g.stop("alpha", grace=1.0, quiet=True)
@@ -894,8 +926,7 @@ class StopRelease(Base):
         self.assertEqual(g.stop("alpha", grace=8, quiet=True), "after a close request")
         t.join(15)
         self.assertEqual((t.result["ended"], t.result["exit_code"], t.result["windows_asked"]),
-                         ("after a close request", 0, 1))
-        self.assertEqual(t.result["window_title"], "MLB The Show 26 (fastball) [alpha]")
+                         ("after a close request", 0, 1))           # its window lived under one look, so no title is promised
 
     def test_stop_with_no_game_live_says_so_and_leaves_the_files(self):
         self.make("alpha")
