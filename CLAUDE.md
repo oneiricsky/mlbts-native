@@ -54,6 +54,46 @@ head-file prefetch (a pack file, remembered players, mode detection) is deferred
   asset category needs its compute consumers checked first.
 - `MLB_HD_TEXTURES` still needs a settings row in `cfg.c` (every setting there is also a command-line flag).
 
+## Open question: why does the game make so many NaNs at match start?
+
+In plain words: a NaN ("not a number") is what a calculation gives when it has no answer, such as 0 divided by 0 or
+infinity minus infinity. A normal program makes a handful. At match start the game draws a 512x512 picture of the
+field's edges (the msdfgen step) and makes about 67 million of them in one frame, roughly 256 per pixel. The port
+handles each one correctly but slowly. The change on `research/float-fixup` makes each one cheaper (the step goes from
+702 to 525 ms), but it never asks why they appear. If the game is feeding itself bad numbers, or the port turns good
+numbers into bad ones, removing the cause would remove most of the step, which is far more than the fix-up can.
+
+Answer (2026-11-22, one stadium): the NaNs are the game's own, not a port bug. Before the pass starts, 97 % of the
+picture's pixels hold plain infinity ("inside" or "outside", no distance) and only 2.9 % (7,506) hold real distances,
+and the picture's signs trace a clean field outline. msdfgen's error-correction pass (`f_7000030ec0`, with
+`f_7000031e70`, `f_7000033530`) then visits every pixel and computes `(a - 0.5) / (a - b)`; with infinities that is
+`inf - inf`, a NaN, which fails the "edge between these pixels" test, so the answer is always "nothing to fix". About 99.9 %
+of the 70 million NaN results come from five functions in that pass; about a quarter are `inf - inf` births and the rest
+are those NaNs carried on. In plain words: the game spends most of its match-start step proving that empty space has no
+edges.
+
+The fix is a code patch set `msdf_skip` (`tools/data/patches-1.0.20.txt`, setting `MLB_MSDF_SKIP`, default on, with a
+settings-menu row "Shorter freeze at match start"): the pass skips a pixel whose three channels are all infinite. Six
+runs, 35 s each, off and on alternated: the MSDF step 683, 706, 673 ms (mean 687) with the skip off, 166, 221, 182 ms
+(mean 189) with it on; the finished field texture has the same checksum in all six (sum 147739026, 587113 non-zero of
+1048576), and the owner saw the field in game and it looked right.
+
+How sure we are (2026-11-23): for the one stadium tested, the finished texture is byte for byte identical with the skip
+off and on (all 1,048,576 bytes, same SHA-256), so the output is proven equal there. It is not proven for every input:
+reading the guest code showed the pass marks a pixel only through two classifier calls (`f_70000336bc`,
+`f_7000033530`); the divide-based range tests give NaN for an infinite pixel whatever its neighbours hold, but a range
+test can pass for one and `f_70000336bc` then checks the real stadium outline, which cannot be worked out offline. So
+other stadiums, times of day and weather still need the same byte compare. How to do it: a temporary dump in
+`write_texels` (`runtime/gfx/nvn_api_obj.c`, never committed) writes the 512x512 `fmt 0x25` WriteTexels data to a folder;
+run the dump exe once with `MLB_MSDF_SKIP=0` and once with `1`, compare the files. Still to do: the other stadiums, a
+whole-match run, the 1.0.15 address (needs the 1.0.15 exefs for `tools/addrmap.py`; it is not on this machine), a
+`docs/reports/` write-up. The float fix-up (`research/float-fixup`) matters much less once the NaNs are gone; measure it
+again before merging it.
+
+The trace that found this (a diagnostic build kept out of commits): count NaN results by calling function from the host
+return address (symbolized with `llvm-symbolizer`), split "born" from "carried on", dump the pass's input picture, read
+the guest code with `tools/disasm.py`.
+
 ## Experiment and tooling notes
 
 - Run a deliberately broken control before trusting a new metric (the known-yellow case proved the blown-pixel
@@ -66,6 +106,14 @@ head-file prefetch (a pack file, remembered players, mode detection) is deferred
 - Before any `gh` or push command, check the repo, the remote and the real commit hash (a wrong-repo issue and a
   mistyped lease hash both happened). The auto-mode checker blocks force-pushes and deletes: say what the action
   does and wait for an explicit yes.
+- When several sessions work at once, a game run takes the lock folder first: `mkdir D:/AI/Apps/mlbts-native/work/game.lock`
+  (it fails if another session holds it) and removes it when the game has exited.
+- A game run needs a live Windows audio output. With none (the monitor's speakers asleep), the log says `audout: no
+  output device` and the game sits at the loading screen and never starts the match. Check that line first.
+- A build made in a worktree (`.claude/worktrees/<name>`) is run with `MLB_EXEFS`, `MLB_ROMFS` and `MLB_PROFILE` set to
+  `D:/AI/Apps/mlbts-native/work/build/game/exefs`, `.../game/romfs` and `.../profile`, and from `work/build`, because
+  the shader translator (`totk_xlate.exe`, `.id`) and `SDL3.dll` sit next to the exe there. Build it from the
+  worktree root with `ninja -f work/<dir>/build.ninja`. Bench settings take the full name (`MLB_MSDF_SKIP=0`).
 - The investigation plan lives outside the repo at `C:/Users/sky/.claude/plans/fuzzy-growing-kurzweil.md`.
 
 ## What upstream (Fastball 0.2.0) already has
@@ -129,6 +177,9 @@ Present in this tree once 0.2.0 is merged.
 ## Working with the owner
 
 - Short, plain language; follow the human-writing skill for prose. The owner is not a graphics programmer.
+- Every chat reply that reports a finding, a result or a decision contains a layman's explanation: what it means in
+  everyday words, with no jargon (or the jargon explained the first time), and what it changes for the owner. Put it
+  in the reply itself, not only in a report or a commit. A pure status line or a question needs none.
 - Long runs go to a background agent. Agents follow the session's permission mode, and plan mode pauses them.
   Watch the 5-hour usage limit before starting long work.
 - Do not launch long game runs unasked; short smoke runs are fine.
