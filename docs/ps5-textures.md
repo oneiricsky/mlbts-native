@@ -21,6 +21,37 @@ size it aims for. The game then picks the index up from the `hdtex` folder of it
 `MLB_HD_TEXTURES=<folder>` uses another folder, `off` or `0` turns it off. The log says `hdtex: N PS5 textures indexed`
 at start and `hdtex: texture ... is PS5/...` for each one swapped in.
 
+### Checking an index
+
+```
+python -I tools/make_hd_index.py --check work/build/hdtex/index.txt [--ps5 <PS5 dump folder>]
+```
+
+Reads only the headers of the PS5 files an index names (no Switch files needed) and prints one line per problem, then
+`N index lines checked, M problems in K lines`. Exit status is 0 when clean and 1 otherwise. `--ps5` replaces the
+index's `root` line, for a dump that has moved. About a minute per 2,400 lines from the dump's drive. A problem line
+means the game would skip that texture or load it wrong; fix it by building the index again, not by editing it.
+`python -I -m unittest discover -s tools -p test_hd_index.py` runs the tests, which need no dump.
+
+| Message | What it means |
+| --- | --- |
+| `not a line of the form <hash> <width> <height> <levels> <drop> <PS5 file>` | The line cannot be read; the game ignores it. |
+| `no root line in the index and no --ps5 folder given` | There is no dump folder to look in. |
+| `not a path of the form PS5/.../<name>.TEX` | The file path is outside `PS5/`, has `..`, or is not a `.TEX` file. |
+| `the file name does not start with its folder name X` | The name and folder disagree (`AAA/BBB-NORMAL.TEX`), so the entry may belong to another player. |
+| `another PS5 file has the same hash and size, the two cannot be told apart` | Two files share an index key; the builder drops these, so this means the index was edited or built by hand. |
+| `file not found under <root>` | The dump is missing, on another drive letter, or the file was renamed. |
+| `not a PS5 TX12 file`, `file is only N bytes, shorter than a header` | Wrong or empty file. |
+| `odd header: ...` | The level count is outside 2 to 16, or the level table does not fit before the texture data. |
+| `file is shorter than its header says` | The file is cut off inside its texture data. |
+| `header is N bytes, every PS5 file seen so far has 1440: the file is probably cut short` | The loader finds the data as file size minus data size, so a cut file passes its other checks and loads shifted data. This catches it. A different header size could also be a kind of texture not seen before. |
+| `level sizes add up to X bytes, the header says Y` | The level table does not match the data size. |
+| `format code N is not BC1 (13) or BC7 (22)` | The loader handles only BC1 and BC7. |
+| `largest level is ...`, `level i (WxH) is ... bytes, less than ...`, `level i lies outside the file` | A level is smaller than its dimensions need, or runs past the end of the file. |
+| `drop D leaves no level (the file has N)` | The index drops more levels than the file has. |
+| `after dropping D levels the image is WxH, which is not the Switch size ... times a power of two` | The image would not contain a level of exactly the Switch size, which the compute passes need (`hd_shift`). |
+| `only N levels are left at the Switch size, the Switch texture has L` | The PS5 chain is too short below the Switch size. |
+
 ## How it works
 
 The game does not take a texture's size from the `.TEX` file's header. It creates the texture at the Switch size
