@@ -630,7 +630,7 @@ static VkFormat sampled_view_format(const VkTexImage *img, const view_t *v, int 
     return b.vk != img->format && b.vk == srgb_twin(img->format) ? b.vk : img->format;
 }
 
-// mlbts-native: set while a compute dispatch is recorded. Compute passes address a texture by integer texel in the game's own
+// fastball: set while a compute dispatch is recorded. Compute passes address a texture by integer texel in the game's own
 // coordinates (the face skin-tone measurement fetches a rectangle of the colour map and normalises by the size it queries),
 // so a PS5 image, which is larger than the Switch texture the game sized them for, is bound from the level that has the
 // Switch's size: the full level made it average the wrong quarter of the map, and the face shader divided by that and

@@ -412,7 +412,7 @@ uint64_t vk_sync_reserve(void) {
 uint64_t vk_sync_submit(const uint64_t *handles, int n) {
     vk_sync_start();
     VkCtx *c = vk_ctx();
-    // mlbts-native diagnosis (MLB_TRACE=perf): the replay's phases per timeline value (vt, vk_sync_phase_times). beg is
+    // fastball diagnosis (MLB_TRACE=perf): the replay's phases per timeline value (vt, vk_sync_phase_times). beg is
     // before the submit lock: the gap from the replay thread's dequeue (vk_backend.c ft.rs) is the present drain, the
     // new-submit texture bookkeeping and waiting for the lock. rec after recording, fl after the upload flush, pro
     // after the mirror prologue; sub is stamped below after vkQueueSubmit2.
@@ -541,7 +541,7 @@ int vk_sync_value_times(uint64_t v, uint64_t *sub, uint64_t *seen) {
     return ok;
 }
 
-// mlbts-native diagnosis (the game's GPU-wait bursts, vk_exec_xfer.c): the replay of value v split into its phases.
+// fastball diagnosis (the game's GPU-wait bursts, vk_exec_xfer.c): the replay of value v split into its phases.
 // The gap from the replay thread's dequeue (vk_backend.c gfx_fence_times rs) to beg is the present drain, the
 // new-submit texture bookkeeping and the submit lock; beg-rec is recording, rec-fl the upload flush, fl-pro the mirror
 // prologue (shadow sync first), pro-sub vkQueueSubmit2, sub-re the tail. 0 fields: the trace was off. ops is how many
@@ -555,7 +555,7 @@ int vk_sync_phase_times(uint64_t v, uint64_t *beg, uint64_t *rec, uint64_t *fl, 
     return ok;
 }
 
-// mlbts-native diagnosis: the first command-buffer handle value v's submission carried (vk_sync_note_ops).
+// fastball diagnosis: the first command-buffer handle value v's submission carried (vk_sync_note_ops).
 uint64_t vk_sync_submit_h0(uint64_t v) {
     plat_mutex_lock(&st_lock);
     uint64_t h = vt[v % VT_N].v == v ? vt[v % VT_N].h0 : 0;
@@ -563,7 +563,7 @@ uint64_t vk_sync_submit_h0(uint64_t v) {
     return h;
 }
 
-// mlbts-native diagnosis: the recording thread, mid-record of value v (op counting under TOTK_TRACE=perf, vk_exec.c);
+// fastball diagnosis: the recording thread, mid-record of value v (op counting under TOTK_TRACE=perf, vk_exec.c);
 // read once v is in the table (st_lock orders it after this store). h0: the submission's first command-buffer handle,
 // to tell a re-submitted buffer from a re-recorded one.
 void vk_sync_note_ops(uint64_t fence, uint32_t ops, uint64_t h0) {

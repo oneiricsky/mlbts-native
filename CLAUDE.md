@@ -3,6 +3,17 @@
 These override AGENTS.md (upstream's) wherever they conflict. Upstream's AGENTS.md says to push to the upstream
 repo, which does not apply here. Its rule to end commits with a Co-Authored-By line does apply (see below).
 
+## Research branch
+
+This is the owner's personal research fork of upstream (sam110411/fastball). It tracks upstream by merging each
+release and keeps its own work in separate files where possible. The product is what we learn plus working tools,
+not releases, so the gates are lighter: a PS5 colour-map default needs the fallback, the `MLB_HD_TEXTURES` settings
+row, a check on about two dozen heads from both teams with the known-bad control, and one full match; the
+full-content fingerprint check and the stale-face test wait until a wrong or stuck face appears. The main line is
+making the PS5 faces solid, then the next visible category. General performance is upstream's strength; the current
+research focus is the remaining stalls (the match-start CPU work, first-use costs). Loading-ahead work beyond the
+head-file prefetch (a pack file, remembered players, mode detection) is deferred.
+
 ## Commits and remotes
 
 - Subjects use Conventional Commit types like upstream (`feat`, `fix`, `perf`, `docs`, `refactor`, `chore`, with an
@@ -14,6 +25,8 @@ repo, which does not apply here. Its rule to end commits with a Co-Authored-By l
   the Co-Authored-By line the session gives. The model is never the author or committer (those stay Sky Miles),
   and no other AI identity appears in a commit. Earlier commits are not rewritten to add it. The owner's personal
   email never appears in a commit, a message or a network request.
+- Every commit is SSH-signed with the 1Password key (see the parent CLAUDE.md for the setup); never pass
+  `--no-gpg-sign`. If signing fails because 1Password is locked, stop and tell the user.
 - Commit only. Push only when asked. Force-push only on an explicit request, with `--force-with-lease` pinned to
   the full remote tip, after saying that it rewrites published history.
 - `origin` is oneiricsky/mlbts-native. Upstream is sam110411/fastball (renamed from mlbts-native). Pass

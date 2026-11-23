@@ -27,6 +27,8 @@ static const CfgMeta metas[] = {
     {"NICKNAME", "Player", NULL, RESTART},   // account.c GetNickname (up to 32 bytes of UTF-8)
     {"SKIP_INTRO", "0", "0|1", RESTART},   // fs_host.c: the boot logos (SCE legal screen, Sony Studio and MLB intro
                                            // movies) answered as not found; the game-modes menu follows directly
+    {"HD_PREFETCH", "1", "0|1", RESTART},   // hdtex.c: a head file the game opens makes a background thread read its PS5 file
+                                            // (the hard disk's cold read, about 15 ms each, no longer lands in the upload)
     {"OFFLINE_PACKAGES", "0", "0|1", RESTART},   // packages.c: Road to the Show's Packages from a server on this PC
     {"KEEP_TUTORIALS", "1", "0|1", RESTART},   // tutorials.c: finished tutorials stay finished (profile/tutorials-seen.txt)
     {"RTTS_AUTOSAVE", "1", "0|1", RESTART},   // rtts_autosave.c: hub upgrades saved when their screen is left

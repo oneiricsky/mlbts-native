@@ -37,7 +37,7 @@
 #ifdef _WIN32
 #define strdup _strdup   // fastball: the MSVC C library names it so
 #endif
-#include "cfg.h"   // mlbts-native: cfg_bool (MLB_SKIP_INTRO), as kernel.c
+#include "cfg.h"   // fastball: cfg_bool (MLB_SKIP_INTRO), as kernel.c
 #include "host.h"
 #include "platform/platform.h"
 
@@ -1037,6 +1037,10 @@ static int64_t host_read_at(PlatFile *f, void *buf, uint32_t n, uint64_t off) {
     return got < 0 ? -1 : got;
 }
 
+// fastball: the path of every RomFS file opened for reading, for a back end that wants to know what the game is about to need
+// (runtime/mlb/hdtex.c reads the PS5 file of a head texture ahead of its upload); a no-op without one.
+__attribute__((weak)) void rt_host_opened(const char *path) { (void)path; }
+
 static uint32_t open_file(uint64_t *out, const char *path, int mode) {
     fs_trace(mode & FS_OPEN_WRITE ? "write" : "read", path);
     if (!out || !(mode & (FS_OPEN_READ | FS_OPEN_WRITE)) || (mode & ~7)) return FS_R_INVALID_ARGUMENT;
@@ -1045,6 +1049,7 @@ static uint32_t open_file(uint64_t *out, const char *path, int mode) {
     uint32_t r = host_path_kind(path, p, sizeof p, &kind);
     if (r) return r;
     if (plat_fs_kind(p) != PLAT_FS_FILE) return FS_R_PATH_NOT_FOUND;
+    if (kind == M_ROM && !(mode & FS_OPEN_WRITE)) rt_host_opened(path);
     if ((kind == M_SAVE_RO || kind == M_ROM) && (mode & FS_OPEN_WRITE)) return FS_R_UNSUPPORTED_OPEN;
     int save_writer = kind == M_SAVE && (mode & FS_OPEN_WRITE);
     int err = 0;

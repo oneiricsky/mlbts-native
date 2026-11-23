@@ -640,7 +640,7 @@ extern "C" int rt_patch_set(const char *name);
 static void tab_game(float scale) {
     const char *no_patches = "Not in this build: it was made without the game's code patches";
     opt_begin("##game", scale);
-    // mlbts-native: MLB_SKIP_INTRO (fs_host.c) — the boot logos answered as missing files
+    // fastball: MLB_SKIP_INTRO (fs_host.c) — the boot logos answered as missing files
     opt_toggle("SKIP_INTRO", "Skip intro logos",
                "Go straight to the game-modes menu at start: the legal screen and the two intro movies are left "
                "out. Applies at the next start of the game.");
