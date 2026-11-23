@@ -77,3 +77,35 @@ the game compares config flags against, not option names.
 
 Watch for fake matches when extending the table: short common words collide with the hash. One
 candidate in this set looked plausible and was not.
+
+## Running a comparison
+
+This is upstream's method (docs/frame-rate.md, "Measuring"), with `tools/bench.py` doing the bookkeeping. The match
+is the harness match above (`AIvAI` plus `GameOnly`), the one upstream calls the attract match.
+
+1. Change one thing between the configurations: a setting such as `MLB_HD_TEXTURES`, or the build. Keep every
+   other setting and `mlb.cfg` the same.
+2. Alternate the runs (A, B, A, B), because the match differs from run to run and the machine drifts over a
+   session. Add `--counterbalance` to flip the order every second round (A B B A).
+3. Run each configuration at least twice, and three times if the difference is small. Record the run count with the
+   result.
+4. Play 400 s a run with the sampler off (`MLB_SAMPLER=off`: it slows the game) and `MLB_TRACE=perf`. One game at a
+   time; `bench.py` refuses to start while `mlb.exe` is running.
+5. Read the first minute separately. It holds loading and, now and then, a boot stall of 8 to 10 s. `compare`
+   prints the first window's frame count and the figures from the second minute on.
+6. Call a difference real only if the min-max ranges of the runs do not overlap, and say so when there are fewer
+   than three runs. Otherwise write "within noise".
+
+```
+python -I tools/bench.py run --config off:MLB_HD_TEXTURES=off --config colour:MLB_HD_TEXTURES=hdtex_allc --runs 2
+python -I tools/bench.py compare work/bench/<date>
+python -I tools/bench.py compare off=run1.log off=run2.log colour=run3.log colour=run4.log
+```
+
+`run` starts `work/build/mlb.exe` (change it with `--exe` or `MLB_BENCH_EXE`) from its own folder, so the game finds
+`game/romfs`, `profile/` and `mlb.cfg` beside it; put `MLB_EXEFS`, `MLB_ROMFS` or `MLB_PROFILE` in `--env` if a
+build keeps them elsewhere. It writes `work/bench/<date>/<label>-<n>.log` and `.json` (the summary from
+`tools/perf_summary.py` plus the run's settings). `--dry-run` prints the order and settings without starting
+anything. `compare` also takes old logs with a `label=` prefix. The summary reads a log whether or not each line
+starts with a timestamp (`MLB_LOG_TIME=1` puts `[ 12.345] ` in front of every line): its patterns are not anchored
+to the start of the line.
