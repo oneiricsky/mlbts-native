@@ -194,10 +194,17 @@ linker. `tools/shader_smoke.py` translates a sample of MLB's FXB shaders offline
     with the local Uid, and its nickname comes from `MLB_NICKNAME` (default `Player`). The network service account
     reads as unavailable; its other online calls stop with a named fatal, so no SDK code ever sees a host-made user
     handle. ✔
-16. **Input** by symbol override (`runtime/mlb/hid.c`): one full-key controller as player 1, fed by every connected
-    gamepad through SDL3 (Xbox and PlayStation pads: DualSense, DualSense Edge, DualShock 4; merged) and the keyboard
+16. **Input** by symbol override (`runtime/mlb/hid.c`): full-key controllers, one player per connected gamepad
+    through SDL3 (Xbox and PlayStation pads: DualSense, DualSense Edge, DualShock 4), and the keyboard as player 1
     (map in the file header; `MLB_PAD_MAP`, `MLB_RUMBLE`). `MLB_PAD_DRIVER=xinput`, or no `SDL3.dll` beside the exe,
     falls back to XInput (Xbox pads only). ✔
+    Players (`MLB_PAD_PLAYERS=each`, default; issue #26): the first pad connected is NpadId No1, the next No2, up to
+    No4; a pad keeps its number while connected and a new one takes the lowest free number. The game registers No1
+    to No4 and No6 to No8 (`main+0x13443d8`, 1.0.20), keeps a pad record per id, reads every id whose style set says
+    connected, and for a local match of n players shows the controller applet for up to n (`main+0x1344274`), which
+    `ShowControllerSupport` answers with the players connected. Rumble goes to the pad of the handle's player.
+    `MLB_PAD_PLAYERS=one` merges every pad into player 1 (buttons ORed, each stick from the pad pushed furthest), the
+    port's behaviour before.
     Face buttons: the game works in PlayStation buttons and its Switch build maps them by place (`main+0x1343380`:
     Switch A is circle, B cross, X triangle, Y square), so by position throws, swings and pitches sit where they do
     on PlayStation and Xbox; but its menus confirm with circle (`BUTTON_MASK_UI_ACCEPT` = 0x2000, `main+0x4a36f4`),
@@ -210,7 +217,8 @@ linker. `tools/shader_smoke.py` translates a sample of MLB's FXB shaders offline
     until released. `label` and `position` fix one mapping. F8 (`statedump.c`, diagnostic) writes main's data and
     bss to `<profile>/state-<frame>.bin` for such comparisons.
     The game's button prompts show the controller in use (`runtime/mlb/prompts.c`, `MLB_PROMPTS=auto|nintendo|xbox|
-    playstation`, the *Button icons* row of the Controls tab). MLB draws every prompt button from one 1024x1024 BC7
+    playstation`, the *Button icons* row of the Controls tab). The game has one set of prompts for all players, so
+    `auto` follows player 1's pad (with `MLB_PAD_PLAYERS=one`, the pad used last). MLB draws every prompt button from one 1024x1024 BC7
     texture (the `symbols` entry of `NSW/UI/ART/FONTS/FONTS.TEX`), which has only Switch buttons; the RomFS has no Xbox
     or PlayStation art (`PS4/` and `PS5/` hold animation, stadium and subtitle files). `tools/make_prompts.py` draws
     Xbox and PlayStation icons in the game's style (Bahnschrift letters, drawn symbols) and compresses them to BC7

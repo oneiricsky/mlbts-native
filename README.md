@@ -52,7 +52,8 @@ release is made: [docs/release.md](docs/release.md).
 - Road to the Show's Packages without a connection, as another option of the setup: the game earns and opens its
   equipment packs against a small server on the player's own PC ([`tools/packages`](tools/packages/README.md)).
   Nothing is sent anywhere, and it is off unless turned on.
-- Xbox and PlayStation controllers (through SDL3) with rumble. The game's button prompts follow the controller in use.
+- Xbox and PlayStation controllers (through SDL3) with rumble, one player per controller (up to 4) for local
+  multiplayer. The game's button prompts follow player 1's controller.
 - Keyboard and mouse.
 - Resolution options: output size, render scale, FSR 1, NVIDIA DLSS / DLAA and AMD FSR 3.1 / FSR 4 (the setup
   downloads the DLSS and FSR libraries for the graphics card from NVIDIA's and AMD's repositories; they are not
