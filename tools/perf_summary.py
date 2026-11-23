@@ -13,6 +13,9 @@ FRAME = re.compile(r"frametime: 60 s: (\d+) frames in ([\d.]+) s, mean ([\d.]+) 
                    r"over 25 ms (\d+), 50 ms (\d+), 100 ms (\d+)")
 SWAP = re.compile(r"hdtex: texture \S+ (\d+)x(\d+) .* is (\S+): image (\d+)x(\d+).*?([\d.]+) ms\s*$")
 OPTIONS = re.compile(r"Options - Online: (\d), .*?RTTS: (\d), DD: (\d)")
+WORST = re.compile(r"frametime:\s+worst frame (\d+): ([\d.]+) ms")
+SLOW = re.compile(r"perf: slow frame (\d+): ([\d.]+) ms")
+GPULINE = re.compile(r"perf: frame \d+: .*?vram (\d+) of (\d+) MiB.*?ram working set (\d+) MiB")
 HDERR = re.compile(r"hdtex: .*(cannot open|cannot read|not handled|odd header|not a PS5|leaves no level|outside the file|cannot be sampled|creation failed)")
 
 
@@ -37,11 +40,25 @@ def pool(rows):
 
 def summarize(path):
     windows, swaps, errors, options = [], [], 0, None
+    worst, slow, vram, ram = [], [], [], []
     with open(path, errors="replace") as f:
         for line in f:
             m = FRAME.search(line)
             if m:
                 windows.append(window_row(m))
+                continue
+            m = WORST.search(line)
+            if m:
+                worst.append(float(m.group(2)))
+                continue
+            m = SLOW.search(line)
+            if m:
+                slow.append(float(m.group(2)))
+                continue
+            m = GPULINE.search(line)
+            if m:
+                vram.append(int(m.group(1)))
+                ram.append(int(m.group(3)))
                 continue
             m = SWAP.search(line)
             if m:
@@ -54,7 +71,16 @@ def summarize(path):
                 if m:
                     options = {"online": int(m.group(1)), "rtts": int(m.group(2)), "dd": int(m.group(3))}
     ms = [t for _, t in swaps]
-    return {"log": path, "windows": windows,
+    extra = {}
+    if worst:
+        extra["worst_frame_ms"] = max(worst)
+    if slow:
+        extra["slow_frames_logged"] = len(slow)
+        extra["slowest_logged_ms"] = max(slow)
+    if vram:
+        extra["vram_max_mib"] = max(vram)
+        extra["ram_working_set_max_mib"] = max(ram)
+    res = {"log": path, "windows": windows,
             "all_windows": pool(windows),
             "windows_2_on": pool(windows[1:]),
             "first_window_frames": windows[0]["frames"] if windows else None,
@@ -63,6 +89,9 @@ def summarize(path):
                       "load_ms_max": max(ms) if ms else None, "errors": errors,
                       "note": "the game logs only the first 64 swaps"},
             "first_options_line": options if options else "unknown"}
+    if extra:
+        res["extra"] = extra
+    return res
 
 
 def main(argv):
