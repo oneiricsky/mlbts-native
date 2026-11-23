@@ -1,0 +1,32 @@
+name: Fork checks
+
+# The fork's pushes are not covered by pr.yml (it runs on pull requests only). This keeps to the same checks, plus the
+# index-checker tests, and leaves upstream's workflow file alone so merging a release stays conflict-free.
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Repo hygiene
+        run: python -I tools/check_content.py --all
+
+      - name: Python syntax
+        run: |
+          python -I -c "import glob, py_compile; files = sorted(glob.glob('recomp/*.py') + glob.glob('tools/*.py') + glob.glob('tools/equipment/**/*.py', recursive=True) + glob.glob('tools/packages/**/*.py', recursive=True) + glob.glob('installer/*.py')); [py_compile.compile(f, doraise=True) for f in files]; print(f'py_compile OK: {len(files)} files')"
+
+      - name: Index checker tests
+        run: python -I -m unittest discover -s tools -p test_hd_index.py
