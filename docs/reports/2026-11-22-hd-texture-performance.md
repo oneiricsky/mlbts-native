@@ -2,6 +2,10 @@
 
 Status: measured on one machine; no slowdown found in steady play. Recommendation at the end.
 
+These numbers are from the build before the 0.2.0 merge (`12ebc18`). Upstream's 0.2.0 removed the per-pitch freeze, so
+the per-pitch figures below describe the old build; the merged build's numbers are in
+[2026-11-22-gpu-wait-hitches.md](2026-11-22-gpu-wait-hitches.md) ("Update after merging 0.2.0").
+
 ## What was compared
 
 Three configurations on the dev harness (AIvAI, GameOnly, TOR at LAD), each run twice, 400 seconds a run (6 one-minute windows,
