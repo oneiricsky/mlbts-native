@@ -266,6 +266,8 @@ void harness_init(void) {
     rt_log("harness: scenario '%s' (%s) home %d away %d seed %s fixed_clock %d stop_after_s %.1f stop_at_marker '%s' dumps %d errors %d",
            g_sc.name, g_sc.path[0] ? g_sc.path : "env only", g_sc.home, g_sc.away, g_sc.has_seed ? "set" : "unset",
            g_sc.fixed_clock, g_sc.stop_after_s, g_sc.stop_at_marker, g_sc.ndump, g_sc.errors);
+    const char *prof = cfg_get("MLB_PROFILE");
+    rt_log("harness: profile %s", prof && *prof ? prof : "(default, beside mlb.exe)");
     harness_marker("boot");
     CreateThread(NULL, 0, watcher, NULL, 0, NULL);
 }
