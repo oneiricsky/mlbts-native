@@ -99,8 +99,6 @@ if os.name == "nt":
     _user32.GetWindowTextW.argtypes = [wt.HWND, wt.LPWSTR, ctypes.c_int]
     _user32.IsWindowVisible.restype = wt.BOOL
     _user32.IsWindowVisible.argtypes = [wt.HWND]
-    _user32.GetClassNameW.restype = ctypes.c_int
-    _user32.GetClassNameW.argtypes = [wt.HWND, wt.LPWSTR, ctypes.c_int]
     _user32.SendMessageTimeoutW.restype = wt.LPARAM
     _user32.SendMessageTimeoutW.argtypes = [wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM, wt.UINT, wt.UINT,
                                             ctypes.POINTER(ctypes.c_size_t)]
@@ -279,25 +277,23 @@ def process_start(pid):
         _k32.CloseHandle(h)
 
 
-_HELPER_CLASSES = ("IME", "MSCTFIME UI")   # Windows makes these hidden titled windows ("Default IME") in every process that has a window
-
-
 def _windows(pid):
-    """[(hwnd, visible, title)] of the top-level windows with a title that belong to `pid`, without the input method's
-    helper windows. The titles come from the operating system; a screenshot is never looked at."""
+    """[(hwnd, title)] of the visible top-level windows with a title that belong to `pid`: the game's window. Hidden
+    titled windows are not it: the graphics driver makes one ("Temp Window", 0.9 s after launch, gone when the game's
+    window comes 6 s later) and so does the input method ("Default IME"); asking those to close closes nothing.
+    The titles come from the operating system; a screenshot is never looked at."""
     out = []
 
     @_ENUMPROC
     def cb(hwnd, _):
         p = wt.DWORD()
         _user32.GetWindowThreadProcessId(hwnd, ctypes.byref(p))
-        if p.value == pid:
-            cls, n = ctypes.create_unicode_buffer(64), _user32.GetWindowTextLengthW(hwnd)
-            _user32.GetClassNameW(hwnd, cls, 64)
+        if p.value == pid and _user32.IsWindowVisible(hwnd):
+            n = _user32.GetWindowTextLengthW(hwnd)
             buf = ctypes.create_unicode_buffer(n + 1)
             _user32.GetWindowTextW(hwnd, buf, n + 1)
-            if buf.value and cls.value not in _HELPER_CLASSES:
-                out.append((hwnd, bool(_user32.IsWindowVisible(hwnd)), buf.value))
+            if buf.value:
+                out.append((hwnd, buf.value))
         return True
 
     _user32.EnumWindows(cb, 0)
@@ -305,18 +301,15 @@ def _windows(pid):
 
 
 def window_titles(pid):
-    """The titles of `pid`'s top-level windows, visible ones first, each once."""
-    ws = _windows(pid)
-    titles = []
-    for want in (True, False):
-        titles += [t for _h, vis, t in ws if vis == want and t not in titles]
-    return titles
+    """The titles of `pid`'s visible top-level windows, each once."""
+    return list(dict.fromkeys(t for _h, t in _windows(pid)))
 
 
 def request_close(pid):
-    """WM_CLOSE to every titled top-level window of `pid` (what the X button sends). Returns how many were asked."""
+    """WM_CLOSE to each of `pid`'s visible windows with a title (what the X button sends). Returns how many were
+    asked; whether the game then ends is for the caller to wait for."""
     asked, result = 0, ctypes.c_size_t()
-    for hwnd, _vis, _title in _windows(pid):
+    for hwnd, _title in _windows(pid):
         # SMTO_ABORTIFHUNG: the call waits until the window's code has handled the message, at most 2 s, and returns
         # at once when that thread is hung.
         _user32.SendMessageTimeoutW(hwnd, _WM_CLOSE, 0, 0, 0x0002, 2000, ctypes.byref(result))
@@ -768,18 +761,15 @@ class _HandleProc:
 
 def _stop_game(proc, grace):
     """Ask the game to close (WM_CLOSE to its windows) and wait up to `grace` seconds; kill it when it still runs.
-    The request is repeated every half second until the game has a window (one that is still starting has none yet).
+    The request is repeated every half second until it ends: a game that is still starting has no window yet (the
+    real game's comes about 6 s after launch in a fresh slot).
     Returns (how it ended: "after a close request" or "killed", how many windows were asked)."""
     killed, asked = False, 0
     try:
         end = time.time() + grace
         while proc.poll() is None and time.time() < end:
-            asked = request_close(proc.pid)
-            if asked:
-                break
+            asked = request_close(proc.pid) or asked
             time.sleep(0.5)
-        while proc.poll() is None and time.time() < end:
-            time.sleep(0.1)
         killed = proc.poll() is None
     finally:
         if proc.poll() is None:       # also a second Ctrl+C during the wait: the game is never left running
@@ -870,11 +860,10 @@ def watch(proc, started, id, n, timeout=None, grace=CLOSE_GRACE, quiet=False):
 
     def look():
         nonlocal title, visible
-        for _hwnd, vis, t in _windows(proc.pid):
+        for _hwnd, t in _windows(proc.pid):
             if t not in titles:
                 titles.append(t)
-            if vis or title is None:
-                title, visible = t, vis
+            title, visible = t, True
         if time.time() >= state["next_live"]:
             for pid, image, slot in live_games():
                 if pid != proc.pid:
@@ -911,6 +900,7 @@ def watch(proc, started, id, n, timeout=None, grace=CLOSE_GRACE, quiet=False):
     if ended == "by itself" and stop_note:   # someone else asked it to close, or killed it
         close = (stop_note.get("requested"), "the stop command")
         ended = "killed" if stop_note.get("killed") else "after a close request"
+        asked = stop_note.get("windows_asked", asked)
     if our_marker(id):                       # no live run in this slot any more
         write_marker(id, label=marker.get("label"), exe=exe_path(id), start=marker.get("start"), mode=marker.get("mode"))
     log = _slot_log(run_dir, id, started)   # None: this run wrote no log
@@ -1066,11 +1056,11 @@ def stop(id, grace=CLOSE_GRACE, quiet=False):
         if h:
             try:
                 end = time.time() + grace
-                info["windows_asked"] = request_close(pid)
-                while not info["windows_asked"] and _k32.WaitForSingleObject(h, 500) == _WAIT_TIMEOUT and time.time() < end:
-                    info["windows_asked"] = request_close(pid)      # again: a game still starting has no window yet
-                left = max(0, int((end - time.time()) * 1000))
-                if _k32.WaitForSingleObject(h, left) == _WAIT_TIMEOUT:
+                while time.time() < end:                           # asked again every half second: a game that
+                    info["windows_asked"] = request_close(pid)     # is still starting has no window yet
+                    if _k32.WaitForSingleObject(h, 500) != _WAIT_TIMEOUT:
+                        break                                      # it ended
+                if _k32.WaitForSingleObject(h, 0) == _WAIT_TIMEOUT:
                     _k32.TerminateProcess(h, 1)
                     _k32.WaitForSingleObject(h, 5000)
                     info["killed"] = True

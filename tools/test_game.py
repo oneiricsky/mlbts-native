@@ -73,8 +73,8 @@ try:
     if mode == "crash":
         code = 3
     closed = []
-    if mode in ("window", "stubborn"):
-        # A top-level window like the game's. WM_CLOSE is what the X button sends; the game then stops by itself.
+    if mode in ("window", "stubborn", "late"):
+        # The game's top-level window. WM_CLOSE is what the X button sends; the game then stops by itself.
         WNDPROC = ctypes.WINFUNCTYPE(ctypes.c_ssize_t, wt.HWND, wt.UINT, wt.WPARAM, wt.LPARAM)
 
         class WNDCLASSW(ctypes.Structure):        # ctypes.wintypes does not have it
@@ -93,7 +93,7 @@ try:
         def wnd(h, m, w, l):
             if m == 0x0010:                         # WM_CLOSE
                 closed.append(1)
-                if mode == "window":
+                if mode != "stubborn":
                     u.DestroyWindow(h)
                     u.PostQuitMessage(0)
                 return 0
@@ -104,19 +104,25 @@ try:
         cls.hInstance = k.GetModuleHandleW(None)
         cls.lpszClassName = "fakegame"
         u.RegisterClassW(ctypes.byref(cls))
-        hwnd = u.CreateWindowExW(0, "fakegame", "MLB The Show 26 (fastball) [%s]" % label, 0, 0, 0, 0, 0, None, None,
-                                 cls.hInstance, None)     # style 0: never shown, so nothing pops up on the desktop
+        if mode == "late":
+            # A hidden helper window with a title, as the graphics driver makes one in the real game ("Temp Window").
+            helper = u.CreateWindowExW(0, "fakegame", "Temp Window", 0, 0, 0, 0, 0, None, None, cls.hInstance, None)
+            print("FAKE helper window %d" % (helper or 0), flush=True)
+            time.sleep(2.0)                         # the game's own window comes 2 s later
+        # The game's window: visible, but far off every screen, so nothing shows on the desktop (WS_VISIBLE).
+        hwnd = u.CreateWindowExW(0, "fakegame", "MLB The Show 26 (fastball) [%s]" % label, 0x10000000, -30000, -30000,
+                                 64, 64, None, None, cls.hInstance, None)
         print("FAKE window %d" % (hwnd or 0), flush=True)
         msg = wt.MSG()
         u.PeekMessageW.argtypes = [ctypes.POINTER(wt.MSG), wt.HWND, wt.UINT, wt.UINT, wt.UINT]
         end = time.time() + secs
-        while time.time() < end and not (mode == "window" and closed):
+        while time.time() < end and not (mode != "stubborn" and closed):
             if u.PeekMessageW(ctypes.byref(msg), None, 0, 0, 1):   # PM_REMOVE: handle what was sent to the window
                 u.TranslateMessage(ctypes.byref(msg))
                 u.DispatchMessageW(ctypes.byref(msg))
             else:
                 time.sleep(0.02)
-        if mode == "window" and closed:
+        if mode != "stubborn" and closed:
             code = 0                                 # stopped by itself after the close request
     else:
         time.sleep(secs)
@@ -813,7 +819,7 @@ class RealProcesses(Base):
                          ("after a close request", 0, "timeout", 1))
         self.assertLess(res["seconds"], 1.2 + 3)
         self.assertEqual(res["window_title"], "MLB The Show 26 (fastball) [alpha]")   # read from the operating system
-        self.assertFalse(res["window_visible"])
+        self.assertTrue(res["window_visible"])
         self.assertEqual(g.window_titles(res["pid"]), [])                             # the window is gone with the game
 
     def test_a_game_that_ignores_the_close_request_is_killed_after_the_grace(self):
@@ -874,6 +880,22 @@ class StopRelease(Base):
         t.join(10)
         self.assertEqual((t.result["ended"], t.result["close_reason"]), ("killed", "the stop command"))
         self.assertNotIn("pid", g.read_marker("alpha"))
+
+    def test_stop_reaches_a_game_whose_own_window_comes_late(self):
+        self.make("alpha")
+        t = self.start_run(env={"FAKE_MODE": "late", "FAKE_SECONDS": "30"})
+        self.assertTrue(self.wait_live("alpha"))
+        pid = g.slot_is_live("alpha")[0]
+        out = os.path.join(g.slot_path("alpha"), "run-1", "game.out")
+        end = time.time() + 10
+        while "FAKE helper window" not in (read(out) if os.path.isfile(out) else "") and time.time() < end:
+            time.sleep(0.05)
+        self.assertEqual(g.window_titles(pid), [])          # the hidden "Temp Window" is not the game's window
+        self.assertEqual(g.stop("alpha", grace=8, quiet=True), "after a close request")
+        t.join(15)
+        self.assertEqual((t.result["ended"], t.result["exit_code"], t.result["windows_asked"]),
+                         ("after a close request", 0, 1))
+        self.assertEqual(t.result["window_title"], "MLB The Show 26 (fastball) [alpha]")
 
     def test_stop_with_no_game_live_says_so_and_leaves_the_files(self):
         self.make("alpha")
