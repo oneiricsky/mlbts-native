@@ -1,0 +1,11 @@
+# Top of the 10th, tied 3-3, no outs, 2-2 count
+name = extra-innings
+home = 27
+away = 4
+inning = 10
+half = top
+away_score = 3
+home_score = 3
+outs = 0
+balls = 2
+strikes = 2

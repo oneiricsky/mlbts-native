@@ -6,22 +6,37 @@
   python -I tools/bench.py compare work/bench/2026-11-22          (a folder of run JSONs)
   python -I tools/bench.py compare off=a1.log off=a2.log colour=c1.log colour=c2.log
 
-`run` starts the game once per run, alternating the configurations (A, B, A, B, ...), with the sampler off and
-MLB_TRACE=perf, lets it play for --seconds, stops it, and writes <out>/<label>-<n>.log and .json (the JSON is
-tools/perf_summary.py's summary plus the run's settings). Only one game runs at a time. `compare` prints, per label,
-the run count and the mean with its spread (min to max) of each figure, and says when the runs are too few or the
-ranges overlap. The protocol is in docs/dev-config.md, "Running a comparison"."""
+`run` starts the game once per run, alternating the configurations (A, B, A, B, ...), through tools/game.py in a slot
+(work/runs/<slot>, default `bench`), with the sampler off and MLB_TRACE=perf, lets it play for --seconds, closes
+it, and writes <out>/<label>-<n>.log and .json (the JSON is tools/perf_summary.py's summary plus the run's
+settings). Each run is exclusive: it waits (--wait) until no game is live anywhere, and ordinary runs then wait
+for it; a run that shared the machine anyway is marked contended. A slot's first run fills its caches and is
+slower: let the slot run once before timing. `compare` prints, per label, the run count and the mean with its
+spread (min to max) of each figure, and says when the runs are too few or the ranges overlap. The protocol is in
+docs/dev-config.md, "Running a comparison"."""
 import argparse
 import datetime
 import importlib.util
 import json
 import os
-import subprocess
+import shutil
 import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
+
+
+def load_tool(name):
+    # -I removes tools/ from sys.path, so sibling scripts load by path.
+    import importlib.util
+    spec = importlib.util.spec_from_file_location(name, os.path.join(HERE, name + ".py"))
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod
+
+
+game = load_tool("game")   # tools/game.py: slots, turns, the game's process
 
 # Settings that would change timing or take screenshots; a comparison run never inherits them.
 DROPPED = ("MLB_SHOT", "MLB_DRAWLOG", "MLB_WATCH", "MLB_DISPATCH_DUMP", "MLB_STATEDUMP", "MLB_SAMPLER", "MLB_TRACE")
@@ -51,11 +66,13 @@ def parse_config(text):
     return label, env
 
 
-def game_running():
-    if os.name != "nt":
-        return False
-    out = subprocess.run(["tasklist", "/FI", "IMAGENAME eq mlb.exe", "/NH"], capture_output=True, text=True).stdout
-    return "mlb.exe" in out.lower()
+def overlay(extra):
+    """What a measurement run adds to the environment game.py builds: the settings that would change timing or take
+    screenshots removed (None), the sampler off, MLB_TRACE=perf, then `extra`."""
+    over = {k: None for k in DROPPED}
+    over.update({"MLB_SAMPLER": "off", "MLB_TRACE": "perf"})
+    over.update(extra)
+    return over
 
 
 def run_env(common, extra):
@@ -87,9 +104,10 @@ def cmd_run(a):
     exe = os.path.abspath(a.exe)
     out = os.path.abspath(a.out or os.path.join(ROOT, "work", "bench", datetime.date.today().isoformat()))
     plan = schedule(configs, a.runs, a.counterbalance)
-    print("exe: %s (working folder: %s)" % (exe, os.path.dirname(exe)))
+    print("exe: %s" % exe)
+    print("slot: work/runs/%s (the game runs from tools/game.py's copy of the exe folder)" % a.slot)
     print("output: %s" % out)
-    print("%d runs of %d s, one game at a time, in this order: %s" %
+    print("%d runs of %d s, each with the machine to itself, in this order: %s" %
           (len(plan), a.seconds, " ".join("%s-%d" % (l, n) for l, _, n in plan)))
     if a.dry_run:
         for label, env, n in plan:
@@ -99,45 +117,41 @@ def cmd_run(a):
         return
     if not os.path.isfile(exe):
         sys.exit("no game at %s (build it, or pass --exe / set MLB_BENCH_EXE)" % exe)
-    if game_running():
-        sys.exit("mlb.exe is already running; close it first (comparison runs need the machine to themselves)")
+    try:
+        game.prepare(a.slot, exe=exe)      # the slot is made once; its exe and the files beside it follow the build
+    except game.GameError as e:
+        sys.exit(str(e))
     os.makedirs(out, exist_ok=True)
     summary = load_summary()
     manifest = []
     for label, env, n in plan:
         stem = os.path.join(out, "%s-%d" % (label, n))
-        full = run_env(common, env)
-        print("== %s-%d: starting %s for %d s" % (label, n, os.path.basename(exe), a.seconds), flush=True)
-        started = time.time()
-        with open(stem + ".log", "wb") as log:
-            proc = subprocess.Popen([exe], cwd=os.path.dirname(exe), env=full, stdout=log, stderr=subprocess.STDOUT)
-            ended_early = None
-            while time.time() - started < a.seconds:
-                if proc.poll() is not None:
-                    ended_early = proc.returncode
-                    break
-                time.sleep(1)
-            if proc.poll() is None:
-                proc.terminate()
-                try:
-                    proc.wait(15)
-                except subprocess.TimeoutExpired:
-                    proc.kill()
-                    proc.wait()
+        over = overlay({**common, **env})
+        print("== %s-%d: a turn with the machine to itself, then %s for %d s" % (label, n, os.path.basename(exe), a.seconds),
+              flush=True)
+        try:
+            r = game.run(a.slot, env=over, mode="exclusive", wait=a.wait, timeout=a.seconds)
+        except game.NoTurn as e:
+            sys.exit("no turn for a timing run: %s" % e)
+        shutil.copyfile(r["out"], stem + ".log")
         res = summary.summarize(stem + ".log")
-        res.update({"label": label, "run": n, "seconds": a.seconds, "started": datetime.datetime.fromtimestamp(started).isoformat(timespec="seconds"),
-                    "settings": {k: full[k] for k in sorted(set(common) | set(env) | {"MLB_SAMPLER", "MLB_TRACE"})},
-                    "ended_early_with_code": ended_early})
+        early = r["exit_code"] if r["ended"] == "by itself" and r["seconds"] < a.seconds else None
+        res.update({"label": label, "run": n, "seconds": a.seconds, "started": r["started"],
+                    "settings": {k: over.get(k) for k in sorted(set(common) | set(env) | {"MLB_SAMPLER", "MLB_TRACE"})},
+                    "ended_early_with_code": early, "how_it_ended": r["ended"], "exit_code": r["exit_code"],
+                    "first_run_of_slot": r["first_run_of_slot"], "contended": r["contended"], "shared_with": r["shared_with"],
+                    "run_folder": r["run_dir"]})
         with open(stem + ".json", "w") as f:
             json.dump(res, f, indent=1)
             f.write("\n")
         manifest.append({"label": label, "run": n, "json": os.path.basename(stem) + ".json"})
         w = res["all_windows"]
-        print("   %s: %s windows, mean %s fps, first window %s frames%s" %
+        print("   %s: %s windows, mean %s fps, first window %s frames%s%s%s" %
               (os.path.basename(stem), len(res["windows"]), w["mean_fps"] if w else "n/a", res["first_window_frames"],
-               "" if ended_early is None else "  ENDED EARLY (exit code %s)" % ended_early), flush=True)
-        while game_running():
-            time.sleep(2)
+               "" if early is None else "  ENDED EARLY (exit code %s)" % early,
+               "" if not r["contended"] else "  CONTENDED, with %s" % ", ".join(
+                   o["slot"] or os.path.basename(o["image"]) for o in r["shared_with"]),
+               "  (the slot's first run: its caches were still cold)" if r["first_run_of_slot"] else ""), flush=True)
         time.sleep(3)
     with open(os.path.join(out, "bench.json"), "w") as f:
         json.dump({"exe": exe, "seconds": a.seconds, "runs": manifest}, f, indent=1)
@@ -314,6 +328,8 @@ def main(argv):
     r.add_argument("--exe", default=os.environ.get("MLB_BENCH_EXE") or os.path.join(ROOT, "work", "build", "mlb.exe"),
                    help="the game (default work/build/mlb.exe, or MLB_BENCH_EXE)")
     r.add_argument("--out", help="output folder (default work/bench/<date>)")
+    r.add_argument("--slot", default="bench", help="the tools/game.py slot the runs go through (default %(default)s)")
+    r.add_argument("--wait", type=float, default=1800, help="seconds to wait for a turn with the machine to itself (default %(default)s)")
     r.add_argument("--dry-run", action="store_true", help="print the plan and settings; start nothing")
     r.set_defaults(fn=cmd_run)
     c = sub.add_parser("compare", help="compare runs per label")

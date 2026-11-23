@@ -224,6 +224,9 @@ def main():
     exe = out / 'mlb.exe'
     bin_dir = Path(a.clang).parent
     rt_flags, cxx_flags = list(RT_FLAGS), list(CXX_FLAGS)
+    if not mingw:   # the dev target carries the dev harness (runtime/mlb/harness.c); release builds never do
+        rt_flags.append('-DMLB_DEV_HARNESS')
+        cxx_flags.append('-DMLB_DEV_HARNESS')
     pgo_link, pgo_dep = '', ''
     profile = None if a.pgo in ('off', 'gen') else RUNTIME_PROFILE if a.pgo == 'auto' else Path(a.pgo).resolve()
     if a.pgo == 'gen':

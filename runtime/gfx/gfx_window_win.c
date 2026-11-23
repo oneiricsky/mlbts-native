@@ -318,7 +318,13 @@ static void window_main(void *arg) {
     // button flashes, and TOTK_FULLSCREEN waits for the first activation.
     // TOTK_BACKGROUND_WINDOW=1 (test runs): no flashing, never fullscreen at start, and F11 keeps the window's place.
     int background = g_background = cfg_get("TOTK_BACKGROUND_WINDOW") && atoi(cfg_get("TOTK_BACKGROUND_WINDOW"));
-    g_hwnd = CreateWindowExW(0, wc.lpszClassName, L"MLB The Show 26 (fastball)", WND_STYLE, CW_USEDEFAULT, CW_USEDEFAULT, ow, oh, NULL,
+    // fastball: MLB_RUN_LABEL=<name> shows "[name]" in the title bar, so several games running at once (parallel test
+    // sessions) can be told apart on screen.
+    wchar_t title[200] = L"MLB The Show 26 (fastball)";
+    const char *run_label = cfg_get("MLB_RUN_LABEL");
+    if (run_label && *run_label)
+        swprintf(title, 200, L"MLB The Show 26 (fastball) [%.80hs]", run_label);
+    g_hwnd = CreateWindowExW(0, wc.lpszClassName, title, WND_STYLE, CW_USEDEFAULT, CW_USEDEFAULT, ow, oh, NULL,
                              NULL, inst, NULL);
     if (!g_hwnd) {
         rt_log("gfx: CreateWindowEx failed (%lu)", GetLastError());

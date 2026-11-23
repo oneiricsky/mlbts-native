@@ -1,0 +1,12 @@
+# Bottom of the 9th, Dodgers (home) trail 3-4, 1 out, 3-2 count
+name = late-game
+home = 27
+away = 4
+inning = 9
+half = bottom
+away_score = 4
+home_score = 3
+outs = 1
+balls = 3
+strikes = 2
+runners = first,second

@@ -1,0 +1,11 @@
+# Top of the 1st, 1 out, 2-1 count, 0-0 (no transition needed)
+name = opening
+home = 27
+away = 4
+inning = 1
+half = top
+away_score = 0
+home_score = 0
+outs = 1
+balls = 2
+strikes = 1

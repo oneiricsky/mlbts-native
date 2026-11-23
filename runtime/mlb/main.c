@@ -19,9 +19,10 @@
 #include "host.h"
 #include "platform/platform.h"
 #include "sha256.h"
+#include "harness.h"
 
-// ---- log: stderr, plus logs/mlb.log next to mlb.exe once log_open ran. Lines before log_open (mem_init runs first,
-// so the CRT heap does not land in the guest address space) wait in a static buffer.
+// ---- log: stderr, plus logs/mlb.log next to mlb.exe once log_open ran (MLB_LOG=<file> names another file). Lines
+// before log_open (mem_init runs first, so the CRT heap does not land in the guest address space) wait in a static buffer.
 #define LOG_CAP (64ull << 20)
 enum { LOG_EARLY, LOG_FILE, LOG_OFF };
 static int g_log_state;
@@ -129,7 +130,26 @@ static void log_open(void) {
         char *f = strrchr(dir, '/');
         if (f > cut) cut = f;
     }
-    if (cut && (size_t)(cut - dir) + sizeof "/logs" <= sizeof dir) {
+    // fastball: MLB_LOG=<file> (setting LOG) puts the log there and nowhere else. An absolute path is used as given, a
+    // relative one against the exe's folder, like the default. tools/game.py gives every run its own file: games started
+    // from one exe folder wrote the one logs/mlb.log over each other (2026-11-23, three at once from work/runs/scenario-search).
+    const char *want = cfg_get("MLB_LOG");
+    if (want && *want) {
+        if (cut && want[0] != '/' && want[0] != '\\' && want[1] != ':') {
+            *cut = 0;   // the exe's folder
+            snprintf(g_log_path, sizeof g_log_path, "%s/%s", dir, want);
+        } else {
+            snprintf(g_log_path, sizeof g_log_path, "%s", want);
+        }
+        char *sep = strrchr(g_log_path, '/'), *bs = strrchr(g_log_path, '\\');
+        if (bs && (!sep || bs > sep)) sep = bs;
+        if (sep && sep != g_log_path && (size_t)(sep - g_log_path) < sizeof dir) {
+            memcpy(dir, g_log_path, (size_t)(sep - g_log_path));
+            dir[sep - g_log_path] = 0;
+            plat_file_mkdir_p(dir);
+        }
+        g_log_file = plat_append_open(g_log_path);
+    } else if (cut && (size_t)(cut - dir) + sizeof "/logs" <= sizeof dir) {
         strcpy(cut, "/logs");
         plat_file_mkdir_p(dir);
         snprintf(g_log_path, sizeof g_log_path, "%s/mlb.log", dir);
@@ -574,6 +594,7 @@ int main(int argc, char **argv) {
         return save_import_main(import_from);
     }
     log_open();
+    harness_init();   // dev builds only: MLB_HARNESS scenario (harness.c)
     if (probe) return probe_fs();
     // fastball: the sampling profiler only when asked (it suspends every thread to sample it). MLB_SAMPLER=on: every
     // thread's call chains for each frame of 19 ms or more (one every 3 s at most) in <profile>/prof.txt.f<frame>;
