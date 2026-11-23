@@ -109,3 +109,155 @@ build keeps them elsewhere. It writes `work/bench/<date>/<label>-<n>.log` and `.
 anything. `compare` also takes old logs with a `label=` prefix. The summary reads a log whether or not each line
 starts with a timestamp (`MLB_LOG_TIME=1` puts `[ 12.345] ` in front of every line): its patterns are not anchored
 to the start of the line.
+
+## Dev harness plan
+
+Status: design only, nothing here is built yet. It records what the owner settled. Anything not settled is marked
+**open**.
+
+In plain words: today a test run means starting the game by hand, with someone at the PC, and eyeballing the result.
+The plan is a harness that runs a named scenario with one flag, needs nobody present, plays the same match every time,
+records numbers and pictures, and says pass or fail in one plain line.
+
+### Purpose
+
+Three jobs, in this order of priority:
+
+1. Speed and regression timing (frame times, stalls).
+2. Output comparison (is the picture or data still correct after a change).
+3. Exploring and reverse-engineering the game (start any match, mode or scene on demand).
+
+Speed and output come first. Exploring grows out of the same controls.
+
+### Ground rules
+
+- **Unattended.** A run must work with nobody at the PC and no audio device. Today a run needs a live Windows audio
+  output, or the game sits at the loading screen (`audout: no output device`). `TOTK_AUDIO=none` exists in
+  `runtime/core/audout.c`; it must be checked as the fake device. Whether it gets the game past the loading screen is
+  **open** until tested.
+- **Repeatable.** A fixed random seed and a fixed clock, so the same match plays out the same way. (Until this
+  exists, runs drift by hundreds of frames; see `CLAUDE.md`.)
+- **Dev builds only.** The controls are `MLB_HARNESS_*` settings compiled only into dev builds, so players can never
+  trigger them.
+- **Owner starts it.** It runs only when the owner starts it. Nothing runs on its own.
+- **Versions.** Game 1.0.20 first. Hooks are version-aware, so 1.0.15 needs only its address map
+  (`tools/addrmap.py`) and a test, once the 1.0.15 exefs is available (it is not on this machine).
+
+### Scenario file
+
+One scenario file per run, kept in the repo, run with one flag. Fields:
+
+| Field | Meaning | State |
+|---|---|---|
+| stadium | Which ballpark. | Set together with the teams (see below). |
+| home team, away team | Team ids 0..29 (table below). | Working in a throwaway override (see below). |
+| time of day, weather | Light and sky. | **Open**: not found in the game yet. |
+| seed | Fixed random seed. | Decided; not built. |
+| record | What to capture (see Recording). | Decided; not built. |
+| stop | When the run ends. | **Open**: the exact choices (time, inning, event). |
+
+Team ids:
+
+| Id | Team | Id | Team | Id | Team |
+|---|---|---|---|---|---|
+| 0 | BAL | 10 | HOU | 20 | CHC |
+| 1 | BOS | 11 | LAA | 21 | CIN |
+| 2 | NYY | 12 | ATH (not confirmed) | 22 | MIL |
+| 3 | TB | 13 | SEA | 23 | PIT |
+| 4 | TOR | 14 | TEX | 24 | STL |
+| 5 | CWS | 15 | ATL | 25 | AZ |
+| 6 | CLE | 16 | MIA | 26 | COL |
+| 7 | DET | 17 | NYM | 27 | LAD |
+| 8 | KC | 18 | PHI | 28 | SD |
+| 9 | MIN | 19 | WSH | 29 | SF |
+
+**Team and stadium are set together.** The game keeps the home and away team in several copies inside one
+match-settings struct, filled in about 3.5 s after boot. Writing only one copy gave Dodger Stadium with the wrong
+uniforms. The working override (uncommitted, in `runtime/mlb/main.c` of the msdf-skip worktree, env vars
+`MLB_HARNESS_HOME` and `MLB_HARNESS_AWAY`) writes every copy:
+
+| Side | Offsets written |
+|---|---|
+| home | `+0x3f`, `+0x47`, `+0x59` |
+| away | `+0x40`, `+0x52`, `+0x54`, `+0x56` |
+
+Default is home 27 (LAD), away 4 (TOR). Home 0 and away 1 loads the Baltimore (BAL) files and a different field
+texture checksum (127082744), which is a handy proof that the override takes effect.
+
+### Modes in scope
+
+AI-vs-AI exhibition, menus, Road to the Show, franchise, replays and cutscenes.
+
+How to get into a mode: direct loading first, scripted button input only as the fallback.
+
+1. Boot options from the existing option table above (`GameOnly`, `ForcePlayGo`, `hrderbyOnly`, and so on).
+2. Calling the game's own entry functions.
+3. Scripted button presses, only where 1 and 2 cannot reach.
+
+Dropping players into a scenario should use the game's own scenario code where it exists (Situation, Moment,
+Storyline). A search of the game code is in progress. **Open:** which of these exist and how to call them. The
+`DoPlayInit` scenario options (`Inning`, `Outs`, `Balls` and the scores) are compiled out of retail (see the table
+above), so they are no help.
+
+### Recording
+
+| What | How | Notes |
+|---|---|---|
+| Frame times | A frame-time log with named markers (for example "match start", "first pitch"). | Compare by marker, never by frame number. |
+| Texture and buffer dumps | At the graphics call that writes them, for example the 512x512 `fmt 0x25` field texture at `nvnTextureWriteTexels`. | Byte compare. This is the check the msdf skip still needs for other stadiums. |
+| Screenshot pixel diff | Against a reference picture. | Per machine, never committed. |
+| State snapshot | A dump of chosen game state. | **Open:** which state. |
+| GPU capture | A frame capture of the graphics commands. | |
+
+### Baselines
+
+The repo ships no game data, and the user compiles the game from their own copy, so baselines are made on each
+machine at build time.
+
+- The usual reference is the same build with one fix switched off against the fix on (for example `MLB_MSDF_SKIP=0`
+  against the default).
+- A known-good older build is the safeguard against a bug that is already in the reference.
+- Screenshots are per machine and never committed.
+- No hashes of game data are needed in the repo.
+
+### Failure and smoke test
+
+On failure the harness saves the log, the differing dump and a diff image in a local folder, prints one plain summary
+and exits with a failure code.
+
+It has one scenario to start with, the smoke test: boot, a short AI match, no crash, no stall, a sane frame rate.
+"Sane" needs a number: **open**.
+
+### In-game panel
+
+- A tab in the settings menu turns dev mode on.
+- Dev mode opens its own panel: match setup, dropping players into any scenario, recorder controls, and live
+  readouts (frame-time graph, markers, last result).
+- Keyboard and mouse only.
+- Setup changes apply live mid-game where the game allows it. That needs a safe reload point per mode, which is
+  **open**. (Mid-run changes have misled us before: head-show results are baked once, so fixed-from-frame-0 stays the
+  rule for measurements.)
+
+### Build order
+
+The panel grows with each step.
+
+| Step | What | Why this order |
+|---|---|---|
+| 1 | Match setup (stadium, teams, uniforms) and repeatability. | Everything else needs the same match each time. |
+| 2 | Unattended mode and the frame-marker log. | Lets runs go without the owner and gives timing. |
+| 3 | Texture dumps. | First output check. |
+| 4 | Smoke test. | A cheap guard once 1 to 3 exist. |
+| 5 | Screenshot compares. | |
+| 6 | Direct loading per mode. | Needs the scenario-code search. |
+| 7 | State snapshots and GPU capture. | |
+
+### Open items
+
+- Time of day and weather: where the game stores them.
+- Whether `TOTK_AUDIO=none` gets the game past the loading screen.
+- Which scenario code (Situation, Moment, Storyline) exists and how to call it.
+- A safe reload point per mode for live setup changes.
+- Stop conditions, state-snapshot contents, and the "sane frame rate" number.
+- Whether team id 12 is the Athletics.
+- 1.0.15: needs its exefs, then `tools/addrmap.py` and a test.
