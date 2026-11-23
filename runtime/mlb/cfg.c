@@ -42,6 +42,7 @@ static const CfgMeta metas[] = {
     {"GPU", "vulkan", "vulkan|null", RESTART},   // main.c: the graphics back end (gfx_null.c chooses by it)
     {"AA", "fxaa", "off|fxaa", LIVE},   // vk_aa.c: antialiasing of the 3D scene before the game lays its HUD over it
     {"AA_STRENGTH", "75", "0..100", LIVE},   // vk_aa.c: how much FXAA softens thin, sub-pixel detail
+    {"LOG", "", NULL, RESTART},   // main.c log_open: the log file. Absolute as given, else beside mlb.exe; game.py gives each run its own
 #ifdef MLB_DEV_HARNESS
     {"HARNESS", "", NULL, RESTART},   // harness.c: scenario file (dev builds only)
     {"HARNESS_OUT", "", NULL, RESTART},   // harness.c: folder for dumps (default harness-out)
