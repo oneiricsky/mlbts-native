@@ -88,7 +88,12 @@ The same knowledge is published as the GitHub wiki of `oneiricsky/mlbts-native`.
 references become How-the-port-works, The-game-binary, Known-game-functions, Tracing-playbook and History-and-open-questions, and the region notes become Region-A to
 Region-F). The findings pages (walk-up freeze, match-start freeze, load stalls, frame rate, PS5 textures, upstream bugs, dev harness) are written by hand in `docs/wiki/`.
 Rebuild every page with `python -I tools/wiki_build.py` (writes `work/wiki/`, checks that all links resolve); never edit a generated page in the wiki, edit its source
-here. Publishing is a push to `oneiricsky/mlbts-native.wiki.git`: only when the owner asks, with `GIT_TERMINAL_PROMPT=0` and a short timeout.
+here. Publishing is a push to `git@github.com:oneiricsky/mlbts-native.wiki.git` (branch `master`), only when the owner asks. Steps that worked on 2026-11-23: run
+`wiki_build.py`; with `GIT_TERMINAL_PROMPT=0` and `GIT_SSH_COMMAND="C:/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=15"` clone the wiki to `work/wikirepo`
+(the clone and `ls-remote` print a harmless "IO is still pending on closed socket" line; if a clone fails, run it again); `cp work/wiki/*.md work/wikirepo/`; commit there with
+`git -c user.name="Sky Miles" -c user.email="14169181+oneiricsky@users.noreply.github.com" commit` (signing comes from the global config; do not change config); `git push origin master`.
+GitHub creates the wiki repository only when someone saves a first page in the web UI, and the owner has to be signed in for that. Check the result by fetching each page
+(`/oneiricsky/mlbts-native/wiki/<Page>` should return 200).
 
 ## Keeping this skill true
 
