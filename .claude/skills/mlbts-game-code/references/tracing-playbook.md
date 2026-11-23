@@ -20,6 +20,12 @@ The game has no symbols for its own code, so understanding comes from several in
    tools: `sdk+0x13e700`; for `main`, subtract `0x7000000000`.
 7. **Generated C** at the file:line `fn` prints (`work/gen/main/main_NNNN.c`). Registers are locals, `LD64/ST64` are loads/stores, `rt_dispatch` is an
    indirect branch, `FN_ENTER(addr)` marks function entry. Noisy: prefer the clues above first.
+   Cheap way to read a body (strips the register save/restore after each call and collapses loads/stores; line numbers come from `map_find.py fn`):
+   `sed -n <line>,<line+N>p work/gen/main/<file> | sed -E 's/x30 = 0x[0-9a-f]+ull;.*(f_[0-9a-f]+)\(c\);.*/CALL \1/; s/\{ uint64_t ea = (\w+) \+ (0x[0-9a-f]+)ull; uint64_t v = LD([0-9]+)\(ea\); (\w+) = [^;]*; \}/\4 = ld\3[\1+\2]/'`
+   Reading conventions: `x0` first argument/result, `x19`-`x28` survive calls (`x19` is usually `this`); globals are fetched through a pointer table
+   (`x = 0x700227e000; x = ld64[x+0x128]` is "load global #0x128 of that table"; other tables `0x700227d000`, `0x7002291000`, `0x7002294000`-`0x7002298000`);
+   `rt_dispatch` after `ld64[ld64[obj]+off]` is a virtual call (`off` = 8 x vtable slot); `rt_patch_on[n]` is a code-patch switch, so both the original and patched
+   code sit in the function; `fsub32`/`fc_sub32` are flag-setting compares.
 8. **Dev-config option names.** `BOOT/CONFIG_MAIN.TXT` options are matched by a 32-bit hash: ELF-style hash then `h*0x9E3779B7 + ~h*0x61C88641`
    (`docs/dev-config.md`); only 27 of 109 hashes are named.
 

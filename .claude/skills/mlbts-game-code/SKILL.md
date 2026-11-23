@@ -26,6 +26,14 @@ repo, the binary and `docs/`; each claim is tagged **[C]** confirmed (read from 
   `work/map/`. A release contains no game code. [C]
 - The owner is not a graphics programmer: explain findings in plain words (see the repo `CLAUDE.md` rules).
 
+## Honest status of this skill (read before trusting it)
+
+This is an **index-level** map, not a read-through of the code. Built from: the repo docs, the port's source (parsed), strings and vtables recovered from the original
+machine code for all 135,060 recompiled functions, and six region notes written by Haiku agents from that index. Function **bodies** read in full so far: one
+(`0x700108b628`, see known-functions.md). About 12,800 of `main`'s 94,991 functions reference a string; the rest are known only by neighbours, vtable slots, callers and size.
+Treat region-note roles tagged [I] or [H] as leads, not facts, and read the body (see the playbook) before building on one. Next step if more fluency is wanted: read the bodies
+of the state handlers (`docs/map/regions/D-*.md`), the game-mode table (`0x7000e0fb10`) and the 47 AI class vtables of 119 slots, and add what you verify to known-functions.md.
+
 ## First 60 seconds on any task
 
 1. Rebuild/check the local index if `work/map/index/` is missing: `python -I tools/map_all.py` (needs

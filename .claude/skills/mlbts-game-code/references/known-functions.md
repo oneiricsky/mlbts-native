@@ -65,6 +65,15 @@ PRES_COPYRIGHT, REPLAY_VAULT, WAIT_FOR_MESSAGE. Home Run Derby has its own `HRDE
 | `main+0xd4f6e0` | copies the averaging byte right before the frame timer runs | C | framerate.c |
 | `0x700000b140` | per-frame call that runs the lighting bake step (`0x70012e0150`) | C | walkup-freeze.md |
 
+### Verified by reading the body of `0x700108b628` (the only game function body read in full so far) [C]
+
+`x19` = the BATTER_UP state object. `[x19+0x18]` holds the sub-state number: the handler compares it with 3 (then sets 4 and runs a small call) and with 1 (then calls
+`0x700108c030`, the WALK_UP_PRES handler); otherwise it calls `0x700108cd24` (PLAYERS_SETUP); an earlier path calls `0x700108b500` (WALK_UP). So slot 5 dispatches to the
+sub-state handlers listed above. Fields seen: `[x19+0x20]` a 32-bit value re-read each frame (change detection), `[x19+0x24]` a flag byte, `[x19+0x26]`, `[x19+0x28]`, `[x19+0x31]`, `[x19+0x32]` bytes.
+It asks `0x70012c54ec` for the lighting manager then calls `0x70012d0fcc`; the generated code carries both the original `x1 = 1` (force) and the patched path under `rt_patch_on[0]`,
+and a second `rt_patch_on[0]` block clears bit 9 of `[manager+0xd3c]` (patch site 3), matching `docs/walkup-freeze.md`. It also makes virtual calls through
+objects (`[obj]->[+0x80]`, `[+0x60]`, `[+0x90]`, `[+0x1b0]`) that were not resolved. Everything else in the function (what the 70+ callees do) is unread.
+
 ## Stadium lighting and props (the walk-up freeze)
 
 | Address | What | Tag |
