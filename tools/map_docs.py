@@ -160,6 +160,9 @@ def main():
            "python -I tools/map_source.py --out work/map/index                # hand-written and vendored source",
            "python -I tools/map_generated.py                                  # recompiled game code (needs work/gen)",
            "python -I tools/map_binary.py                                     # names + check vs the original code",
+           "python -I tools/map_strings.py                                    # strings per game function + vtables",
+           "python -I tools/map_all.py                                        # all of the above in order, then docs + coverage",
+           "python -I tools/map_find.py fn 0x700108b628                       # look up a game function (see its docstring)",
            "python -I tools/map_docs.py                                       # writes docs/map/",
            "python -I tools/map_coverage.py                                   # exits 1 if anything is unmapped", "```",
            "", "See [coverage.md](coverage.md) for the last result.", "",
@@ -172,6 +175,9 @@ def main():
             "(lower fidelity).", "",
             "## The game binary", "", "See [binary.md](binary.md): 135,060 recompiled functions in the `main` and "
             "`sdk` modules, address ranges, SDK namespaces and the functions the repo already names.", "",
+            "[regions/](regions/) holds one note per address range of `main` (A to F, with the `sdk` module in F): "
+            "subsystem per 256 KB window and key functions, every claim tagged confirmed, inferred or guess. The "
+            "`.claude/skills/mlbts-game-code` skill is the entry point for future sessions.", "",
             "## Subsystem guide", "", "| Area | What it is |", "|---|---|",
             "| `runtime/core` | Generic Switch-OS host: CPU state, memory, kernel services, audio, filesystem |",
             "| `runtime/gfx` | NVN-to-Vulkan graphics layer, shader handling, textures, upscalers, UI |",
