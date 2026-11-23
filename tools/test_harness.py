@@ -28,6 +28,14 @@ import os, sys, time
 sc = dict(l.split("=", 1) for l in open(os.environ["MLB_HARNESS"]).read().splitlines() if "=" in l)
 out = os.environ["MLB_HARNESS_OUT"]
 mode = os.environ.get("FAKE_MODE", "ok")
+prof = os.environ.get("MLB_PROFILE", "")
+if os.path.isdir(prof):
+    with open(os.path.join(prof, "playtime.txt"), "a") as f:
+        f.write("more")
+    with open(os.path.join(prof, "save", "slot1.bin"), "wb") as f:
+        f.write(b"played")
+    with open(os.path.join(prof, "save", "new.bin"), "wb") as f:
+        f.write(b"new")
 fps = 20.0 if mode == "slow" else 60.0
 if mode == "nodev":
     print("audout: no output device (asleep): buffers are recycled without sound", flush=True)
@@ -77,6 +85,19 @@ class Base(unittest.TestCase):
         self.lock = self.dir / "game.lock"
         os.environ["MLB_GAME_LOCK"] = str(self.lock)
         self.addCleanup(os.environ.pop, "MLB_GAME_LOCK", None)
+        self.profile = self.dir / "profile"
+        (self.profile / "save").mkdir(parents=True)
+        (self.profile / "save-tx").mkdir()
+        (self.profile / "cache").mkdir()
+        (self.profile / "save" / "slot1.bin").write_bytes(b"original")
+        (self.profile / "save-tx" / "tx.bin").write_bytes(b"tx")
+        (self.profile / "playtime.txt").write_text("123")
+        (self.profile / "account.uid").write_text("uid")
+        (self.profile / "cache" / "big.bin").write_bytes(b"x" * 100)
+        os.environ["MLB_HARNESS_PROFILE"] = str(self.profile)
+        os.environ["MLB_HARNESS_BACKUPS"] = str(self.dir / "backups")
+        self.addCleanup(os.environ.pop, "MLB_HARNESS_PROFILE", None)
+        self.addCleanup(os.environ.pop, "MLB_HARNESS_BACKUPS", None)
         real = h.stray_game_processes     # tasklist takes about 2 s; the fake game is not an mlb*.exe anyway
         h.stray_game_processes = lambda: []
         self.addCleanup(setattr, h, "stray_game_processes", real)
@@ -225,6 +246,86 @@ class Verdict(unittest.TestCase):
         text = h.ab_verdict("a", "b", [], [], ["inning"], {}, {})
         self.assertIn("inning", text)
         self.assertIn("DIFFERENT", text)
+
+
+def tree_hashes(root):
+    import hashlib
+    out = {}
+    for base, _, names in os.walk(root):
+        for n in names:
+            p = os.path.join(base, n)
+            out[os.path.relpath(p, root)] = hashlib.sha256(Path(p).read_bytes()).hexdigest()
+    return out
+
+
+class Profile(Base):
+    def test_default_run_uses_real_profile_and_backs_up_saves_first(self):
+        before = tree_hashes(self.profile)
+        code, out = self.run_quiet(["run", str(self.scn), *self.common()])
+        self.assertEqual(code, 0, out)
+        s = json.loads(next((self.dir / "out").glob("unit-*")).joinpath("summary.json").read_text())
+        self.assertEqual(s["profile"], str(self.profile))
+        self.assertIn("profile: REAL", out)
+        self.assertIn(s["backup"], out)
+        b = Path(s["backup"])
+        self.assertEqual((b / "save" / "slot1.bin").read_bytes(), b"original")      # the state before the run
+        self.assertEqual((b / "playtime.txt").read_text(), "123")
+        self.assertTrue((b / "save-tx" / "tx.bin").is_file())
+        self.assertFalse((b / "cache").exists())                                      # caches are not copied
+        self.assertNotEqual(tree_hashes(self.profile), before)                       # the game did write to the real profile
+
+    def test_restore_puts_hashes_back(self):
+        before = tree_hashes(self.profile)
+        self.run_quiet(["run", str(self.scn), *self.common()])
+        self.assertNotEqual(tree_hashes(self.profile), before)
+        name = next(p.name for p in (self.dir / "backups").iterdir())
+        code, out = self.run_quiet(["restore", name])
+        self.assertEqual(code, 1)                                                    # not confirmed: changes nothing
+        self.assertIn("--confirm " + name, out)
+        self.assertNotEqual(tree_hashes(self.profile), before)
+        code, out = self.run_quiet(["restore", name, "--confirm", name])
+        self.assertEqual(code, 0, out)
+        after = tree_hashes(self.profile)
+        for k, v in before.items():
+            self.assertEqual(after.get(k), v, k)
+        self.assertNotIn(os.path.join("save", "new.bin"), after)                     # a file made by the run is removed
+        self.assertTrue(any("pre-restore" in p.name for p in (self.dir / "backups").iterdir()))
+        self.assertFalse(self.lock.exists())
+
+    def test_restore_refuses_a_folder_this_tool_did_not_make(self):
+        (self.dir / "backups" / "mine").mkdir(parents=True)
+        code, out = self.run_quiet(["restore", "mine", "--confirm", "mine"])
+        self.assertEqual(code, 2)
+        self.assertIn("not a backup made by this tool", out)
+
+    def test_only_the_newest_ten_of_our_backups_are_kept_and_others_survive(self):
+        root = self.dir / "backups"
+        (root / "owners-own-folder").mkdir(parents=True)
+        for i in range(13):
+            d = root / ("20200101-0000%02d" % i)
+            d.mkdir()
+            (d / h.BACKUP_MARK).write_text("x")
+        h.backup_profile(str(self.profile))
+        names = sorted(p.name for p in root.iterdir())
+        self.assertIn("owners-own-folder", names)
+        ours = [n for n in names if n != "owners-own-folder"]
+        self.assertEqual(len(ours), 10)
+        self.assertNotIn("20200101-000000", ours)
+        self.assertIn("20200101-000012", ours)
+
+    def test_copy_profile_leaves_the_real_one_untouched(self):
+        before = tree_hashes(self.profile)
+        code, out = self.run_quiet(["run", str(self.scn), *self.common("--copy-profile")])
+        self.assertEqual(code, 0, out)
+        self.assertEqual(tree_hashes(self.profile), before)
+        r = next((self.dir / "out").glob("unit-*"))
+        s = json.loads((r / "summary.json").read_text())
+        self.assertEqual(s["profile"], str(r / "profile"))
+        self.assertIn("throwaway copy", out)
+        self.assertEqual((r / "profile" / "save" / "slot1.bin").read_bytes(), b"played")   # the game wrote to the copy
+        self.assertTrue((r / "profile" / "account.uid").is_file())
+        self.assertFalse((r / "profile" / "cache").exists())
+        self.assertFalse((self.dir / "backups").exists())
 
 
 class EndToEnd(Base):

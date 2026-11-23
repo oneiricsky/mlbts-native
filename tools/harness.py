@@ -5,6 +5,11 @@
   python -I tools/harness.py ab    x.scn --a MLB_MSDF_SKIP=0 --b MLB_MSDF_SKIP=1 [--runs 2]
   python -I tools/harness.py smoke
   python -I tools/harness.py compare <run folder A> <run folder B>
+  python -I tools/harness.py restore <backup> --confirm <backup>
+
+Runs use the real profile (work/build/profile). Before each run its save, save-tx and playtime.txt are copied to
+work/harness/backups/<timestamp> (the newest 10 are kept; only folders this tool made are ever deleted); `restore` puts
+them back. --copy-profile runs on a throwaway copy in the run folder instead.
 
 A scenario is `key = value` lines (name, home, away, seed, fixed_clock, stop_after_s, stop_at_marker, dump (repeatable),
 markers). The runner gives it to the game as MLB_HARNESS=<file>, dumps go to MLB_HARNESS_OUT=<run>/dumps, and the game
@@ -21,6 +26,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -275,12 +281,72 @@ def ab_verdict(label_a, label_b, diffs_ab, diffs_repeat, marker_mismatch, times_
 
 # ---- one run -------------------------------------------------------------------------------------------------------
 
-def game_env(scn_path, dumps_dir, extra):
+PROFILE_ITEMS = ("save", "save-tx", "playtime.txt")     # the owner's progress; caches, screenshots and logs are not copied
+BACKUP_MARK = ".harness-backup"                         # only folders holding this file are ever pruned
+KEEP_BACKUPS = 10
+
+
+def real_profile():
+    return os.environ.get("MLB_HARNESS_PROFILE") or MAIN + "/work/build/profile"
+
+
+def backups_root():
+    return os.environ.get("MLB_HARNESS_BACKUPS") or os.path.join(MAIN, "work", "harness", "backups")
+
+
+def copy_items(src, dst):
+    for it in PROFILE_ITEMS:
+        s = os.path.join(src, it)
+        if os.path.isdir(s):
+            shutil.copytree(s, os.path.join(dst, it), dirs_exist_ok=True)
+        elif os.path.isfile(s):
+            shutil.copy2(s, dst)
+
+
+def prune_backups(root, keep=KEEP_BACKUPS):
+    mine = sorted(n for n in os.listdir(root) if os.path.isfile(os.path.join(root, n, BACKUP_MARK)))
+    for n in mine[:-keep]:
+        shutil.rmtree(os.path.join(root, n))
+
+
+def backup_profile(profile, tag=""):
+    """Copy save, save-tx and playtime.txt to <backups>/<timestamp>; keep the newest 10 this tool made."""
+    root = backups_root()
+    os.makedirs(root, exist_ok=True)
+    base = datetime.datetime.now().strftime("%Y%m%d-%H%M%S") + tag
+    d, n = os.path.join(root, base), 1
+    while os.path.exists(d):
+        n += 1
+        d = os.path.join(root, "%s-%d" % (base, n))
+    os.makedirs(d)
+    copy_items(profile, d)
+    with open(os.path.join(d, BACKUP_MARK), "w") as f:
+        f.write("made by tools/harness.py from %s\n" % profile)
+    prune_backups(root)
+    return d
+
+
+def restore_profile(backup, profile):
+    """Make save, save-tx and playtime.txt in `profile` match `backup` (files only; the caller made a safety backup)."""
+    for it in PROFILE_ITEMS:
+        src, dst = os.path.join(backup, it), os.path.join(profile, it)
+        if os.path.isdir(src):
+            keep = {os.path.relpath(os.path.join(b, f), src) for b, _, fs in os.walk(src) for f in fs}
+            for b, _, fs in os.walk(dst):
+                for f in fs:
+                    if os.path.relpath(os.path.join(b, f), dst) not in keep:
+                        os.remove(os.path.join(b, f))
+            shutil.copytree(src, dst, dirs_exist_ok=True)
+        elif os.path.isfile(src):
+            shutil.copy2(src, profile)
+
+
+def game_env(scn_path, dumps_dir, extra, profile):
     bench = load_tool("bench")
     common = {
         "MLB_EXEFS": MAIN + "/work/build/game/exefs",
         "MLB_ROMFS": MAIN + "/work/build/game/romfs",
-        "MLB_PROFILE": MAIN + "/work/build/profile",
+        "MLB_PROFILE": profile,
         "MLB_HARNESS": os.path.abspath(scn_path),
         "MLB_HARNESS_OUT": os.path.abspath(dumps_dir),
     }
@@ -307,21 +373,35 @@ def next_run_dir(out, name):
             n += 1
 
 
-def run_one(scn_path, scn, extra_env, exe, folder, grace, timeout_lock=1800):
+def run_one(scn_path, scn, extra_env, exe, folder, grace, timeout_lock=1800, copy_profile=False):
     """Run the game once under the lock, filling `folder`. Game-level trouble is recorded in the result, not raised."""
     dumps = os.path.join(folder, "dumps")
     os.makedirs(dumps, exist_ok=True)
     with open(scn_path, "rb") as src, open(os.path.join(folder, "scenario.scn"), "wb") as dst:
         dst.write(src.read())
-    env = game_env(scn_path, dumps, extra_env)
     limit = scn.get("stop_after_s", 60) + grace
     log_path = os.path.join(folder, "game.log")
-    res = {"name": scn["name"], "scenario": os.path.abspath(scn_path), "exe": os.path.abspath(exe),
-           "env": {k: env[k] for k in sorted(extra_env)}, "started": datetime.datetime.now().isoformat(timespec="seconds")}
+    res = {"profile": None, "backup": None, "name": scn["name"], "scenario": os.path.abspath(scn_path), "exe": os.path.abspath(exe),
+           "env": {k: extra_env[k] for k in sorted(extra_env)}, "started": datetime.datetime.now().isoformat(timespec="seconds")}
     with game_lock(lock_path(), timeout=timeout_lock):
         stray = stray_game_processes()
         if stray:
             raise HarnessError("a game process is already running without the lock: %s. Close it first." % ", ".join(stray))
+        if copy_profile:
+            profile = os.path.join(folder, "profile")
+            os.makedirs(profile)
+            copy_items(real_profile(), profile)
+            uid = os.path.join(real_profile(), "account.uid")
+            if os.path.isfile(uid):
+                shutil.copy2(uid, profile)
+            print("profile: throwaway copy %s (the real profile is not touched)" % profile, flush=True)
+        else:
+            profile = real_profile()
+            res["backup"] = backup_profile(profile)
+            nm = os.path.basename(res["backup"])
+            print("profile: REAL %s; save backup %s (undo with: restore %s --confirm %s)" % (profile, res["backup"], nm, nm), flush=True)
+        res["profile"] = profile
+        env = game_env(scn_path, dumps, extra_env, profile)
         t0 = time.time()
         proc = None
         try:
@@ -400,7 +480,7 @@ def cmd_run(a):
     scn = load_scenario(a.scenario)
     extra = dict(parse_assign(e) for e in a.env)
     folder = next_run_dir(out_root(a), scn["name"])
-    res = run_one(a.scenario, scn, extra, a.exe, folder, a.grace)
+    res = run_one(a.scenario, scn, extra, a.exe, folder, a.grace, copy_profile=a.copy_profile)
     print(summary_line(res, folder))
     problem = run_problem(res)
     if problem:
@@ -431,7 +511,7 @@ def cmd_ab(a):
             print("== %s %s" % (tag, label[side]), flush=True)
             sub = os.path.join(folder, tag)
             os.makedirs(sub)
-            res = run_one(a.scenario, scn, {**common, **sides[side]}, a.exe, sub, a.grace)
+            res = run_one(a.scenario, scn, {**common, **sides[side]}, a.exe, sub, a.grace, copy_profile=a.copy_profile)
             print("   " + summary_line(res, sub), flush=True)
             problem = run_problem(res)
             if problem:
@@ -488,13 +568,35 @@ def cmd_compare(a):
     return 1 if (diffs or ma ^ mb) else 0
 
 
+def cmd_restore(a):
+    src = a.backup if os.path.isdir(a.backup) else os.path.join(backups_root(), a.backup)
+    name = os.path.basename(os.path.normpath(src))
+    if not os.path.isfile(os.path.join(src, BACKUP_MARK)):
+        raise HarnessError("%s is not a backup made by this tool (no %s file); nothing was changed." % (src, BACKUP_MARK))
+    profile = real_profile()
+    have = [it for it in PROFILE_ITEMS if os.path.exists(os.path.join(src, it))]
+    if a.confirm != name:
+        print("This would put %s from %s back into %s, replacing what is there (a safety backup of the current state is made first)." %
+              (", ".join(have), src, profile))
+        print("To do it, run again with: --confirm %s" % name)
+        return 1
+    with game_lock(lock_path(), timeout=a.lock_wait):
+        stray = stray_game_processes()
+        if stray:
+            raise HarnessError("a game is running (%s); close it before restoring." % ", ".join(stray))
+        safety = backup_profile(profile, "-pre-restore")
+        restore_profile(src, profile)
+    print("restored %s from %s; the state before the restore is saved in %s" % (", ".join(have), src, safety))
+    return 0
+
+
 def cmd_smoke(a):
     folder = next_run_dir(out_root(a), "smoke")
     scn_path = os.path.join(folder, "smoke-scenario.scn")
     with open(scn_path, "w") as f:
         f.write(SMOKE_SCENARIO % a.seconds)
     scn = load_scenario(scn_path)
-    res = run_one(scn_path, scn, {}, a.exe, folder, a.grace)
+    res = run_one(scn_path, scn, {}, a.exe, folder, a.grace, copy_profile=a.copy_profile)
     print(summary_line(res, folder))
     fails = []
     if res["audio"] == "none":
@@ -536,6 +638,8 @@ def cmd_smoke(a):
 def add_run_options(p, grace_default=240):
     p.add_argument("--exe", default=default_exe(), help="the game (default work/build/mlb.exe in the main checkout, or MLB_BENCH_EXE)")
     p.add_argument("--out", help="output folder (default work/harness/<date>)")
+    p.add_argument("--copy-profile", action="store_true",
+                   help="run on a throwaway copy of the profile instead of the real one (default: the real profile, saves backed up first)")
     p.add_argument("--grace", type=float, default=grace_default, help="seconds allowed beyond stop_after_s before the game is killed (default %(default)s)")
 
 
@@ -559,6 +663,11 @@ def main(argv=None):
     s.add_argument("--seconds", type=int, default=100, help="stop_after_s of the smoke scenario (default 100)")
     add_run_options(s)
     s.set_defaults(fn=cmd_smoke)
+    q = sub.add_parser("restore", help="put the save files back from a backup this tool made")
+    q.add_argument("backup", help="a backup folder name (under work/harness/backups) or a path")
+    q.add_argument("--confirm", help="the backup's folder name, to confirm")
+    q.add_argument("--lock-wait", type=float, default=1800)
+    q.set_defaults(fn=cmd_restore)
     c = sub.add_parser("compare", help="compare the dumps and markers of two run folders")
     c.add_argument("a")
     c.add_argument("b")
