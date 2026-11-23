@@ -13,6 +13,7 @@
 
 #include "cfg.h"
 #include "gfx.h"
+#include "harness.h"
 #include "host.h"
 #include "nvn_api.h"
 #include "nvn_hmap.h"
@@ -334,6 +335,9 @@ static void write_texels(Cpu *c, int strided) {
     if (v && v->set_format && v->format != o->d.format) rt_fatal("nvn: WriteTexels: format-reinterpreting view not supported");
     NVN_BLOCKING();
     texels_log("WriteTexels", o, r, arg_p(c, 3), row, img);
+    // fastball dev harness: texture dump and the field_texture marker (empty macro in release builds)
+    harness_texture_write((unsigned)o->d.format, (unsigned)r->width, (unsigned)r->height, arg_p(c, 3),
+                          img * (uint64_t)(r->depth > 0 ? r->depth : 1));
     gfx_backend()->write_texels(o, v, r, arg_p(c, 3), row, img);
 }
 NVN_API(nvnTextureReadTexels) { read_texels(c, 0); }

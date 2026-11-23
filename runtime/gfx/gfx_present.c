@@ -21,6 +21,7 @@
 #include "flight.h"
 #include "fs.h"
 #include "gfx.h"
+#include "harness.h"
 #include "gfx_wsys.h"
 #include "nvn_api.h"
 #include "platform/platform.h"
@@ -765,6 +766,7 @@ static void present_image(VkImage src, VkImageLayout layout, VkFormat fmt, int w
         rt_log("gfx: present submit failed (%d)", (int)r);
     }
     g_frame++;
+    harness_frame_tick();   // fastball dev harness: the frame number in markers
     if (cap) {
         vkWaitForFences(c->device, 1, &g_fence[slot], VK_TRUE, 5000000000ull);
         vmaInvalidateAllocation(c->vma, g_cap_alloc, 0, VK_WHOLE_SIZE);

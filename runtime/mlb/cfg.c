@@ -42,6 +42,11 @@ static const CfgMeta metas[] = {
     {"GPU", "vulkan", "vulkan|null", RESTART},   // main.c: the graphics back end (gfx_null.c chooses by it)
     {"AA", "fxaa", "off|fxaa", LIVE},   // vk_aa.c: antialiasing of the 3D scene before the game lays its HUD over it
     {"AA_STRENGTH", "75", "0..100", LIVE},   // vk_aa.c: how much FXAA softens thin, sub-pixel detail
+#ifdef MLB_DEV_HARNESS
+    {"HARNESS", "", NULL, RESTART},   // harness.c: scenario file (dev builds only)
+    {"HARNESS_OUT", "", NULL, RESTART},   // harness.c: folder for dumps (default harness-out)
+    {"HARNESS_HOME", "", "0..29", RESTART}, {"HARNESS_AWAY", "", "0..29", RESTART},   // harness.c: team override
+#endif
     // TotK Recomp's rows (cfg.c @ ae30a61); the TotK-only ones are read by nothing here
     // Screen
     {"FULLSCREEN", "0", "0|1", LIVE}, {"WINDOW_SIZE", "1920x1080", NULL, LIVE},

@@ -2,8 +2,7 @@
 // dev target, not for --toolchain release builds); without it every call below is an empty macro and harness.c is empty.
 //
 // Settings (cfg.c rows, env MLB_X or --set):
-//   MLB_HARNESS=<path>      scenario file; unset = harness off (markers still log when MLB_HARNESS_MARKERS=1 is not needed:
-//                           harness_marker always logs once the harness is on)
+//   MLB_HARNESS=<path>      scenario file; harness is on when it, MLB_HARNESS_HOME or MLB_HARNESS_AWAY is set
 //   MLB_HARNESS_OUT=<dir>   where dumps go (default: harness-out beside the log)
 //   MLB_HARNESS_HOME / MLB_HARNESS_AWAY = 0..29   team override without a scenario file (a scenario key wins)
 //
