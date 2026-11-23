@@ -16,7 +16,7 @@ Everything here was measured on one PC (an i5-12400F with an RX 6700 XT), game v
 ## How it is built and measured
 
 - [How the port works](How-the-port-works): the layers, how the game's code becomes C, how graphics and frame timing work.
-- [The game binary](The-game-binary): what the game's code is made of and where things sit in it. The code is described region by region under [Game binary regions](Game-binary-regions).
+- [The game binary](The-game-binary): what the game's code is made of and where things sit in it.
 - [Dev harness and measuring](Dev-harness-and-measuring): how a run is set up, and the rules for comparing two builds.
 - [Tools and the code map](Tools-and-the-code-map): the scripts that index the code and how to rebuild them. The pages under "Game binary regions" and the game-code pages are generated from the repo skill `mlbts-game-code`; [Start here](Start-here) is the entry point for a new session.
 - [History and open questions](History-and-open-questions): what is not settled.
