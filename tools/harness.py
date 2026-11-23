@@ -1,26 +1,28 @@
 #!/usr/bin/env python3
 """Developer harness runner: unattended, repeatable game runs from a scenario file.
 
-  python -I tools/harness.py run   tools/scenarios/x.scn [--env KEY=VAL ...] [--exe PATH]
+  python -I tools/harness.py run   tools/scenarios/x.scn [--env KEY=VAL ...] [--exe PATH] [--slot NAME]
   python -I tools/harness.py ab    x.scn --a MLB_MSDF_SKIP=0 --b MLB_MSDF_SKIP=1 [--runs 2]
   python -I tools/harness.py smoke
   python -I tools/harness.py compare <run folder A> <run folder B>
   python -I tools/harness.py restore <backup> --confirm <backup>
 
-Runs use the real profile (work/build/profile). Before each run its save, save-tx and playtime.txt are copied to
-work/harness/backups/<timestamp> (the newest 10 are kept; only folders this tool made are ever deleted); `restore` puts
-them back. --copy-profile runs on a throwaway copy in the run folder instead.
+Every run goes through tools/game.py in a slot (work/runs/<slot>, default `harness`): its own copy of the exe, its own
+log and a copy of the saves, refreshed from the real profile at each run, which is so never written. `ab` compares
+dumps, not times, so it runs shared with other games (--mode exclusive for a machine to itself); it waits for its turn
+(--wait). --real-profile is the old way: the game runs on the real profile itself from the exe's folder, after its
+save, save-tx and playtime.txt were copied to work/harness/backups/<timestamp> (the newest 10 are kept; only folders
+this tool made are ever deleted), and only when no other game is live; `restore` puts a backup back.
 
 A scenario is `key = value` lines (name, home, away, seed, fixed_clock, stop_after_s, stop_at_marker, dump (repeatable),
-markers). The runner gives it to the game as MLB_HARNESS=<file>, dumps go to MLB_HARNESS_OUT=<run>/dumps, and the game
-stops itself at stop_after_s. Each run leaves, in work/harness/<date>/<name>-<n>/: game.log, dumps/, summary.json (and
-diff/ when something differs). These hold game data and are never committed.
+markers, framelog). The runner gives it to the game as MLB_HARNESS=<file>, dumps go to MLB_HARNESS_OUT=<run>/dumps in
+game.py's run folder, and the game stops itself at stop_after_s. Each run leaves, in work/harness/<date>/<name>-<n>/:
+scenario.scn and summary.json (and diff/ when something differs); summary.json names game.py's run folder, which holds
+game.out, game.log, result.json and dumps/. These hold game data and are never committed.
 
-Exit status: 0 fine, 1 a difference or a failed check, 2 the run could not happen (no audio device, lock, bad input).
-Only one game may run on the machine: every run takes the folder lock work/game.lock first (MLB_GAME_LOCK overrides).
+Exit status: 0 fine, 1 a difference or a failed check, 2 the run could not happen (no audio device, no turn, bad input).
 Tests: python -I -m unittest discover -s tools -p test_harness.py"""
 import argparse
-import contextlib
 import datetime
 import importlib.util
 import json
@@ -33,11 +35,10 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
-MAIN = os.environ.get("MLB_HARNESS_MAIN") or "D:/AI/Apps/mlbts-native"   # the main checkout holds the built game and the lock
+MAIN = os.environ.get("MLB_HARNESS_MAIN") or "D:/AI/Apps/mlbts-native"   # the main checkout holds the built game
 STALL_MS = 3000          # a single frame longer than this counts as a stall
 MIN_FPS = 30.0           # a smoke run slower than this is not sane
-MARKER = re.compile(r"\[host\] harness: marker (\S+) frame (\d+) t ([\d.]+)")
-SCENARIO_KEYS = {"name", "home", "away", "seed", "fixed_clock", "stop_after_s", "stop_at_marker", "dump", "markers"}
+SCENARIO_KEYS = {"name", "home", "away", "seed", "fixed_clock", "stop_after_s", "stop_at_marker", "dump", "markers", "framelog"}
 SMOKE_SCENARIO = """name = smoke
 home = 0
 away = 1
@@ -62,6 +63,10 @@ def load_tool(name):
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     return mod
+
+
+game = load_tool("game")   # tools/game.py: slots, turns, the game's process
+bench = load_tool("bench")
 
 
 # ---- scenario ----------------------------------------------------------------------------------------------------
@@ -114,60 +119,12 @@ def load_scenario(path):
     return s
 
 
-# ---- the one-game-at-a-time lock --------------------------------------------------------------------------------
-
-def lock_path():
-    return os.environ.get("MLB_GAME_LOCK") or os.path.join(MAIN, "work", "game.lock")
-
-
-@contextlib.contextmanager
-def game_lock(path, timeout=1800, poll=10):
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    start = time.time()
-    announced = False
-    while True:
-        try:
-            os.mkdir(path)
-            break
-        except FileExistsError:
-            if time.time() - start >= timeout:
-                raise HarnessError("%s is held by another session (waited %d s); the game may only run once at a time. "
-                                   "If nothing is running, remove the folder by hand." % (path, time.time() - start))
-            if not announced:
-                print("waiting for %s (another session has the game)" % path, flush=True)
-                announced = True
-            time.sleep(poll)
-    try:
-        yield
-    finally:
-        with contextlib.suppress(OSError):
-            os.rmdir(path)
-
-
-def stray_game_processes():
-    if os.name != "nt":
-        return []
-    out = subprocess.run(["tasklist", "/FO", "CSV", "/NH"], capture_output=True, text=True).stdout
-    found = []
-    for line in out.splitlines():
-        parts = [p.strip('"') for p in line.split('","')]
-        if len(parts) > 1 and re.fullmatch(r"mlb\w*\.exe", parts[0].strip('"').lower()):
-            found.append("%s (pid %s)" % (parts[0].strip('"'), parts[1]))
-    return found
-
-
 # ---- log reading ---------------------------------------------------------------------------------------------------
-
 def parse_markers(log):
-    return [(m.group(1), int(m.group(2)), float(m.group(3))) for m in MARKER.finditer(log)]
+    return [(m.group(1), int(m.group(2)), float(m.group(3))) for m in game.MARKER_LINE.finditer(log)]
 
 
-def audio_state(log):
-    if "audout: no output device" in log:
-        return "none"
-    if "audout: WASAPI device" in log:
-        return "ok"
-    return "unknown"
+audio_state = game.audio_state
 
 
 def marker_fps(markers):
@@ -341,8 +298,9 @@ def restore_profile(backup, profile):
             shutil.copy2(src, profile)
 
 
-def game_env(scn_path, dumps_dir, extra, profile):
-    bench = load_tool("bench")
+def run_env(scn_path, dumps_dir, extra, profile):
+    """The whole environment of a --real-profile run: measured without diagnostics, the game from its own folder on
+    the real profile."""
     common = {
         "MLB_EXEFS": MAIN + "/work/build/game/exefs",
         "MLB_ROMFS": MAIN + "/work/build/game/romfs",
@@ -373,35 +331,79 @@ def next_run_dir(out, name):
             n += 1
 
 
-def run_one(scn_path, scn, extra_env, exe, folder, grace, timeout_lock=1800, copy_profile=False):
-    """Run the game once under the lock, filling `folder`. Game-level trouble is recorded in the result, not raised."""
-    dumps = os.path.join(folder, "dumps")
-    os.makedirs(dumps, exist_ok=True)
+def harness_env(extra):
+    """What a slot run adds to the environment (the rest is game.py's): no setting that would change the picture or
+    take screenshots, the sampler off and MLB_TRACE=perf, then the caller's settings. None removes a variable."""
+    over = bench.overlay({})
+    over.update(extra)
+    return over
+
+
+def run_one(scn_path, scn, extra_env, exe, folder, grace, slot="harness", real=False, mode="shared", wait=1800):
+    """Run the game once, filling `folder`. Game-level trouble is recorded in the result, not raised.
+    Default: through tools/game.py in the slot, on a copy of the real saves. real=True: the old way, on the real
+    profile itself after a backup, alone on the machine (_run_real)."""
+    os.makedirs(folder, exist_ok=True)
     with open(scn_path, "rb") as src, open(os.path.join(folder, "scenario.scn"), "wb") as dst:
         dst.write(src.read())
     limit = scn.get("stop_after_s", 60) + grace
-    log_path = os.path.join(folder, "game.log")
     res = {"profile": None, "backup": None, "name": scn["name"], "scenario": os.path.abspath(scn_path), "exe": os.path.abspath(exe),
            "env": {k: extra_env[k] for k in sorted(extra_env)}, "started": datetime.datetime.now().isoformat(timespec="seconds")}
-    with game_lock(lock_path(), timeout=timeout_lock):
-        stray = stray_game_processes()
-        if stray:
-            raise HarnessError("a game process is already running without the lock: %s. Close it first." % ", ".join(stray))
-        if copy_profile:
-            profile = os.path.join(folder, "profile")
-            os.makedirs(profile)
-            copy_items(real_profile(), profile)
-            uid = os.path.join(real_profile(), "account.uid")
-            if os.path.isfile(uid):
-                shutil.copy2(uid, profile)
-            print("profile: throwaway copy %s (the real profile is not touched)" % profile, flush=True)
-        else:
-            profile = real_profile()
-            res["backup"] = backup_profile(profile)
-            nm = os.path.basename(res["backup"])
-            print("profile: REAL %s; save backup %s (undo with: restore %s --confirm %s)" % (profile, res["backup"], nm, nm), flush=True)
+    if real:
+        code, hung, log_path, dumps = _run_real(scn_path, extra_env, exe, folder, limit, res, wait)
+        with open(log_path, encoding="utf-8", errors="replace") as f:
+            log = f.read()
+        markers, audio, fatal = parse_markers(log), audio_state(log), "FATAL:" in log
+        perf = load_tool("perf_summary").summarize(log_path)
+        res.update({"audio": audio, "fatal": fatal, "markers": markers, "dumps_dir": dumps,
+                    "dumps": {n: os.path.getsize(p) for n, p in sorted(list_files(dumps).items())}})
+        how = "killed"
+    else:
+        game.prepare(slot, exe=exe)          # the slot is made once; its exe follows the build
+        try:
+            r = game.run(slot, env=harness_env(extra_env), scenario=scn_path, mode=mode, wait=wait, timeout=limit,
+                         real_profile=real_profile())
+        except game.NoTurn as e:
+            raise HarnessError("no turn for a run in slot %s: %s" % (slot, e))
+        with open(r["out"], encoding="utf-8", errors="replace") as f:   # what the game printed: the same lines as mlb.log
+            text = f.read()
+        res.update({"profile": os.path.join(game.slot_path(slot), "profile"), "slot_run": r["run_dir"], "log": r["log"],
+                    "dumps_dir": os.path.join(r["run_dir"], "dumps"), "dumps": r.get("dumps", {}), "out": r["out"],
+                    "exit_code": r["exit_code"], "seconds": r["seconds"], "audio": audio_state(text),
+                    "markers": parse_markers(text), "fatal": "FATAL:" in text,
+                    "window_title": r["window_title"], "contended": r["contended"],
+                    "first_run_of_slot": r["first_run_of_slot"]})
+        code, hung, how = r["exit_code"], r["ended"] != "by itself", r["ended"]
+        perf = load_tool("perf_summary").summarize(r["out"])
+    res.update({"marker_fps": marker_fps(res["markers"]), "perf": perf, "hung": hung})
+    res["worst_frame_ms"] = (perf.get("extra") or {}).get("worst_frame_ms")
+    if hung:
+        res["exit"] = "did not stop by itself within %d s; %s" % (limit, "closed on request" if how == "after a close request" else "killed")
+    elif code != 0 or res["fatal"]:
+        res["exit"] = "crashed (exit code %s%s)" % (code, ", FATAL line in the log" if res["fatal"] else "")
+    else:
+        res["exit"] = "stopped by itself"
+    with open(os.path.join(folder, "summary.json"), "w") as f:
+        json.dump(res, f, indent=1)
+        f.write("\n")
+    return res
+
+
+def _run_real(scn_path, extra_env, exe, folder, limit, res, wait):
+    """The old way, behind --real-profile: the game runs on the real profile itself from its own folder, after its
+    saves were backed up, and only when no other game is live. Returns (exit code, whether it had to be killed, the
+    log, the dumps folder)."""
+    profile = real_profile()
+    dumps, log_path = os.path.join(folder, "dumps"), os.path.join(folder, "game.log")
+    os.makedirs(dumps, exist_ok=True)
+    with game.admission("exclusive", wait=wait) as turn:
+        if not turn.ok:
+            raise HarnessError("no turn for a run on the real profile: %s" % turn.why)
+        res["backup"] = backup_profile(profile)
+        nm = os.path.basename(res["backup"])
+        print("profile: REAL %s; save backup %s (undo with: restore %s --confirm %s)" % (profile, res["backup"], nm, nm), flush=True)
         res["profile"] = profile
-        env = game_env(scn_path, dumps, extra_env, profile)
+        env = run_env(scn_path, dumps, extra_env, profile)
         t0 = time.time()
         proc = None
         try:
@@ -418,29 +420,8 @@ def run_one(scn_path, scn, extra_env, exe, folder, grace, timeout_lock=1800, cop
             if proc is not None and proc.poll() is None:
                 proc.kill()
                 proc.wait()
-            end = time.time() + 20
-            while stray_game_processes() and time.time() < end:
-                time.sleep(1)
-    code = proc.returncode
-    with open(log_path, encoding="utf-8", errors="replace") as f:
-        log = f.read()
-    markers = parse_markers(log)
-    res.update({"exit_code": code, "seconds": round(time.time() - t0, 1), "audio": audio_state(log), "markers": markers,
-                "marker_fps": marker_fps(markers), "fatal": "FATAL:" in log, "hung": hung})
-    if hung:
-        res["exit"] = "did not stop by itself within %d s; killed" % limit
-    elif code != 0 or res["fatal"]:
-        res["exit"] = "crashed (exit code %s%s)" % (code, ", FATAL line in the log" if res["fatal"] else "")
-    else:
-        res["exit"] = "stopped by itself"
-    perf = load_tool("perf_summary").summarize(log_path)
-    res["perf"] = perf
-    res["worst_frame_ms"] = (perf.get("extra") or {}).get("worst_frame_ms")
-    res["dumps"] = {n: os.path.getsize(p) for n, p in sorted(list_files(dumps).items())}
-    with open(os.path.join(folder, "summary.json"), "w") as f:
-        json.dump(res, f, indent=1)
-        f.write("\n")
-    return res
+    res.update({"exit_code": proc.returncode, "seconds": round(time.time() - t0, 1)})
+    return proc.returncode, hung, log_path, dumps
 
 
 NO_AUDIO = ("no audio output device: the game's log says 'audout: no output device', so it sits at the loading screen and "
@@ -480,7 +461,7 @@ def cmd_run(a):
     scn = load_scenario(a.scenario)
     extra = dict(parse_assign(e) for e in a.env)
     folder = next_run_dir(out_root(a), scn["name"])
-    res = run_one(a.scenario, scn, extra, a.exe, folder, a.grace, copy_profile=a.copy_profile)
+    res = run_one(a.scenario, scn, extra, a.exe, folder, a.grace, slot=a.slot, real=a.real_profile, mode=a.mode, wait=a.wait)
     print(summary_line(res, folder))
     problem = run_problem(res)
     if problem:
@@ -511,14 +492,15 @@ def cmd_ab(a):
             print("== %s %s" % (tag, label[side]), flush=True)
             sub = os.path.join(folder, tag)
             os.makedirs(sub)
-            res = run_one(a.scenario, scn, {**common, **sides[side]}, a.exe, sub, a.grace, copy_profile=a.copy_profile)
+            res = run_one(a.scenario, scn, {**common, **sides[side]}, a.exe, sub, a.grace, slot=a.slot, real=a.real_profile,
+                      mode=a.mode, wait=a.wait)
             print("   " + summary_line(res, sub), flush=True)
             problem = run_problem(res)
             if problem:
                 print("FAIL: " + problem)
                 return 2 if res["audio"] == "none" else 1
             results[side].append(res)
-    dumps = lambda side, n: os.path.join(folder, "%s-%d" % (side, n), "dumps")
+    dumps = lambda side, n: results[side][n - 1]["dumps_dir"]   # slot runs keep their dumps in game.py's run folder
     diffs_ab = compare_dumps(dumps("a", 1), dumps("b", 1))
     repeat = []
     for side in ("a", "b"):
@@ -542,12 +524,14 @@ def cmd_ab(a):
 
 
 def folder_view(path):
-    dumps = os.path.join(path, "dumps")
+    """(the dumps folder, the summary) of a run folder: an old one with its own dumps/, or a slot run whose dumps are
+    in game.py's run folder."""
     summary = os.path.join(path, "summary.json")
     res = None
     if os.path.isfile(summary):
         with open(summary) as f:
             res = json.load(f)
+    dumps = (res or {}).get("dumps_dir") or os.path.join(path, "dumps")
     return (dumps if os.path.isdir(dumps) else path), res
 
 
@@ -580,10 +564,9 @@ def cmd_restore(a):
               (", ".join(have), src, profile))
         print("To do it, run again with: --confirm %s" % name)
         return 1
-    with game_lock(lock_path(), timeout=a.lock_wait):
-        stray = stray_game_processes()
-        if stray:
-            raise HarnessError("a game is running (%s); close it before restoring." % ", ".join(stray))
+    with game.admission("exclusive", wait=a.wait) as turn:
+        if not turn.ok:
+            raise HarnessError("a game is running, so the saves are not restored: %s" % turn.why)
         safety = backup_profile(profile, "-pre-restore")
         restore_profile(src, profile)
     print("restored %s from %s; the state before the restore is saved in %s" % (", ".join(have), src, safety))
@@ -596,7 +579,7 @@ def cmd_smoke(a):
     with open(scn_path, "w") as f:
         f.write(SMOKE_SCENARIO % a.seconds)
     scn = load_scenario(scn_path)
-    res = run_one(scn_path, scn, {}, a.exe, folder, a.grace, copy_profile=a.copy_profile)
+    res = run_one(scn_path, scn, {}, a.exe, folder, a.grace, slot=a.slot, real=a.real_profile, mode=a.mode, wait=a.wait)
     print(summary_line(res, folder))
     fails = []
     if res["audio"] == "none":
@@ -620,7 +603,7 @@ def cmd_smoke(a):
     elif fps is None and res["audio"] == "ok" and not res["hung"] and not res["exit"].startswith("crashed"):
         fails.append("no frame rate could be worked out (needs two marker lines or one perf line)")
     texture = [n for n, size in res["dumps"].items() if size > 0]
-    if texture and all(not any(read_head(os.path.join(folder, "dumps", n))) for n in texture):
+    if texture and all(not any(read_head(os.path.join(res["dumps_dir"], n))) for n in texture):
         fails.append("the dumped texture is all zeros")
     if not texture and res["audio"] == "ok" and not res["hung"]:
         fails.append("the field texture was not written (no non-empty file in dumps/)")
@@ -628,7 +611,7 @@ def cmd_smoke(a):
         print("\nSMOKE FAIL:")
         for f in fails:
             print("  FAIL: " + f)
-        print("Log kept in %s" % os.path.join(folder, "game.log"))
+        print("Log kept in %s" % res["log"])
         return 2 if res["audio"] == "none" else 1
     print("\nSMOKE PASS: audio ok, no crash, no stall (worst frame %s ms), %s fps, field texture written." %
           ("n/a" if worst is None else "%.0f" % worst, "n/a" if fps is None else "%.1f" % fps))
@@ -638,9 +621,14 @@ def cmd_smoke(a):
 def add_run_options(p, grace_default=240):
     p.add_argument("--exe", default=default_exe(), help="the game (default work/build/mlb.exe in the main checkout, or MLB_BENCH_EXE)")
     p.add_argument("--out", help="output folder (default work/harness/<date>)")
-    p.add_argument("--copy-profile", action="store_true",
-                   help="run on a throwaway copy of the profile instead of the real one (default: the real profile, saves backed up first)")
-    p.add_argument("--grace", type=float, default=grace_default, help="seconds allowed beyond stop_after_s before the game is killed (default %(default)s)")
+    p.add_argument("--slot", default="harness", help="the tools/game.py slot the runs go through (default %(default)s)")
+    p.add_argument("--mode", choices=("shared", "exclusive"), default="shared",
+                   help="shared: run beside other games (default; this tool compares dumps, not times); exclusive: only with no game live")
+    p.add_argument("--wait", type=float, default=1800, help="seconds to wait for a turn (default %(default)s)")
+    p.add_argument("--real-profile", action="store_true",
+                   help="the old way: run on the real profile itself from the exe's folder, saves backed up first, only with no game live")
+    p.add_argument("--grace", type=float, default=grace_default,
+                   help="seconds allowed beyond stop_after_s before the game is asked to close (default %(default)s)")
 
 
 def main(argv=None):
@@ -666,7 +654,7 @@ def main(argv=None):
     q = sub.add_parser("restore", help="put the save files back from a backup this tool made")
     q.add_argument("backup", help="a backup folder name (under work/harness/backups) or a path")
     q.add_argument("--confirm", help="the backup's folder name, to confirm")
-    q.add_argument("--lock-wait", type=float, default=1800)
+    q.add_argument("--wait", type=float, default=1800, help="seconds to wait until no game is live")
     q.set_defaults(fn=cmd_restore)
     c = sub.add_parser("compare", help="compare the dumps and markers of two run folders")
     c.add_argument("a")
@@ -679,7 +667,7 @@ def main(argv=None):
         print("ERROR: %s" % e)
         return 2
     except KeyboardInterrupt:
-        print("interrupted; the game was stopped and the lock released")
+        print("interrupted; the game was stopped")
         return 2
 
 

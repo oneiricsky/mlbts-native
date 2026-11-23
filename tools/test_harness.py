@@ -4,14 +4,15 @@
   python -I -m unittest discover -s tools -p test_harness.py
 
 The fake game reads the scenario named by MLB_HARNESS, writes a dump into MLB_HARNESS_OUT and prints the log lines the
-real runtime prints (audout, marker lines, perf lines). FAKE_MODE picks a failure: nodev, crash, hang, stall, slow."""
+real runtime prints (audout, marker lines, perf lines). FAKE_MODE picks a failure: nodev, crash, hang, stall, slow.
+Runs go through tools/game.py in a slot of a temporary folder (MLB_GAME_ROOT); games other sessions run are left out
+of the count, so they cannot change these tests."""
 import importlib.util
 import io
 import json
 import os
 import sys
 import tempfile
-import threading
 import time
 import unittest
 from contextlib import redirect_stdout
@@ -79,12 +80,11 @@ class Base(unittest.TestCase):
         self.addCleanup(self.tmp.cleanup)
         self.dir = Path(self.tmp.name)
         self.fake = self.dir / "fake_game.py"
-        self.fake.write_text(FAKE)
+        self.fake.write_text(FAKE, newline="\n")
         self.scn = self.dir / "unit.scn"
         self.scn.write_text(SCENARIO)
-        self.lock = self.dir / "game.lock"
-        os.environ["MLB_GAME_LOCK"] = str(self.lock)
-        self.addCleanup(os.environ.pop, "MLB_GAME_LOCK", None)
+        os.environ["MLB_GAME_ROOT"] = str(self.dir)                 # slots and markers live in the temporary folder
+        self.addCleanup(os.environ.pop, "MLB_GAME_ROOT", None)
         self.profile = self.dir / "profile"
         (self.profile / "save").mkdir(parents=True)
         (self.profile / "save-tx").mkdir()
@@ -98,9 +98,9 @@ class Base(unittest.TestCase):
         os.environ["MLB_HARNESS_BACKUPS"] = str(self.dir / "backups")
         self.addCleanup(os.environ.pop, "MLB_HARNESS_PROFILE", None)
         self.addCleanup(os.environ.pop, "MLB_HARNESS_BACKUPS", None)
-        real = h.stray_game_processes     # tasklist takes about 2 s; the fake game is not an mlb*.exe anyway
-        h.stray_game_processes = lambda: []
-        self.addCleanup(setattr, h, "stray_game_processes", real)
+        real = h.game.live_source                 # games other sessions run right now must not count in these tests
+        h.game.live_source = lambda: []
+        self.addCleanup(setattr, h.game, "live_source", real)
 
     def run_quiet(self, argv):
         buf = io.StringIO()
@@ -116,6 +116,9 @@ class Base(unittest.TestCase):
     def common(self, *more):
         return ["--exe", str(self.fake), "--out", str(self.dir / "out"), "--grace", "10", *more]
 
+    def slot(self, name="harness"):
+        return Path(h.game.slot_path(name))
+
 
 class ScenarioParsing(Base):
     def test_reads_every_key_and_repeated_dump(self):
@@ -125,6 +128,10 @@ class ScenarioParsing(Base):
         self.assertEqual(s["stop_after_s"], 5.0)
         self.assertEqual(s["dump"], ["texture:fmt=0x25,size=512x512", "texture:fmt=0x26,size=64x64"])
         self.assertEqual(s["markers"], "boot,inning")
+
+    def test_framelog_is_a_known_key_and_an_unknown_one_is_kept(self):
+        s = h.parse_scenario("name = x\nframelog = frames.txt\nfuture_key = 9\n")
+        self.assertEqual((s["framelog"], s["extra"]), ("frames.txt", {"future_key": "9"}))
 
     def test_team_out_of_range_is_refused(self):
         with self.assertRaisesRegex(h.ScenarioError, "home.*0.*29"):
@@ -137,33 +144,6 @@ class ScenarioParsing(Base):
     def test_fixed_clock_must_be_0_or_1(self):
         with self.assertRaises(h.ScenarioError):
             h.parse_scenario("fixed_clock = 2\n")
-
-    def test_unknown_key_is_kept_not_fatal(self):
-        s = h.parse_scenario("name = x\nfuture_key = 9\n")
-        self.assertEqual(s["extra"], {"future_key": "9"})
-
-
-class Lock(Base):
-    def test_second_taker_waits_then_times_out_with_clear_message(self):
-        with h.game_lock(str(self.lock), timeout=5, poll=0.05):
-            with self.assertRaisesRegex(h.HarnessError, "game.lock.*held"):
-                with h.game_lock(str(self.lock), timeout=0.2, poll=0.05):
-                    pass
-        self.assertFalse(self.lock.exists())
-
-    def test_released_on_exception(self):
-        with self.assertRaises(RuntimeError):
-            with h.game_lock(str(self.lock), timeout=1, poll=0.05):
-                raise RuntimeError("boom")
-        self.assertFalse(self.lock.exists())
-
-    def test_waits_for_a_holder_that_lets_go(self):
-        self.lock.mkdir()
-        threading.Timer(0.3, self.lock.rmdir).start()
-        t = time.time()
-        with h.game_lock(str(self.lock), timeout=5, poll=0.05):
-            self.assertGreaterEqual(time.time() - t, 0.25)
-        self.assertFalse(self.lock.exists())
 
 
 class LogParsing(unittest.TestCase):
@@ -196,9 +176,7 @@ class DumpCompare(Base):
         x = bytearray(1024)
         y = bytearray(1024)
         y[7] = 1
-        a = self.make("t_32x32.raw", bytes(x), "a")
-        b = self.make("t_32x32.raw", bytes(y), "b")
-        diffs = h.compare_dumps(a, b)
+        diffs = h.compare_dumps(self.make("t_32x32.raw", bytes(x), "a"), self.make("t_32x32.raw", bytes(y), "b"))
         self.assertEqual(len(diffs), 1)
         self.assertEqual((diffs[0]["file"], diffs[0]["kind"], diffs[0]["bytes_differ"]), ("t_32x32.raw", "content", 1))
 
@@ -217,8 +195,7 @@ class DumpCompare(Base):
         a = self.make("t_32x32.raw", bytes(x), "a")
         b = self.make("t_32x32.raw", bytes(y), "b")
         png = self.dir / "d.png"
-        n = h.write_diff_image(a / "t_32x32.raw", b / "t_32x32.raw", png)
-        self.assertEqual(n, 1)
+        self.assertEqual(h.write_diff_image(a / "t_32x32.raw", b / "t_32x32.raw", png), 1)
         im = Image.open(png).convert("L")
         self.assertEqual(im.size, (32, 32))
         self.assertGreater(im.getpixel((1, 1)), 0)
@@ -227,20 +204,16 @@ class DumpCompare(Base):
 
 class Verdict(unittest.TestCase):
     def test_same_says_identical(self):
-        text = h.ab_verdict("MLB_X=0", "MLB_X=1", [], [], [], {}, {})
-        self.assertIn("identical", text.lower())
+        self.assertIn("identical", h.ab_verdict("MLB_X=0", "MLB_X=1", [], [], [], {}, {}).lower())
 
     def test_difference_names_files(self):
-        d = [{"file": "t.raw", "kind": "content", "bytes_differ": 12}]
-        text = h.ab_verdict("MLB_X=0", "MLB_X=1", d, [], [], {}, {})
-        self.assertIn("DIFFERENT", text)
-        self.assertIn("t.raw", text)
-        self.assertIn("12", text)
+        text = h.ab_verdict("MLB_X=0", "MLB_X=1", [{"file": "t.raw", "kind": "content", "bytes_differ": 12}], [], [], {}, {})
+        for word in ("DIFFERENT", "t.raw", "12"):
+            self.assertIn(word, text)
 
     def test_noise_between_repeats_is_called_out(self):
         d = [{"file": "t.raw", "kind": "content", "bytes_differ": 3}]
-        text = h.ab_verdict("a", "b", d, d, [], {}, {})
-        self.assertIn("not repeatable", text.lower())
+        self.assertIn("not repeatable", h.ab_verdict("a", "b", d, d, [], {}, {}).lower())
 
     def test_marker_sets_that_differ_are_a_difference(self):
         text = h.ab_verdict("a", "b", [], [], ["inning"], {}, {})
@@ -251,7 +224,7 @@ class Verdict(unittest.TestCase):
 def tree_hashes(root):
     import hashlib
     out = {}
-    for base, _, names in os.walk(root):
+    for base, _dirs, names in os.walk(root):
         for n in names:
             p = os.path.join(base, n)
             out[os.path.relpath(p, root)] = hashlib.sha256(Path(p).read_bytes()).hexdigest()
@@ -259,12 +232,39 @@ def tree_hashes(root):
 
 
 class Profile(Base):
-    def test_default_run_uses_real_profile_and_backs_up_saves_first(self):
+    def test_a_run_goes_through_a_slot_and_never_writes_the_real_profile(self):
         before = tree_hashes(self.profile)
         code, out = self.run_quiet(["run", str(self.scn), *self.common()])
         self.assertEqual(code, 0, out)
         s = json.loads(next((self.dir / "out").glob("unit-*")).joinpath("summary.json").read_text())
-        self.assertEqual(s["profile"], str(self.profile))
+        slot = self.slot()
+        self.assertEqual(Path(s["profile"]), slot / "profile")
+        self.assertIsNone(s["backup"])                                            # nothing to back up: the real profile is not used
+        self.assertEqual((slot / "mlb_harness.exe").read_bytes(), FAKE.encode())  # the exe of --exe, copied and renamed
+        self.assertEqual(Path(s["slot_run"]), slot / "run-1")
+        for f in ("game.out", "env.json", "result.json"):                         # game.log is the real game's; a stand-in prints
+            self.assertTrue((slot / "run-1" / f).is_file(), f)
+        self.assertEqual(Path(s["dumps_dir"]), slot / "run-1" / "dumps")
+        self.assertEqual((slot / "run-1" / "dumps" / "texture_0x25_32x32.raw").stat().st_size, 1024)
+        self.assertEqual(s["ended"] if "ended" in s else json.loads((slot / "run-1" / "result.json").read_text())["ended"],
+                         "by itself")
+        self.assertEqual((slot / "profile" / "playtime.txt").read_text(), "123more")    # the game wrote into the copy
+        self.assertEqual(tree_hashes(self.profile), before)                        # and not into the real one
+        self.assertTrue(Path(h.game.marker_path("harness")).is_file())             # the slot keeps its permit
+        self.assertFalse((self.dir / "backups").exists())
+
+    def test_the_second_run_of_the_slot_starts_again_from_the_real_saves(self):
+        self.run_quiet(["run", str(self.scn), *self.common()])
+        self.run_quiet(["run", str(self.scn), *self.common()])
+        self.assertTrue((self.slot() / "run-2").is_dir())
+        self.assertEqual((self.slot() / "profile" / "playtime.txt").read_text(), "123more")   # reset, then written once
+
+    def test_real_profile_run_writes_the_real_profile_after_a_backup(self):
+        before = tree_hashes(self.profile)
+        code, out = self.run_quiet(["run", str(self.scn), *self.common("--real-profile")])
+        self.assertEqual(code, 0, out)
+        s = json.loads(next((self.dir / "out").glob("unit-*")).joinpath("summary.json").read_text())
+        self.assertEqual(Path(s["profile"]), self.profile)
         self.assertIn("profile: REAL", out)
         self.assertIn(s["backup"], out)
         b = Path(s["backup"])
@@ -273,16 +273,29 @@ class Profile(Base):
         self.assertTrue((b / "save-tx" / "tx.bin").is_file())
         self.assertFalse((b / "cache").exists())                                      # caches are not copied
         self.assertNotEqual(tree_hashes(self.profile), before)                       # the game did write to the real profile
+        self.assertFalse(self.slot().exists())                                        # no slot in the old way
+
+    def test_real_profile_run_waits_until_no_game_is_live(self):
+        h.game.live_source = lambda: [(4242, "D:/elsewhere/mlb.exe", None)]           # another session's game
+        code, out = self.run_quiet(["run", str(self.scn), *self.common("--real-profile", "--wait", "0")])
+        self.assertEqual((code, self.slot().exists()), (2, False))
+        self.assertIn("no turn for a run on the real profile", out)
+        self.assertIn("mlb.exe (pid 4242)", out)
 
     def test_restore_puts_hashes_back(self):
         before = tree_hashes(self.profile)
-        self.run_quiet(["run", str(self.scn), *self.common()])
+        self.run_quiet(["run", str(self.scn), *self.common("--real-profile")])
         self.assertNotEqual(tree_hashes(self.profile), before)
         name = next(p.name for p in (self.dir / "backups").iterdir())
         code, out = self.run_quiet(["restore", name])
         self.assertEqual(code, 1)                                                    # not confirmed: changes nothing
         self.assertIn("--confirm " + name, out)
         self.assertNotEqual(tree_hashes(self.profile), before)
+        h.game.live_source = lambda: [(4242, "D:/elsewhere/mlb.exe", None)]           # a game is running: not now
+        code, out = self.run_quiet(["restore", name, "--confirm", name, "--wait", "0"])
+        self.assertEqual(code, 2)
+        self.assertIn("a game is running", out)
+        h.game.live_source = lambda: []
         code, out = self.run_quiet(["restore", name, "--confirm", name])
         self.assertEqual(code, 0, out)
         after = tree_hashes(self.profile)
@@ -290,7 +303,6 @@ class Profile(Base):
             self.assertEqual(after.get(k), v, k)
         self.assertNotIn(os.path.join("save", "new.bin"), after)                     # a file made by the run is removed
         self.assertTrue(any("pre-restore" in p.name for p in (self.dir / "backups").iterdir()))
-        self.assertFalse(self.lock.exists())
 
     def test_restore_refuses_a_folder_this_tool_did_not_make(self):
         (self.dir / "backups" / "mine").mkdir(parents=True)
@@ -313,40 +325,29 @@ class Profile(Base):
         self.assertNotIn("20200101-000000", ours)
         self.assertIn("20200101-000012", ours)
 
-    def test_copy_profile_leaves_the_real_one_untouched(self):
-        before = tree_hashes(self.profile)
-        code, out = self.run_quiet(["run", str(self.scn), *self.common("--copy-profile")])
-        self.assertEqual(code, 0, out)
-        self.assertEqual(tree_hashes(self.profile), before)
-        r = next((self.dir / "out").glob("unit-*"))
-        s = json.loads((r / "summary.json").read_text())
-        self.assertEqual(s["profile"], str(r / "profile"))
-        self.assertIn("throwaway copy", out)
-        self.assertEqual((r / "profile" / "save" / "slot1.bin").read_bytes(), b"played")   # the game wrote to the copy
-        self.assertTrue((r / "profile" / "account.uid").is_file())
-        self.assertFalse((r / "profile" / "cache").exists())
-        self.assertFalse((self.dir / "backups").exists())
-
 
 class EndToEnd(Base):
+    def summary(self, n=0):
+        folder = sorted((self.dir / "out").glob("unit-*"))[n]
+        return folder, json.loads(folder.joinpath("summary.json").read_text())
+
     def test_run_collects_log_dump_and_summary(self):
         code, out = self.run_quiet(["run", str(self.scn), *self.common()])
         self.assertEqual(code, 0, out)
-        runs = sorted((self.dir / "out").glob("unit-*"))
-        self.assertEqual(len(runs), 1)
-        r = runs[0]
-        self.assertTrue((r / "game.log").is_file())
-        self.assertEqual((r / "dumps" / "texture_0x25_32x32.raw").stat().st_size, 1024)
-        s = json.loads((r / "summary.json").read_text())
-        self.assertEqual(s["audio"], "ok")
-        self.assertEqual([m[0] for m in s["markers"]], ["boot", "inning"])
-        self.assertEqual(s["exit"], "stopped by itself")
-        self.assertFalse(self.lock.exists())
+        folder, s = self.summary()
+        self.assertTrue(folder.joinpath("scenario.scn").is_file())
+        self.assertEqual((s["audio"], [m[0] for m in s["markers"]], s["exit"]), ("ok", ["boot", "inning"], "stopped by itself"))
+        self.assertEqual({n: (Path(s["dumps_dir"], n).stat().st_size, size) for n, size in s["dumps"].items()},
+                         {"texture_0x25_32x32.raw": (1024, 1024)})
+        self.assertIn("[host] harness: marker boot", Path(s["out"]).read_text())
+        self.assertFalse(s["hung"])
+        self.assertIsNone(s["window_title"])
 
     def test_run_numbers_do_not_collide(self):
         self.run_quiet(["run", str(self.scn), *self.common()])
         self.run_quiet(["run", str(self.scn), *self.common()])
         self.assertEqual(len(list((self.dir / "out").glob("unit-*"))), 2)
+        self.assertTrue((self.slot() / "run-2" / "result.json").is_file())             # game.py numbers them too
 
     def test_no_audio_device_is_reported_plainly(self):
         os.environ["FAKE_MODE"] = "nodev"
@@ -354,9 +355,8 @@ class EndToEnd(Base):
         code, out = self.run_quiet(["run", str(self.scn), *self.common()])
         self.assertNotEqual(code, 0)
         self.assertIn("no audio output device", out)
-        self.assertFalse(self.lock.exists())
 
-    def test_hang_is_killed_and_lock_freed(self):
+    def test_hang_is_asked_to_close_and_then_killed(self):
         os.environ["FAKE_MODE"] = "hang"
         self.addCleanup(os.environ.pop, "FAKE_MODE", None)
         self.scn.write_text(SCENARIO.replace("stop_after_s = 5", "stop_after_s = 1"))
@@ -364,13 +364,13 @@ class EndToEnd(Base):
         code, out = self.run_quiet(["run", str(self.scn), "--exe", str(self.fake), "--out", str(self.dir / "out"), "--grace", "1"])
         self.assertLess(time.time() - t, 30)
         self.assertNotEqual(code, 0)
-        self.assertIn("did not stop", out)
-        self.assertFalse(self.lock.exists())
+        self.assertIn("did not stop by itself within 2 s; killed", out)
+        self.assertEqual(h.game.slot_is_live("harness"), [])
 
     def test_env_reaches_the_game(self):
         code, out = self.run_quiet(["run", str(self.scn), *self.common("--env", "MLB_X=1")])
-        r = next((self.dir / "out").glob("unit-*"))
-        self.assertEqual((r / "dumps" / "texture_0x25_32x32.raw").read_bytes()[5], 5 ^ 0xFF)
+        _folder, s = self.summary()
+        self.assertEqual(Path(s["dumps_dir"], "texture_0x25_32x32.raw").read_bytes()[5], 5 ^ 0xFF)
 
     def test_ab_same_setting_is_identical_and_exits_zero(self):
         code, out = self.run_quiet(["ab", str(self.scn), "--a", "MLB_X=0", "--b", "MLB_X=0", *self.common()])
@@ -381,20 +381,35 @@ class EndToEnd(Base):
         code, out = self.run_quiet(["ab", str(self.scn), "--a", "MLB_X=0", "--b", "MLB_X=1", *self.common()])
         self.assertEqual(code, 1, out)
         self.assertIn("DIFFERENT", out)
-        pngs = list((self.dir / "out").rglob("*.png"))
-        self.assertEqual(len(pngs), 1, pngs)
-        self.assertFalse(self.lock.exists())
+        self.assertEqual(len(list((self.dir / "out").rglob("*.png"))), 1)
 
-    def test_ab_runs_alternate(self):
+    def test_ab_runs_alternate_in_the_same_slot(self):
         code, out = self.run_quiet(["ab", str(self.scn), "--a", "MLB_X=0", "--b", "MLB_X=0", "--runs", "2", *self.common()])
-        order = [ln.split()[1] for ln in out.splitlines() if ln.startswith("== ")]
-        self.assertEqual(order, ["a-1", "b-1", "a-2", "b-2"])
+        self.assertEqual([ln.split()[1] for ln in out.splitlines() if ln.startswith("== ")], ["a-1", "b-1", "a-2", "b-2"])
+        self.assertEqual(len(h.game.run_dirs("harness")), 4)
+
+    def test_ab_can_run_exclusive_and_refuses_at_once_without_a_turn(self):
+        h.game.live_source = lambda: [(4242, "D:/elsewhere/mlb.exe", None)]
+        code, out = self.run_quiet(["ab", str(self.scn), "--a", "MLB_X=0", "--b", "MLB_X=0", *self.common("--mode", "exclusive", "--wait", "0")])
+        self.assertEqual(code, 2, out)
+        self.assertIn("1 game(s) live", out)
+        self.assertFalse(self.slot().joinpath("run-1").exists())
 
     def test_compare_two_run_folders(self):
         self.run_quiet(["run", str(self.scn), *self.common()])
         self.run_quiet(["run", str(self.scn), *self.common("--env", "MLB_X=1")])
-        runs = sorted((self.dir / "out").glob("unit-*"))
-        code, out = self.run_quiet(["compare", str(runs[0]), str(runs[1])])
+        a, b = sorted((self.dir / "out").glob("unit-*"))
+        code, out = self.run_quiet(["compare", str(a), str(b)])
+        self.assertEqual(code, 1, out)
+        self.assertIn("DIFFERENT", out)
+
+    def test_compare_reads_an_old_run_folder_with_its_own_dumps(self):
+        a, b = self.dir / "old-a", self.dir / "old-b"
+        for d, data in ((a, bytes(16)), (b, bytes(15) + b"\x01")):
+            (d / "dumps").mkdir(parents=True)
+            (d / "dumps" / "t.raw").write_bytes(data)
+            (d / "summary.json").write_text(json.dumps({"markers": [["boot", 10, 1.5]]}))
+        code, out = self.run_quiet(["compare", str(a), str(b)])
         self.assertEqual(code, 1, out)
         self.assertIn("DIFFERENT", out)
 
