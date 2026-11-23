@@ -14,7 +14,8 @@
 //   fixed_clock = 0|1           fixed clock (same)
 //   stop_after_s = <seconds>    clean stop this long after boot
 //   stop_at_marker = <name>     clean stop when this marker is logged
-//   dump = texture:fmt=0x25,size=512x512[,count=N]   dump matching nvnTextureWriteTexels data (count: default 1 write)
+//   dump = texture:fmt=0x25,size=512x512[,count=N]   dump nvnTextureWriteTexels data into a texture of that format and size
+//                               (size is the texture's, not the written region's; count: writes to dump, default 1)
 //   dump = buffer:addr=0x7004651350,size=256[,at=<marker>]   dump guest memory at a marker (default: at stop)
 //   markers = log|off           default log
 // A key not in this list is reported in the log (`harness: unknown key ...`), never silently ignored; so is a bad value.
