@@ -9,4 +9,4 @@ home_score = 3
 outs = 1
 balls = 3
 strikes = 2
-runners = first,third
+runners = first,second

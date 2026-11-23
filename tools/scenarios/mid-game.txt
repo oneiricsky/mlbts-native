@@ -1,4 +1,4 @@
-# Top of the 4th, home leads 2-1, no outs, 1-2 count
+# Top of the 4th, home leads 2-1, runner on first, no outs, 1-2 count
 name = mid-game
 home = 27
 away = 4
@@ -6,6 +6,7 @@ inning = 4
 half = top
 away_score = 1
 home_score = 2
+runners = first
 outs = 0
 balls = 1
 strikes = 2
