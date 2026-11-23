@@ -107,11 +107,12 @@ static void xinput_load(void *arg) {
     rt_log("hid: XInput %s; keyboard while the game window has focus", x_get ? "loaded" : "not available");
 }
 
-// The XInput pads by user index: their player (-1 not connected) and last state, read under sdl_lock by
+// The XInput pads by user index: their player (-1 not connected) and last state, read on the input thread by
 // xinput_update. A connected pad is read at every update; the free indices are probed once a second (XInputGetState on
 // an empty index is slow).
 static int x_player[4] = {-1, -1, -1, -1};
 static XPad x_pad[4];
+static uint16_t x_sent[4][2];   // the motors last sent (rumble_apply)
 static uint64_t x_next_scan;
 
 static void pads_changed(void);
@@ -133,6 +134,7 @@ static void xinput_update(uint64_t now) {
             int p = 0;
             while (used >> p & 1) p++;
             x_player[i] = p, changed = 1;
+            x_sent[i][0] = x_sent[i][1] = 0;
             rt_log("hid: XInput pad %d connected as player %d", i, p + 1);
         } else if (x_player[i] >= 0) {
             rt_log("hid: XInput pad %d (player %d) disconnected", i, x_player[i] + 1);
@@ -292,8 +294,7 @@ static uint64_t pad_bits(const XPad *p, FaceIn *face) {
     return b;
 }
 
-// ---- SDL3, loaded at run time from mlb.exe's folder. Every SDL call is made under sdl_lock: the game's npad reads,
-// the settings menu (render thread) and vibration come from different threads.
+// ---- SDL3, loaded at run time from mlb.exe's folder. Every SDL call is made on the input thread (input_main).
 #define SDL_FNS(X)                                                                                                     \
     X(SDL_SetHint) X(SDL_Init) X(SDL_GetError) X(SDL_GetVersion) X(SDL_SetEventEnabled) X(SDL_free)                  \
     X(SDL_GetGamepads) X(SDL_OpenGamepad) X(SDL_CloseGamepad) X(SDL_GamepadConnected) X(SDL_UpdateGamepads)          \
@@ -304,7 +305,7 @@ SDL_FNS(SDL_PTR)
 #undef SDL_PTR
 
 #define SCAN_NS 1000000000ull   // a new controller is looked for once a second
-#define UPDATE_NS 2000000ull    // SDL reads the controllers at most every 2 ms (the console samples every 5)
+#define UPDATE_NS 2000000ull    // the input thread reads the controllers every 2 ms (the console samples every 5)
 enum { MAX_PADS = 4 };
 typedef struct {
     SDL_Gamepad *g;
@@ -312,14 +313,13 @@ typedef struct {
     int face_label[4];   // the Switch button of the south, east, west, north button by its label, -1 unknown
     int kind;            // fastball: for the button icons (prompts.h hid_prompt_kind): 1 Xbox, 2 PlayStation, 0 other
     int player;          // fastball: 0 to 3, player 1 to 4 (NpadId No1 to No4)
+    uint16_t rumble[2];  // fastball: the motors last sent (rumble_apply), and when
+    uint64_t rumble_ns;
 } SdlPad;
-// Also guards the XInput pads' table (x_player, x_pad).
-static PlatMutex sdl_lock = PLAT_MUTEX_INIT;
-static PlatOnce sdl_once = PLAT_ONCE_INIT;
 static int sdl_ok;   // SDL3 loaded and its gamepad subsystem up: the pads come from SDL, not XInput
 static SdlPad pads[MAX_PADS];
 static int npads;
-static uint64_t next_scan, last_update;
+static uint64_t next_scan;
 
 static const char *pad_family(SDL_GamepadType t) {
     switch (t) {
@@ -419,7 +419,7 @@ static int pad_kind(SDL_Gamepad *g) {
     return l == SDL_GAMEPAD_BUTTON_LABEL_A ? 1 : l == SDL_GAMEPAD_BUTTON_LABEL_CROSS ? 2 : 0;
 }
 
-// fastball: under sdl_lock, after a pad came or went or MLB_PAD_PLAYERS changed: the players connected (player_mask)
+// fastball: on the input thread, after a pad came or went or MLB_PAD_PLAYERS changed: the players connected (player_mask)
 // and the button icons (the lowest-numbered pad: player 1's when there is one).
 static void pads_changed(void) {
     uint32_t mask = 1;
@@ -440,7 +440,7 @@ static void pads_changed(void) {
     prompt_kind_set(kind);
 }
 
-// Under sdl_lock: drop the pads that went away; once a second open the ones that arrived, each as the lowest-numbered
+// On the input thread: drop the pads that went away; once a second open the ones that arrived, each as the lowest-numbered
 // player no pad has. Logs each change.
 static void sdl_scan(void) {
     int changed = 0;
@@ -468,6 +468,7 @@ static void sdl_scan(void) {
             p->g = g, p->id = ids[k];
             for (int f = 0; f < 4; f++) p->face_label[f] = switch_of_label(p_SDL_GetGamepadButtonLabel(g, face_sdl[f]));
             p->kind = pad_kind(g);
+            p->rumble[0] = p->rumble[1] = 0, p->rumble_ns = 0;   // a new pad's motors are still
             p->player = 0;
             while (used >> p->player & 1) p->player++;
             changed = 1;
@@ -483,7 +484,7 @@ static void sdl_scan(void) {
     if (changed) pads_changed();
 }
 
-// Under sdl_lock: the Switch buttons of one SDL pad but the face buttons (into *face); its guide button (Xbox, PS)
+// On the input thread: the Switch buttons of one SDL pad but the face buttons (into *face); its guide button (Xbox, PS)
 // ORs into *guide.
 static uint64_t sdl_bits(const SdlPad *p, FaceIn *face, int *guide) {
     SDL_Gamepad *g = p->g;
@@ -509,86 +510,147 @@ static uint64_t sdl_bits(const SdlPad *p, FaceIn *face, int *guide) {
     return b;
 }
 
-// ---- every controller merged: buttons ORed, each stick from the pad pushed furthest (raw, before the dead zone)
+// ---- the input thread. fastball: every SDL and XInput call is made on this one thread, never on the game's. Opening a
+// pad and sending it rumble talk to the device and wait for it: a Bluetooth DualSense that dropped and reconnected
+// twice in the first innings of an exhibition (issue #26, two pads) made 12 frames that minute take over 100 ms, 0
+// or 1 in every other minute of the match, while the game's main thread made those calls. Now the thread reads the
+// pads every UPDATE_NS into a snapshot, which the game's reads only copy, and sends the rumble the game asked for.
+typedef struct {
+    int player, kind;
+    uint64_t buttons;   // the Switch buttons but the face buttons
+    FaceIn face;
+    int32_t lx, ly, rx, ry;   // Switch axes: y up
+    int guide;
+} PadSnap;
+static PlatMutex snap_lock = PLAT_MUTEX_INIT;   // snap, nsnap, rumble_want
+static PadSnap snap[MAX_PADS];
+static int nsnap;
+static uint16_t rumble_want[MAX_PLAYERS][2];   // the motors (low, high) each player's pads should run, 0..65535
+static PlatOnce input_once = PLAT_ONCE_INIT;
+
+// SDL stops a rumble after its duration: the longest it takes (65 s), as XInput's motors run until told otherwise,
+// sent again before it runs out. A pad is sent only changes: a write to a pad waits for it.
+#define RUMBLE_RENEW_NS 30000000000ull
+
+static void rumble_apply(uint64_t now) {
+    uint16_t want[MAX_PLAYERS][2];
+    plat_mutex_lock(&snap_lock);
+    memcpy(want, rumble_want, sizeof want);
+    plat_mutex_unlock(&snap_lock);
+    if (sdl_ok) {
+        for (int i = 0; i < npads; i++) {
+            SdlPad *p = &pads[i];
+            const uint16_t *w = want[pad_each ? p->player : 0];
+            if (w[0] == p->rumble[0] && w[1] == p->rumble[1] && (!(w[0] | w[1]) || now - p->rumble_ns < RUMBLE_RENEW_NS))
+                continue;
+            p_SDL_RumbleGamepad(p->g, w[0], w[1], 0xFFFF);
+            p->rumble[0] = w[0], p->rumble[1] = w[1], p->rumble_ns = now;
+        }
+    } else if (x_set)
+        for (int i = 0; i < 4; i++) {
+            if (x_player[i] < 0) continue;
+            const uint16_t *w = want[pad_each ? x_player[i] : 0];
+            if (w[0] == x_sent[i][0] && w[1] == x_sent[i][1]) continue;
+            XVibration xv = {w[0], w[1]};
+            x_set((DWORD)i, &xv);
+            x_sent[i][0] = w[0], x_sent[i][1] = w[1];
+        }
+}
+
+static void input_main(void *arg) {
+    (void)arg;
+    sdl_load(NULL);   // SDL's device notifications belong to the thread that starts it and pumps its updates
+    int each_seen = -1;
+    for (;;) {
+        uint64_t now = plat_now_ns();
+        knobs();
+        if (sdl_ok) {
+            p_SDL_UpdateGamepads();
+            sdl_scan();
+        } else
+            xinput_update(now);
+        if (pad_each != each_seen) each_seen = pad_each, pads_changed();   // MLB_PAD_PLAYERS changed (or the start)
+        PadSnap s[MAX_PADS];
+        int n = 0;
+        if (sdl_ok)
+            for (int i = 0; i < npads; i++, n++) {
+                SDL_Gamepad *g = pads[i].g;
+                PadSnap *o = &s[n];
+                memset(o, 0, sizeof *o);
+                o->player = pads[i].player, o->kind = pads[i].kind;
+                o->buttons = sdl_bits(&pads[i], &o->face, &o->guide);
+                o->lx = clamp_stick(p_SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_LEFTX));
+                o->ly = clamp_stick(-(int32_t)p_SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_LEFTY));
+                o->rx = clamp_stick(p_SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_RIGHTX));
+                o->ry = clamp_stick(-(int32_t)p_SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_RIGHTY));
+                // with every pad as player 1, the pad in use sets the button icons (prompt_kind)
+                if (!pad_each && npads > 1 && o->kind != prompt_kind &&
+                    (o->buttons || o->face.held || abs(o->lx) > STICK_DIR || abs(o->ly) > STICK_DIR ||
+                     abs(o->rx) > STICK_DIR || abs(o->ry) > STICK_DIR))
+                    prompt_kind_set(o->kind);
+            }
+        else
+            for (int i = 0; i < 4; i++) {
+                if (x_player[i] < 0) continue;
+                const XPad *p = &x_pad[i];
+                PadSnap *o = &s[n++];
+                memset(o, 0, sizeof *o);
+                o->player = x_player[i], o->kind = 1;
+                o->buttons = pad_bits(p, &o->face);
+                o->lx = clamp_stick(p->lx), o->ly = clamp_stick(p->ly);
+                o->rx = clamp_stick(p->rx), o->ry = clamp_stick(p->ry);
+            }
+        plat_mutex_lock(&snap_lock);
+        memcpy(snap, s, sizeof *s * (size_t)n);
+        nsnap = n;
+        plat_mutex_unlock(&snap_lock);
+        rumble_apply(now);
+        plat_wait_ns(UPDATE_NS);
+    }
+}
+
+static void input_start(void *arg) {
+    (void)arg;
+    if (!plat_thread_spawn(input_main, NULL, "input", 0)) rt_log("hid: cannot start the input thread: keyboard only");
+}
+
+// ---- a player's controllers merged: buttons ORed, each stick from the pad pushed furthest (raw, before the dead zone)
 typedef struct { uint64_t buttons; int32_t lx, ly, rx, ry; int guide; } PadIn;
 
 static void take_stick(int32_t *x, int32_t *y, int32_t nx, int32_t ny) {
     if ((int64_t)nx * nx + (int64_t)ny * ny > (int64_t)*x * *x + (int64_t)*y * *y) *x = nx, *y = ny;
 }
 
-// 1 when one of the player's controllers is connected. SDL's y axes grow downwards, the Switch's upwards. player: 0 to
-// 3, or -1 for every pad (the settings menu's read; face_bits).
+// 1 when one of the player's controllers is connected, from the input thread's last reading. player: 0 to 3, or -1
+// for every pad (the settings menu's read; face_bits).
 static int pad_read(PadIn *in, int player) {
-    static int each_seen = -1;
     memset(in, 0, sizeof *in);
     FaceIn face = {0};
     knobs();
-    plat_once(&sdl_once, sdl_load, NULL);
-    plat_mutex_lock(&sdl_lock);
-    uint64_t now = plat_now_ns();
-    if (now - last_update >= UPDATE_NS) {   // the game reads the npad several times a frame: one update serves them
-        last_update = now;
-        if (sdl_ok) {
-            p_SDL_UpdateGamepads();
-            sdl_scan();
-        } else
-            xinput_update(now);
-    }
-    if (pad_each != each_seen) each_seen = pad_each, pads_changed();   // MLB_PAD_PLAYERS changed (or the first read)
+    plat_once(&input_once, input_start, NULL);
     int have = 0;
-    if (!sdl_ok) {
-        for (int i = 0; i < 4; i++) {
-            if (x_player[i] < 0 || !pad_of(x_player[i], player)) continue;
-            const XPad *p = &x_pad[i];
-            in->buttons |= pad_bits(p, &face);
-            take_stick(&in->lx, &in->ly, clamp_stick(p->lx), clamp_stick(p->ly));
-            take_stick(&in->rx, &in->ry, clamp_stick(p->rx), clamp_stick(p->ry));
-            have = 1;
-        }
-        plat_mutex_unlock(&sdl_lock);
-        in->buttons |= face_bits(&face, player);
-        return have;
-    }
-    for (int i = 0; i < npads; i++) {
-        if (!pad_of(pads[i].player, player)) continue;
+    plat_mutex_lock(&snap_lock);
+    for (int i = 0; i < nsnap; i++) {
+        const PadSnap *s = &snap[i];
+        if (!pad_of(s->player, player)) continue;
         have = 1;
-        SDL_Gamepad *g = pads[i].g;
-        FaceIn pf = {0};
-        uint64_t b = sdl_bits(&pads[i], &pf, &in->guide);
-        face.held |= pf.held;
-        for (int f = 0; f < 4; f++) face.lab[f] |= pf.lab[f];
-        int32_t lx = clamp_stick(p_SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_LEFTX));
-        int32_t ly = clamp_stick(-(int32_t)p_SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_LEFTY));
-        int32_t rx = clamp_stick(p_SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_RIGHTX));
-        int32_t ry = clamp_stick(-(int32_t)p_SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_RIGHTY));
-        in->buttons |= b;
-        take_stick(&in->lx, &in->ly, lx, ly);
-        take_stick(&in->rx, &in->ry, rx, ry);
-        // fastball: with every pad as player 1, the pad in use sets the button icons (prompt_kind)
-        if (!pad_each && npads > 1 && pads[i].kind != prompt_kind &&
-            (b || pf.held || abs(lx) > STICK_DIR || abs(ly) > STICK_DIR || abs(rx) > STICK_DIR || abs(ry) > STICK_DIR))
-            prompt_kind_set(pads[i].kind);
+        in->buttons |= s->buttons, in->guide |= s->guide;
+        face.held |= s->face.held;
+        for (int f = 0; f < 4; f++) face.lab[f] |= s->face.lab[f];
+        take_stick(&in->lx, &in->ly, s->lx, s->ly);
+        take_stick(&in->rx, &in->ry, s->rx, s->ry);
     }
-    plat_mutex_unlock(&sdl_lock);
+    plat_mutex_unlock(&snap_lock);
     in->buttons |= face_bits(&face, player);
     return have;
 }
 
-// Both motors of the player's controllers (player < 0: every controller), 0..65535 each.
+// Both motors of player's controllers (0 to 3), 0..65535 each: the input thread sends them.
 static void pad_rumble(int player, uint16_t lo, uint16_t hi) {
-    plat_once(&sdl_once, sdl_load, NULL);
-    plat_mutex_lock(&sdl_lock);
-    if (sdl_ok) {
-        // SDL stops a rumble after its duration: the longest it takes, as XInput's motors run until told otherwise.
-        // The same values again only extend it (SDL sends no report then).
-        for (int i = 0; i < npads; i++)
-            if (pad_of(pads[i].player, player)) p_SDL_RumbleGamepad(pads[i].g, lo, hi, 0xFFFF);
-    } else if (x_set) {
-        XVibration xv = {lo, hi};
-        for (int i = 0; i < 4; i++)
-            if (x_player[i] >= 0 && pad_of(x_player[i], player)) x_set((DWORD)i, &xv);
-    }
-    plat_mutex_unlock(&sdl_lock);
+    plat_once(&input_once, input_start, NULL);
+    plat_mutex_lock(&snap_lock);
+    rumble_want[player][0] = lo, rumble_want[player][1] = hi;
+    plat_mutex_unlock(&snap_lock);
 }
 
 // fastball: the in-game settings menu (ui/menu.cpp) reads the pads itself while it is open, in Switch button bits
