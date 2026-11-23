@@ -24,17 +24,23 @@
 struct MlbHdEntry {
     uint64_t hash;
     uint16_t w, h, levels, drop;
+    uint8_t queued;   // prefetch: this file was already handed to the reader thread
     char *path;
 };
 
 static MlbHdEntry *entries;
 static int nentries;
+static MlbHdEntry **byname;   // the entries by PS5 path, for the prefetch (one entry per file is enough)
 static char root[1024];
 static PlatOnce once = PLAT_ONCE_INIT;
 
 static int cmp_entry(const void *a, const void *b) {
     uint64_t x = ((const MlbHdEntry *)a)->hash, y = ((const MlbHdEntry *)b)->hash;
     return x < y ? -1 : x > y;
+}
+
+static int cmp_name(const void *a, const void *b) {
+    return strcmp((*(MlbHdEntry *const *)a)->path, (*(MlbHdEntry *const *)b)->path);
 }
 
 static void init(void *arg) {
@@ -62,10 +68,14 @@ static void init(void *arg) {
             cap = cap ? cap * 2 : 64;
             if (!(entries = realloc(entries, sizeof *entries * (size_t)cap))) rt_fatal("hdtex: out of memory");
         }
-        entries[nentries++] = (MlbHdEntry){h, (uint16_t)w, (uint16_t)ht, (uint16_t)lv, (uint16_t)drop, _strdup(line + off)};
+        entries[nentries++] = (MlbHdEntry){h, (uint16_t)w, (uint16_t)ht, (uint16_t)lv, (uint16_t)drop, 0, _strdup(line + off)};
     }
     fclose(f);
     qsort(entries, (size_t)nentries, sizeof *entries, cmp_entry);
+    if (nentries && (byname = malloc(sizeof *byname * (size_t)nentries))) {
+        for (int i = 0; i < nentries; i++) byname[i] = &entries[i];
+        qsort(byname, (size_t)nentries, sizeof *byname, cmp_name);
+    }
     rt_log("hdtex: %d PS5 textures indexed (%s), from %s", nentries, path, root);
 }
 
@@ -186,4 +196,60 @@ int mlb_hd_load(const MlbHdEntry *e, MlbHdTex *out) {
 void mlb_hd_free(MlbHdTex *t) {
     free(t->data);
     memset(t, 0, sizeof *t);
+}
+
+// ---- prefetch
+//
+// The game opens a head's Switch files (CHARACTERS/HEADS/<NAME>/<NAME>-COLOR.TEX, -NORMAL.TEX) when it loads the player,
+// and uploads their textures much later, when they are first drawn: in a harness match 1.7 s at the least and 23 s at the
+// median after the open. The PS5 file of the same name sits on the dump's drive, a hard disk where a cold read of a file
+// takes about 15 ms (0.25 ms from the cache): 58 heads in the one frame of the lineup card were a 700 ms frame. So the
+// open starts a read of the PS5 file on a thread of its own; the upload then finds the file in the system cache.
+#define PF_QN 1024
+static MlbHdEntry *pf_q[PF_QN];
+static unsigned pf_head, pf_tail;
+static PlatMutex pf_lock = PLAT_MUTEX_INIT;
+static PlatCond pf_cond = PLAT_COND_INIT;
+static int pf_started;
+static volatile int32_t pf_done;
+
+static void pf_main(void *arg) {
+    (void)arg;
+    plat_thread_priority(PLAT_PRIO_BELOW_NORMAL);
+    for (;;) {
+        plat_mutex_lock(&pf_lock);
+        while (pf_head == pf_tail) plat_cond_wait(&pf_cond, &pf_lock);
+        MlbHdEntry *e = pf_q[pf_head++ % PF_QN];
+        plat_mutex_unlock(&pf_lock);
+        uint64_t t0 = plat_now_ns();
+        MlbHdTex t;
+        if (mlb_hd_load(e, &t)) mlb_hd_free(&t);
+        int32_t n = __atomic_add_fetch(&pf_done, 1, __ATOMIC_RELAXED);
+        if (n <= 4 || n == 64 || n == 256)
+            rt_log("hdtex: prefetched #%d %s in %.1f ms", (int)n, e->path, (double)(plat_now_ns() - t0) / 1e6);
+    }
+}
+
+void rt_host_opened(const char *path) {
+    static int on = -1;
+    if (on < 0) on = mlb_hd_on() && cfg_bool("MLB_HD_PREFETCH") && byname;
+    if (!on || !path) return;
+    const char *h = strstr(path, "CHARACTERS/HEADS/");
+    if (!h || h < path + 5 || strncmp(h - 5, "/NSW/", 5)) return;
+    size_t n = strlen(h);
+    if (n < 28 || (strcmp(h + n - 10, "-COLOR.TEX") && strcmp(h + n - 11, "-NORMAL.TEX"))) return;
+    char key[512];
+    if (snprintf(key, sizeof key, "PS5/%s", h) >= (int)sizeof key) return;
+    MlbHdEntry kv = {.path = key}, *kp = &kv;
+    MlbHdEntry **hit = bsearch(&kp, byname, (size_t)nentries, sizeof *byname, cmp_name);
+    if (!hit || __atomic_exchange_n(&(*hit)->queued, 1, __ATOMIC_RELAXED)) return;
+    plat_mutex_lock(&pf_lock);
+    if (pf_tail - pf_head >= PF_QN) {
+        (*hit)->queued = 0;
+    } else {
+        pf_q[pf_tail++ % PF_QN] = *hit;
+        if (!pf_started) pf_started = plat_thread_spawn(pf_main, NULL, "hd-prefetch", 0) ? 1 : -1;
+        plat_cond_signal(&pf_cond);
+    }
+    plat_mutex_unlock(&pf_lock);
 }
