@@ -12,6 +12,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 
 #include "cfg.h"
 #include "fs.h"
@@ -31,7 +32,55 @@ static size_t g_log_early_n;
 static uint64_t g_log_bytes;
 unsigned rt_trace;
 
+// fastball: MLB_LOG_TIME=1 puts the time since the first log line ("[ 12.345] ") in front of every log line, and logs the
+// local wall-clock time of that first line once, so a line can be placed in time (perf runs, the sampler, tools that
+// line a log up with something outside the game). Off by default; read once from the environment, because the log runs
+// before the settings are parsed.
+static int g_log_time = -1;
+static uint64_t g_log_t0;
+static int g_log_bol = 1;   // the next byte starts a line
+
+static void log_raw_plain(const char *p, size_t n);
+
+static int log_time_on(void) {
+    int v = __atomic_load_n(&g_log_time, __ATOMIC_RELAXED);
+    if (v >= 0) return v;
+    const char *e = getenv("MLB_LOG_TIME");
+    v = e && *e && *e != '0';
+    uint64_t zero = 0, now = plat_now_ns();
+    int first = v && __atomic_compare_exchange_n(&g_log_t0, &zero, now ? now : 1, 0, __ATOMIC_RELAXED, __ATOMIC_RELAXED);
+    __atomic_store_n(&g_log_time, v, __ATOMIC_RELAXED);
+    if (first) {
+        time_t t = time(NULL);
+        struct tm lt;
+        char when[64] = "unknown";
+        if (!localtime_s(&lt, &t)) strftime(when, sizeof when, "%Y-%m-%d %H:%M:%S", &lt);
+        rt_log("log clock: the first line is at %s local time", when);
+    }
+    return v;
+}
+
 void rt_log_raw(const char *p, size_t n) {
+    if (!n || !log_time_on()) {
+        log_raw_plain(p, n);
+        return;
+    }
+    if (!__atomic_exchange_n(&g_log_bol, p[n - 1] == '\n', __ATOMIC_RELAXED)) {
+        log_raw_plain(p, n);
+        return;
+    }
+    char buf[2048];
+    int k = snprintf(buf, sizeof buf, "[%7.3f] ", (double)(plat_now_ns() - __atomic_load_n(&g_log_t0, __ATOMIC_RELAXED)) / 1e9);
+    if (k > 0 && n < sizeof buf - (size_t)k) {
+        memcpy(buf + k, p, n);
+        log_raw_plain(buf, (size_t)k + n);
+    } else {
+        if (k > 0) log_raw_plain(buf, (size_t)k);
+        log_raw_plain(p, n);
+    }
+}
+
+static void log_raw_plain(const char *p, size_t n) {
     fwrite(p, 1, n, stderr);
     int state = __atomic_load_n(&g_log_state, __ATOMIC_ACQUIRE);
     if (state == LOG_EARLY) {
