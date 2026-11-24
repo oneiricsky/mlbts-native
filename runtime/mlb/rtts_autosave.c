@@ -24,6 +24,16 @@
 // the menu stopped taking input after the third purchase in a row, cause not found; in that run every save was
 // followed by the menu re-entering its selection box.) The screen slot is shared with tutorials.c: whatever it holds
 // at boot (the game's function or tutorials.c's host function) is called.
+//
+// Not while a new player is made. Making a player runs the same commands (the position's confirm, the first tokens
+// spent on the TokenAllocation screen, the same screen as the hub's Tools), and the game's autosave then saved the
+// half-made player as a career, before the name was typed. When the game closed or stopped before its own next save,
+// that save was what was left: a career with the default name "Joe Random" that opened straight in the hub instead of
+// the rest of creation (seen 2026-11-23, a player's report and test runs; a creation that runs on to the game's next
+// save was not followed).
+// Making a player starts at the BpCreation screen and ends when the Road to the Show home (RttSHomeMain) opens, and
+// in between this module saves nothing, so the game saves when it would without it. services.c hands every game log
+// line to rtts_autosave_game_log, which follows those two screens.
 #include <stdint.h>
 #include <string.h>
 
@@ -57,11 +67,14 @@ static const char *const k_names[NBUY] = {
 static int g_build = -1;
 static uint64_t g_hook[NBUY], g_screen_hook, g_screen_prev;
 static uint64_t g_record;   // f_700045c704's out argument (guest addresses are host addresses in this port)
-// All three with __atomic: the commands and the screen function are thought to run on the same UI thread [H], not
-// shown.
+// All with __atomic: the commands and the screen function are thought to run on the same UI thread [H], not shown.
+// g_making is set on the thread that logs the screen's line, which in every run logged it before that screen's
+// commands and screen function ran.
 static int g_pending;          // a save is wanted
 static int g_in_cmd;           // wrapped commands running
 static int g_screen_in_cmd;    // the screen changed while one ran
+static int g_making;           // a new player is being made (BpCreation entered, the home screen not yet)
+static int g_installed;        // every slot holds its hook
 
 static uint64_t rd64(uint64_t a) { return a && mem_guest_readable(a, 8) ? *(const uint64_t *)(uintptr_t)a : 0; }
 
@@ -105,7 +118,7 @@ static void buy_hook(Cpu *c) {
     memcpy(x, c->x, sizeof x);
     memcpy(v, c->v, sizeof v);
     int after = i >= 8 ? tokens(c) : 0;
-    if (i < 8 || (before >= 0 && after >= 0 && after != before)) {
+    if (!__atomic_load_n(&g_making, __ATOMIC_ACQUIRE) && (i < 8 || (before >= 0 && after >= 0 && after != before))) {
         if (!__atomic_exchange_n(&g_pending, 1, __ATOMIC_ACQ_REL))
             rt_log("rtts autosave: an upgrade command ran; the career is saved when this screen is left");
     }
@@ -123,6 +136,28 @@ static void screen_hook(Cpu *c) {
         __atomic_store_n(&g_screen_in_cmd, 1, __ATOMIC_RELEASE);   // buy_hook saves once the command has returned
     else if (__atomic_exchange_n(&g_pending, 0, __ATOMIC_ACQ_REL)) autosave(c, "screen left after an upgrade command");
     c->x[0] = r;
+}
+
+// services.c: every log line of the game. "uiEngine: Entering screen: [TitleLoadingScreen->BpCreation (4)]" starts
+// making a new player, "...->RttSHomeMain (19)" (the Road to the Show home) ends it.
+void rtts_autosave_game_log(const char *text, int n) {
+    static const char pre[] = "uiEngine: Entering screen: [";
+    enum { PRE = sizeof pre - 1 };
+    if (!__atomic_load_n(&g_installed, __ATOMIC_ACQUIRE) || n <= PRE || memcmp(text, pre, PRE)) return;
+    const char *s = text + PRE, *end = text + n;
+    while (s + 1 < end && !(s[0] == '-' && s[1] == '>')) s++;
+    if (s + 1 >= end) return;
+    s += 2;
+    int k = 0;
+    while (s + k < end && s[k] != ' ' && s[k] != ']') k++;
+    int making;
+    if (k == 10 && !memcmp(s, "BpCreation", 10)) making = 1;
+    else if (k == 12 && !memcmp(s, "RttSHomeMain", 12)) making = 0;
+    else return;
+    if (making) __atomic_store_n(&g_pending, 0, __ATOMIC_RELEASE);
+    if (__atomic_exchange_n(&g_making, making, __ATOMIC_ACQ_REL) != making)
+        rt_log(making ? "rtts autosave: a new player is being made; no autosave until Road to the Show's home opens"
+                      : "rtts autosave: Road to the Show's home opened; upgrades are saved again");
 }
 
 static int poke64(uint64_t addr, uint64_t val) {
@@ -175,5 +210,6 @@ void rtts_autosave_apply(void) {
             return;
         }
     }
+    __atomic_store_n(&g_installed, 1, __ATOMIC_RELEASE);
     rt_log("rtts autosave: upgrades bought in Road to the Show are saved when their screen is left");
 }

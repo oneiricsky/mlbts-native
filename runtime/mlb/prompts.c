@@ -9,8 +9,8 @@
 // blocks of the chosen set over its image after every upload, and uploads it again from its storage when the set
 // changes (the storage keeps the Switch icons, so going back to them is an upload).
 //
-// Which set: MLB_PROMPTS (the settings menu's Controls tab) = auto (default: the kind of the controller used last,
-// hid.c; the game's own icons with no controller or a Nintendo one), nintendo, xbox or playstation. The face buttons
+// Which set: MLB_PROMPTS (the settings menu's Controls tab) = auto (default: the kind of player 1's controller, or
+// of the one used last with MLB_PAD_PLAYERS=one, hid.c; the game's own icons with no controller or a Nintendo one), nintendo, xbox or playstation. The face buttons
 // follow MLB_PAD_MAP: by label Switch A shows Xbox A or cross; by position it shows the button in the A button's place
 // (Xbox B, circle); auto switches between them with the game's screens (hid.c). All take effect at once.
 #include <stdlib.h>

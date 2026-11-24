@@ -13,7 +13,8 @@ Windows 11). Most current work is graphics correctness (wrong or missing images,
 - **Performance comes first.** The user notices any fps loss. Diagnostics must cost nothing during normal play: gate
   them behind F12, a cfg knob or RenderDoc. Remove test code that slows the game once it has done its job.
 - They want real fixes backed by evidence, not rounds of guesses. Trace the cause (RenderDoc, logs), then fix.
-- Commit to `main` and push it to GitHub (`origin`, https://github.com/sam110411/fastball). Commit only the
+- Commit normal development to `dev` and push it to GitHub (`origin`, https://github.com/sam110411/fastball); not to
+  `main` unless the user asks. Commit only the
   files of the task; the user may have uncommitted work of their own in the tree. End each commit message with the
   `Co-Authored-By:` line the session gives.
 - Write explanations in plain language. The user is not a graphics programmer.

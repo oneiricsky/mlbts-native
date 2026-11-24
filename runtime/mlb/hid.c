@@ -1,15 +1,21 @@
-// nn::hid by symbol override: the functions main imports (docs/runtime-port.md), fed by one host controller. Our own
+// nn::hid by symbol override: the functions main imports (docs/runtime-port.md), fed by the host's controllers. Our own
 // implementation; state layouts and bit numbers per libnx hid.h (ISC), read for the layout only; the override approach
 // and the controller support result after TotK Recomp runtime/ov_input.c @ ae30a61 (MIT).
 //
-// The console is docked (am.c), so the controller is a full-key controller as player 1 (NpadId No1, style bit 0); the
-// handheld id and the Joy-Con styles read as disconnected. Its state is merged from:
+// The console is docked (am.c), so each controller is a full-key controller (style bit 0); the handheld id and the
+// Joy-Con styles read as disconnected. The players:
 //   - every connected gamepad, through SDL3 (SDL3.dll next to mlb.exe, loaded at run time; tools/fetch_deps.py):
 //     Xbox pads (SDL's XInput driver), PlayStation pads (DualSense, DualSense Edge, DualShock 4, DualShock 3; SDL's
-//     HID drivers, USB or Bluetooth), Switch Pro and other pads SDL knows. Their buttons are ORed and each stick takes
-//     the pad pushed furthest, so an Xbox and a PlayStation pad can be connected at once. As in TotK, Astral Chain and
-//     Power Moon Recomp, which read their controllers through SDL3 too. MLB_PAD_DRIVER=xinput, or no SDL3.dll, reads
-//     the first XInput pad instead (xinput1_4.dll; Xbox and compatible pads only).
+//     HID drivers, USB or Bluetooth), Switch Pro and other pads SDL knows. As in TotK, Astral Chain and Power Moon
+//     Recomp, which read their controllers through SDL3 too. MLB_PAD_DRIVER=xinput, or no SDL3.dll, reads the XInput
+//     pads instead (xinput1_4.dll; Xbox and compatible pads only).
+//     fastball: each pad is its own player (MLB_PAD_PLAYERS=each, default): the first connected is player 1 (NpadId
+//     No1), the next player 2 (No2), up to 4, as the console numbers its controllers. A pad keeps its number while it
+//     is connected; one that connects takes the lowest free number. Local multiplayer needs this (issue #26: with two
+//     DualShock 4s both drove player 1). The game registers No1 to No4 (and No6 to No8) at start (main+0x13443d8,
+//     1.0.20), keeps a pad record per id and reads each connected id's state; for a match of n players it asks the
+//     controller applet for up to n (main+0x1344274, clamped to 4), answered here with the players connected.
+//     MLB_PAD_PLAYERS=one is the old way: every pad is player 1, buttons ORed, each stick from the pad pushed furthest.
 //     MLB_PAD_MAP=auto (default) maps the face buttons by label in menus and by place in play, switching on the
 //     screens the game enters (hid_game_log), so menus confirm with Xbox A / cross and gameplay matches PlayStation
 //     and Xbox; the button icons follow (prompts.c). =position maps by place, as on the console: the east button (Xbox B,
@@ -24,10 +30,11 @@
 //     north (a throw to first on Xbox A, power swing on Xbox Y). Triggers past half way are ZL/ZR; View / Share /
 //     Create and the PlayStation touchpad click are -, Menu / Options are +. The guide button (Xbox, PS) opens the
 //     settings menu.
-//   - the keyboard, while a window of this process is in the foreground (GetAsyncKeyState):
+//   - the keyboard, as player 1, while a window of this process is in the foreground (GetAsyncKeyState):
 //       left stick W A S D, right stick I J K L, d-pad arrow keys, A Enter or Space, B Escape or Backspace, X R, Y F,
 //       L Q, R E, ZL 1, ZR 3, + Tab, - M, left stick click C, right stick click V.
-// Vibration plays on every pad's motors (MLB_RUMBLE=0: off): the low band's amplitude on the left (heavy) motor, the
+//     Player 1 is connected even with no pad, for the keyboard.
+// Vibration plays on the player's pads' motors (MLB_RUMBLE=0: off): the low band's amplitude on the left (heavy) motor, the
 // high band's on the right, times MLB_RUMBLE_STRENGTH percent. The sticks get a radial dead zone
 // (MLB_LSTICK_DEADZONE / MLB_RSTICK_DEADZONE, else MLB_STICK_DEADZONE, percent; the settings menu's Controls tab).
 // Nothing here allocates guest memory or calls back into the guest.
@@ -71,6 +78,16 @@ static PlatMutex lock = PLAT_MUTEX_INIT;
 static int initialized;
 static uint32_t supported_styles = STYLE_FULL_KEY;
 
+// fastball: players 1 to 4 are NpadId No1 to No4 (ids 0 to 3). Bit p of player_mask: player p+1 is connected. Player 1
+// always is (the keyboard); the others while a pad has their number (pads_changed).
+enum { MAX_PLAYERS = 4 };
+static volatile uint32_t player_mask = 1;
+static int pad_each = 1;   // MLB_PAD_PLAYERS=each: a player per pad; 0: every pad is player 1 (knobs)
+
+// The pads of one player: player < 0 all of them (the settings menu's reads); else the pads numbered player, or every
+// pad as player 1 (index 0) with MLB_PAD_PLAYERS=one.
+static int pad_of(int pad_player, int player) { return player < 0 || (pad_each ? pad_player == player : player == 0); }
+
 // ---- XInput, loaded at run time
 typedef struct { uint16_t buttons; uint8_t lt, rt; int16_t lx, ly, rx, ry; } XPad;
 typedef struct { uint32_t packet; XPad pad; } XState;
@@ -90,25 +107,41 @@ static void xinput_load(void *arg) {
     rt_log("hid: XInput %s; keyboard while the game window has focus", x_get ? "loaded" : "not available");
 }
 
-static int pad_slot = -1;   // the XInput user index read last, -1 none
+// The XInput pads by user index: their player (-1 not connected) and last state, read on the input thread by
+// xinput_update. A connected pad is read at every update; the free indices are probed once a second (XInputGetState on
+// an empty index is slow).
+static int x_player[4] = {-1, -1, -1, -1};
+static XPad x_pad[4];
+static uint16_t x_sent[4][2];   // the motors last sent (rumble_apply)
+static uint64_t x_next_scan;
 
-static int xinput_read(XPad *out) {
+static void pads_changed(void);
+
+static void xinput_update(uint64_t now) {
     plat_once(&xinput_once, xinput_load, NULL);
-    if (!x_get) return 0;
-    XState s;
-    if (pad_slot >= 0 && x_get((DWORD)pad_slot, &s) == ERROR_SUCCESS) {
-        *out = s.pad;
-        return 1;
-    }
-    for (int i = 0; i < 4; i++)
+    if (!x_get) return;
+    int scan = now >= x_next_scan, changed = 0;
+    if (scan) x_next_scan = now + 1000000000ull;
+    for (int i = 0; i < 4; i++) {
+        if (x_player[i] < 0 && !scan) continue;
+        XState s;
         if (x_get((DWORD)i, &s) == ERROR_SUCCESS) {
-            if (pad_slot != i) rt_log("hid: XInput pad %d", i);
-            pad_slot = i;
-            *out = s.pad;
-            return 1;
+            x_pad[i] = s.pad;
+            if (x_player[i] >= 0) continue;
+            uint32_t used = 0;
+            for (int k = 0; k < 4; k++)
+                if (x_player[k] >= 0) used |= 1u << x_player[k];
+            int p = 0;
+            while (used >> p & 1) p++;
+            x_player[i] = p, changed = 1;
+            x_sent[i][0] = x_sent[i][1] = 0;
+            rt_log("hid: XInput pad %d connected as player %d", i, p + 1);
+        } else if (x_player[i] >= 0) {
+            rt_log("hid: XInput pad %d (player %d) disconnected", i, x_player[i] + 1);
+            x_player[i] = -1, changed = 1;
         }
-    pad_slot = -1;
-    return 0;
+    }
+    if (changed) pads_changed();
 }
 
 static int32_t clamp_stick(int32_t v) { return v > STICK_MAX ? STICK_MAX : v < -STICK_MAX ? -STICK_MAX : v; }
@@ -132,6 +165,7 @@ static void knobs(void) {
     double g = cfg_double("RUMBLE_STRENGTH");
     rumble_gain = g < 0 ? 0 : g / 100;
     rumble_on = cfg_bool("MLB_RUMBLE");
+    pad_each = strcmp(cfg_value("MLB_PAD_PLAYERS"), "one") != 0;
     __atomic_store_n(&knobs_ver, v, __ATOMIC_RELEASE);
 }
 
@@ -219,18 +253,20 @@ int hid_face_position(void) {
 
 // The Switch bits of the held face buttons. When the mapping changes (auto: a screen changed), a button held at that
 // moment is ignored until released: the A that leaves the pause menu would otherwise turn into Switch B, a throw home
-// or a swing, the moment play resumes. overlay: the settings menu's own read, always by label and outside the latch.
-static uint64_t face_bits(const FaceIn *f, int overlay) {
+// or a swing, the moment play resumes. player < 0: the settings menu's own read, always by label and outside the
+// latch; else each player has a latch of their own.
+static uint64_t face_bits(const FaceIn *f, int player) {
     static PlatMutex face_lock = PLAT_MUTEX_INIT;
-    static int last = -1;
-    static uint8_t blocked;
+    static int last[MAX_PLAYERS] = {-1, -1, -1, -1};
+    static uint8_t blocked[MAX_PLAYERS];
+    int overlay = player < 0;
     int pos = overlay ? 0 : hid_face_position();
     uint8_t use = f->held;
     if (!overlay) {
         plat_mutex_lock(&face_lock);
-        if (pos != last) blocked = last < 0 ? 0 : f->held, last = pos;
-        blocked &= f->held;
-        use &= (uint8_t)~blocked;
+        if (pos != last[player]) blocked[player] = last[player] < 0 ? 0 : f->held, last[player] = pos;
+        blocked[player] &= f->held;
+        use &= (uint8_t)~blocked[player];
         plat_mutex_unlock(&face_lock);
     }
     uint64_t b = 0;
@@ -258,8 +294,7 @@ static uint64_t pad_bits(const XPad *p, FaceIn *face) {
     return b;
 }
 
-// ---- SDL3, loaded at run time from mlb.exe's folder. Every SDL call is made under sdl_lock: the game's npad reads,
-// the settings menu (render thread) and vibration come from different threads.
+// ---- SDL3, loaded at run time from mlb.exe's folder. Every SDL call is made on the input thread (input_main).
 #define SDL_FNS(X)                                                                                                     \
     X(SDL_SetHint) X(SDL_Init) X(SDL_GetError) X(SDL_GetVersion) X(SDL_SetEventEnabled) X(SDL_free)                  \
     X(SDL_GetGamepads) X(SDL_OpenGamepad) X(SDL_CloseGamepad) X(SDL_GamepadConnected) X(SDL_UpdateGamepads)          \
@@ -270,20 +305,21 @@ SDL_FNS(SDL_PTR)
 #undef SDL_PTR
 
 #define SCAN_NS 1000000000ull   // a new controller is looked for once a second
-#define UPDATE_NS 2000000ull    // SDL reads the controllers at most every 2 ms (the console samples every 5)
+#define UPDATE_NS 2000000ull    // the input thread reads the controllers every 2 ms (the console samples every 5)
 enum { MAX_PADS = 4 };
 typedef struct {
     SDL_Gamepad *g;
     SDL_JoystickID id;
     int face_label[4];   // the Switch button of the south, east, west, north button by its label, -1 unknown
     int kind;            // fastball: for the button icons (prompts.h hid_prompt_kind): 1 Xbox, 2 PlayStation, 0 other
+    int player;          // fastball: 0 to 3, player 1 to 4 (NpadId No1 to No4)
+    uint16_t rumble[2];  // fastball: the motors last sent (rumble_apply), and when
+    uint64_t rumble_ns;
 } SdlPad;
-static PlatMutex sdl_lock = PLAT_MUTEX_INIT;
-static PlatOnce sdl_once = PLAT_ONCE_INIT;
 static int sdl_ok;   // SDL3 loaded and its gamepad subsystem up: the pads come from SDL, not XInput
 static SdlPad pads[MAX_PADS];
 static int npads;
-static uint64_t next_scan, last_update;
+static uint64_t next_scan;
 
 static const char *pad_family(SDL_GamepadType t) {
     switch (t) {
@@ -355,8 +391,12 @@ static int switch_of_label(SDL_GamepadButtonLabel l) {
 static const SDL_GamepadButton face_sdl[4] = {SDL_GAMEPAD_BUTTON_SOUTH, SDL_GAMEPAD_BUTTON_EAST,
                                               SDL_GAMEPAD_BUTTON_WEST, SDL_GAMEPAD_BUTTON_NORTH};
 
-// fastball: the kind of controller whose buttons the game's prompts show (prompts.c, MLB_PROMPTS=auto): the one
-// used last (a button pressed or a stick pushed past half way), else the one connected first; 0 without a controller.
+// fastball: the kind of controller whose buttons the game's prompts show (prompts.c, MLB_PROMPTS=auto); 0 without a
+// controller. The game has one set of prompts for all players, so with a player per pad (MLB_PAD_PLAYERS=each) it is
+// player 1's pad (the lowest-numbered pad while player 1 has none): an Xbox pad as player 1 and a PlayStation pad as
+// player 2 show Xbox icons, steadily; following the pad used last would flip them back and forth while both players
+// play. With MLB_PAD_PLAYERS=one it is the pad used last (a button pressed or a stick pushed past half way), else the
+// one connected first. MLB_PROMPTS=xbox or playstation sets them whatever is connected.
 // A pad of a type SDL does not name goes by its south button's label (A: Xbox-like, cross: PlayStation); Nintendo pads
 // keep the game's own icons.
 static volatile int prompt_kind;
@@ -379,41 +419,72 @@ static int pad_kind(SDL_Gamepad *g) {
     return l == SDL_GAMEPAD_BUTTON_LABEL_A ? 1 : l == SDL_GAMEPAD_BUTTON_LABEL_CROSS ? 2 : 0;
 }
 
-// Under sdl_lock: drop the pads that went away; once a second open the ones that arrived. Logs each change.
+// fastball: on the input thread, after a pad came or went or MLB_PAD_PLAYERS changed: the players connected (player_mask)
+// and the button icons (the lowest-numbered pad: player 1's when there is one).
+static void pads_changed(void) {
+    uint32_t mask = 1;
+    int low = MAX_PLAYERS, kind = 0;
+    if (sdl_ok)
+        for (int i = 0; i < npads; i++) {
+            if (pad_each) mask |= 1u << pads[i].player;
+            if (pads[i].player < low) low = pads[i].player, kind = pads[i].kind;
+        }
+    else
+        for (int i = 0; i < 4; i++)
+            if (x_player[i] >= 0) {
+                if (pad_each) mask |= 1u << x_player[i];
+                kind = 1;   // XInput pads are Xbox pads
+            }
+    if (__atomic_exchange_n(&player_mask, mask, __ATOMIC_RELEASE) != mask && pad_each)
+        rt_log("hid: players connected: %d", __builtin_popcount(mask));
+    prompt_kind_set(kind);
+}
+
+// On the input thread: drop the pads that went away; once a second open the ones that arrived, each as the lowest-numbered
+// player no pad has. Logs each change.
 static void sdl_scan(void) {
+    int changed = 0;
     for (int i = 0; i < npads;)
         if (p_SDL_GamepadConnected(pads[i].g)) i++;
         else {
-            rt_log("hid: controller %u disconnected", (unsigned)pads[i].id);
+            rt_log("hid: controller %u (player %d) disconnected", (unsigned)pads[i].id, pads[i].player + 1);
             p_SDL_CloseGamepad(pads[i].g);
             pads[i] = pads[--npads];
-            prompt_kind_set(npads ? pads[0].kind : 0);   // fastball: a pad still there, until another is used
+            changed = 1;
         }
     uint64_t now = plat_now_ns();
-    if (now < next_scan) return;
-    next_scan = now + SCAN_NS;
-    int n = 0;
-    SDL_JoystickID *ids = p_SDL_GetGamepads(&n);
-    for (int k = 0; ids && k < n && npads < MAX_PADS; k++) {
-        int have = 0;
-        for (int i = 0; i < npads; i++) have |= pads[i].id == ids[k];
-        if (have) continue;
-        SDL_Gamepad *g = p_SDL_OpenGamepad(ids[k]);
-        if (!g) continue;
-        SdlPad *p = &pads[npads++];
-        p->g = g, p->id = ids[k];
-        for (int f = 0; f < 4; f++) p->face_label[f] = switch_of_label(p_SDL_GetGamepadButtonLabel(g, face_sdl[f]));
-        p->kind = pad_kind(g);
-        if (npads == 1) prompt_kind_set(p->kind);   // fastball: the first pad, until another is used
-        int rumble = p_SDL_GetBooleanProperty(p_SDL_GetGamepadProperties(g), SDL_PROP_GAMEPAD_CAP_RUMBLE_BOOLEAN, false);
-        const char *name = p_SDL_GetGamepadName(g);
-        rt_log("hid: controller %u \"%s\" connected (%s layout, %s)", (unsigned)p->id, name ? name : "?",
-               pad_family(p_SDL_GetGamepadType(g)), rumble ? "rumble" : "no rumble");
+    if (now >= next_scan) {
+        next_scan = now + SCAN_NS;
+        int n = 0;
+        SDL_JoystickID *ids = p_SDL_GetGamepads(&n);
+        for (int k = 0; ids && k < n && npads < MAX_PADS; k++) {
+            int have = 0;
+            uint32_t used = 0;
+            for (int i = 0; i < npads; i++) have |= pads[i].id == ids[k], used |= 1u << pads[i].player;
+            if (have) continue;
+            SDL_Gamepad *g = p_SDL_OpenGamepad(ids[k]);
+            if (!g) continue;
+            SdlPad *p = &pads[npads++];
+            p->g = g, p->id = ids[k];
+            for (int f = 0; f < 4; f++) p->face_label[f] = switch_of_label(p_SDL_GetGamepadButtonLabel(g, face_sdl[f]));
+            p->kind = pad_kind(g);
+            p->rumble[0] = p->rumble[1] = 0, p->rumble_ns = 0;   // a new pad's motors are still
+            p->player = 0;
+            while (used >> p->player & 1) p->player++;
+            changed = 1;
+            int rumble =
+                p_SDL_GetBooleanProperty(p_SDL_GetGamepadProperties(g), SDL_PROP_GAMEPAD_CAP_RUMBLE_BOOLEAN, false);
+            const char *name = p_SDL_GetGamepadName(g);
+            rt_log("hid: controller %u \"%s\" connected as player %d (%s layout, %s)", (unsigned)p->id,
+                   name ? name : "?", pad_each ? p->player + 1 : 1, pad_family(p_SDL_GetGamepadType(g)),
+                   rumble ? "rumble" : "no rumble");
+        }
+        p_SDL_free(ids);
     }
-    p_SDL_free(ids);
+    if (changed) pads_changed();
 }
 
-// Under sdl_lock: the Switch buttons of one SDL pad but the face buttons (into *face); its guide button (Xbox, PS)
+// On the input thread: the Switch buttons of one SDL pad but the face buttons (into *face); its guide button (Xbox, PS)
 // ORs into *guide.
 static uint64_t sdl_bits(const SdlPad *p, FaceIn *face, int *guide) {
     SDL_Gamepad *g = p->g;
@@ -439,94 +510,166 @@ static uint64_t sdl_bits(const SdlPad *p, FaceIn *face, int *guide) {
     return b;
 }
 
-// ---- every controller merged: buttons ORed, each stick from the pad pushed furthest (raw, before the dead zone)
+// ---- the input thread. fastball: every SDL and XInput call is made on this one thread, never on the game's. Opening a
+// pad and sending it rumble talk to the device and wait for it: a Bluetooth DualSense that dropped and reconnected
+// twice in the first innings of an exhibition (issue #26, two pads) made 12 frames that minute take over 100 ms, 0
+// or 1 in every other minute of the match, while the game's main thread made those calls. Now the thread reads the
+// pads every UPDATE_NS into a snapshot, which the game's reads only copy, and sends the rumble the game asked for.
+typedef struct {
+    int player, kind;
+    uint64_t buttons;   // the Switch buttons but the face buttons
+    FaceIn face;
+    int32_t lx, ly, rx, ry;   // Switch axes: y up
+    int guide;
+} PadSnap;
+static PlatMutex snap_lock = PLAT_MUTEX_INIT;   // snap, nsnap, rumble_want
+static PadSnap snap[MAX_PADS];
+static int nsnap;
+static uint16_t rumble_want[MAX_PLAYERS][2];   // the motors (low, high) each player's pads should run, 0..65535
+static PlatOnce input_once = PLAT_ONCE_INIT;
+
+// SDL stops a rumble after its duration: the longest it takes (65 s), as XInput's motors run until told otherwise,
+// sent again before it runs out. A pad is sent only changes: a write to a pad waits for it.
+#define RUMBLE_RENEW_NS 30000000000ull
+
+static void rumble_apply(uint64_t now) {
+    uint16_t want[MAX_PLAYERS][2];
+    plat_mutex_lock(&snap_lock);
+    memcpy(want, rumble_want, sizeof want);
+    plat_mutex_unlock(&snap_lock);
+    if (sdl_ok) {
+        for (int i = 0; i < npads; i++) {
+            SdlPad *p = &pads[i];
+            const uint16_t *w = want[pad_each ? p->player : 0];
+            if (w[0] == p->rumble[0] && w[1] == p->rumble[1] && (!(w[0] | w[1]) || now - p->rumble_ns < RUMBLE_RENEW_NS))
+                continue;
+            p_SDL_RumbleGamepad(p->g, w[0], w[1], 0xFFFF);
+            p->rumble[0] = w[0], p->rumble[1] = w[1], p->rumble_ns = now;
+        }
+    } else if (x_set)
+        for (int i = 0; i < 4; i++) {
+            if (x_player[i] < 0) continue;
+            const uint16_t *w = want[pad_each ? x_player[i] : 0];
+            if (w[0] == x_sent[i][0] && w[1] == x_sent[i][1]) continue;
+            XVibration xv = {w[0], w[1]};
+            x_set((DWORD)i, &xv);
+            x_sent[i][0] = w[0], x_sent[i][1] = w[1];
+        }
+}
+
+static void input_main(void *arg) {
+    (void)arg;
+    sdl_load(NULL);   // SDL's device notifications belong to the thread that starts it and pumps its updates
+    int each_seen = -1;
+    for (;;) {
+        uint64_t now = plat_now_ns();
+        knobs();
+        if (sdl_ok) {
+            p_SDL_UpdateGamepads();
+            sdl_scan();
+        } else
+            xinput_update(now);
+        if (pad_each != each_seen) each_seen = pad_each, pads_changed();   // MLB_PAD_PLAYERS changed (or the start)
+        PadSnap s[MAX_PADS];
+        int n = 0;
+        if (sdl_ok)
+            for (int i = 0; i < npads; i++, n++) {
+                SDL_Gamepad *g = pads[i].g;
+                PadSnap *o = &s[n];
+                memset(o, 0, sizeof *o);
+                o->player = pads[i].player, o->kind = pads[i].kind;
+                o->buttons = sdl_bits(&pads[i], &o->face, &o->guide);
+                o->lx = clamp_stick(p_SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_LEFTX));
+                o->ly = clamp_stick(-(int32_t)p_SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_LEFTY));
+                o->rx = clamp_stick(p_SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_RIGHTX));
+                o->ry = clamp_stick(-(int32_t)p_SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_RIGHTY));
+                // with every pad as player 1, the pad in use sets the button icons (prompt_kind)
+                if (!pad_each && npads > 1 && o->kind != prompt_kind &&
+                    (o->buttons || o->face.held || abs(o->lx) > STICK_DIR || abs(o->ly) > STICK_DIR ||
+                     abs(o->rx) > STICK_DIR || abs(o->ry) > STICK_DIR))
+                    prompt_kind_set(o->kind);
+            }
+        else
+            for (int i = 0; i < 4; i++) {
+                if (x_player[i] < 0) continue;
+                const XPad *p = &x_pad[i];
+                PadSnap *o = &s[n++];
+                memset(o, 0, sizeof *o);
+                o->player = x_player[i], o->kind = 1;
+                o->buttons = pad_bits(p, &o->face);
+                o->lx = clamp_stick(p->lx), o->ly = clamp_stick(p->ly);
+                o->rx = clamp_stick(p->rx), o->ry = clamp_stick(p->ry);
+            }
+        plat_mutex_lock(&snap_lock);
+        memcpy(snap, s, sizeof *s * (size_t)n);
+        nsnap = n;
+        plat_mutex_unlock(&snap_lock);
+        rumble_apply(now);
+        plat_wait_ns(UPDATE_NS);
+    }
+}
+
+static void input_start(void *arg) {
+    (void)arg;
+    if (!plat_thread_spawn(input_main, NULL, "input", 0)) rt_log("hid: cannot start the input thread: keyboard only");
+}
+
+// ---- a player's controllers merged: buttons ORed, each stick from the pad pushed furthest (raw, before the dead zone)
 typedef struct { uint64_t buttons; int32_t lx, ly, rx, ry; int guide; } PadIn;
 
 static void take_stick(int32_t *x, int32_t *y, int32_t nx, int32_t ny) {
     if ((int64_t)nx * nx + (int64_t)ny * ny > (int64_t)*x * *x + (int64_t)*y * *y) *x = nx, *y = ny;
 }
 
-// 1 when a controller is connected. SDL's y axes grow downwards, the Switch's upwards. overlay: the settings menu's
-// read (face_bits).
-static int pad_read(PadIn *in, int overlay) {
+// 1 when one of the player's controllers is connected, from the input thread's last reading. player: 0 to 3, or -1
+// for every pad (the settings menu's read; face_bits).
+static int pad_read(PadIn *in, int player) {
     memset(in, 0, sizeof *in);
     FaceIn face = {0};
-    plat_once(&sdl_once, sdl_load, NULL);
-    if (!sdl_ok) {
-        XPad p;
-        if (!xinput_read(&p)) {
-            if (prompt_kind) prompt_kind_set(0);
-            return 0;
-        }
-        if (prompt_kind != 1) prompt_kind_set(1);   // fastball: XInput pads are Xbox pads (button icons)
-        in->buttons = pad_bits(&p, &face) | face_bits(&face, overlay);
-        in->lx = clamp_stick(p.lx), in->ly = clamp_stick(p.ly), in->rx = clamp_stick(p.rx), in->ry = clamp_stick(p.ry);
-        return 1;
+    knobs();
+    plat_once(&input_once, input_start, NULL);
+    int have = 0;
+    plat_mutex_lock(&snap_lock);
+    for (int i = 0; i < nsnap; i++) {
+        const PadSnap *s = &snap[i];
+        if (!pad_of(s->player, player)) continue;
+        have = 1;
+        in->buttons |= s->buttons, in->guide |= s->guide;
+        face.held |= s->face.held;
+        for (int f = 0; f < 4; f++) face.lab[f] |= s->face.lab[f];
+        take_stick(&in->lx, &in->ly, s->lx, s->ly);
+        take_stick(&in->rx, &in->ry, s->rx, s->ry);
     }
-    plat_mutex_lock(&sdl_lock);
-    uint64_t now = plat_now_ns();
-    if (now - last_update >= UPDATE_NS) {   // the game reads the npad several times a frame: one update serves them
-        last_update = now;
-        p_SDL_UpdateGamepads();
-        sdl_scan();
-    }
-    for (int i = 0; i < npads; i++) {
-        SDL_Gamepad *g = pads[i].g;
-        FaceIn pf = {0};
-        uint64_t b = sdl_bits(&pads[i], &pf, &in->guide);
-        face.held |= pf.held;
-        for (int f = 0; f < 4; f++) face.lab[f] |= pf.lab[f];
-        int32_t lx = clamp_stick(p_SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_LEFTX));
-        int32_t ly = clamp_stick(-(int32_t)p_SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_LEFTY));
-        int32_t rx = clamp_stick(p_SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_RIGHTX));
-        int32_t ry = clamp_stick(-(int32_t)p_SDL_GetGamepadAxis(g, SDL_GAMEPAD_AXIS_RIGHTY));
-        in->buttons |= b;
-        take_stick(&in->lx, &in->ly, lx, ly);
-        take_stick(&in->rx, &in->ry, rx, ry);
-        // fastball: this pad is the one in use (button icons, prompt_kind)
-        if (npads > 1 && pads[i].kind != prompt_kind &&
-            (b || pf.held || abs(lx) > STICK_DIR || abs(ly) > STICK_DIR || abs(rx) > STICK_DIR || abs(ry) > STICK_DIR))
-            prompt_kind_set(pads[i].kind);
-    }
-    int have = npads > 0;
-    plat_mutex_unlock(&sdl_lock);
-    in->buttons |= face_bits(&face, overlay);
+    plat_mutex_unlock(&snap_lock);
+    in->buttons |= face_bits(&face, player);
     return have;
 }
 
-// Both motors of every controller, 0..65535 each.
-static void pad_rumble(uint16_t lo, uint16_t hi) {
-    plat_once(&sdl_once, sdl_load, NULL);
-    if (sdl_ok) {
-        plat_mutex_lock(&sdl_lock);
-        // SDL stops a rumble after its duration: the longest it takes, as XInput's motors run until told otherwise.
-        // The same values again only extend it (SDL sends no report then).
-        for (int i = 0; i < npads; i++) p_SDL_RumbleGamepad(pads[i].g, lo, hi, 0xFFFF);
-        plat_mutex_unlock(&sdl_lock);
-        return;
-    }
-    plat_once(&xinput_once, xinput_load, NULL);
-    if (x_set && pad_slot >= 0) {
-        XVibration xv = {lo, hi};
-        x_set((DWORD)pad_slot, &xv);
-    }
+// Both motors of player's controllers (0 to 3), 0..65535 each: the input thread sends them.
+static void pad_rumble(int player, uint16_t lo, uint16_t hi) {
+    plat_once(&input_once, input_start, NULL);
+    plat_mutex_lock(&snap_lock);
+    rumble_want[player][0] = lo, rumble_want[player][1] = hi;
+    plat_mutex_unlock(&snap_lock);
 }
 
-// fastball: the in-game settings menu (ui/menu.cpp) reads the pad itself while it is open, in Switch button bits
-// (the same as the game's: A 0, B 1, X 2, Y 3, L 6, R 7, ZL 8, ZR 9, d-pad 12..15). 0 without a pad.
+// fastball: the in-game settings menu (ui/menu.cpp) reads the pads itself while it is open, in Switch button bits
+// (the same as the game's: A 0, B 1, X 2, Y 3, L 6, R 7, ZL 8, ZR 9, d-pad 12..15): every pad, whichever player.
+// 0 without a pad.
 int hid_menu_pad(uint64_t *buttons, int32_t *lx, int32_t *ly) {
     PadIn in;
-    int have = pad_read(&in, 1);
+    int have = pad_read(&in, -1);
     *buttons = in.buttons, *lx = in.lx, *ly = in.ly;
     return have;
 }
 
 // fastball: the settings menu's dead zone rows show how far each stick is pushed now, before the dead zone (a
-// drifting stick's resting value). now[0] left, now[1] right, in percent of full travel; 0 without a pad.
+// drifting stick's resting value; the pad pushed furthest). now[0] left, now[1] right, in percent of full travel; 0
+// without a pad.
 int hid_stick_percent(double now[2]) {
     PadIn in;
     now[0] = now[1] = 0;
-    if (!pad_read(&in, 1)) return 0;
+    if (!pad_read(&in, -1)) return 0;
     double lx = in.lx / (double)STICK_MAX, ly = in.ly / (double)STICK_MAX, rx = in.rx / (double)STICK_MAX,
            ry = in.ry / (double)STICK_MAX;
     now[0] = fmin(sqrt(lx * lx + ly * ly), 1) * 100;
@@ -538,20 +681,19 @@ int hid_stick_percent(double now[2]) {
 static volatile int text_entry_open;
 void input_block(int on) { __atomic_store_n(&text_entry_open, on ? 1 : 0, __ATOMIC_RELEASE); }
 
-// The merged controller state: buttons and sticks.
-static void poll(NpadState *st) {
+// One player's controller state (player 0 to 3): buttons and sticks; player 1's with the keyboard's.
+static void poll(NpadState *st, int player) {
     uint64_t b = 0;
     int32_t lx = 0, ly = 0, rx = 0, ry = 0;
     int guide = 0;
     PadIn in;
-    knobs();
-    if (pad_read(&in, 0)) {
+    if (pad_read(&in, player)) {
         b = in.buttons, guide = in.guide;
         lx = in.lx, ly = in.ly, rx = in.rx, ry = in.ry;
         dead_zone(&lx, &ly, dz_l);
         dead_zone(&rx, &ry, dz_r);
     }
-    if (window_focused()) {
+    if (player == 0 && window_focused()) {
         static const struct { int vk, bit; } keys[] = {
             {VK_RETURN, B_A}, {VK_SPACE, B_A}, {VK_ESCAPE, B_B}, {VK_BACK, B_B}, {'R', B_X}, {'F', B_Y}, {'Q', B_L},
             {'E', B_R}, {'1', B_ZL}, {'3', B_ZR}, {VK_TAB, B_PLUS}, {'M', B_MINUS}, {'C', B_LSTICK}, {'V', B_RSTICK},
@@ -577,19 +719,21 @@ static void poll(NpadState *st) {
     // it is open the game gets an idle controller. Buttons held when it closes stay hidden from the game until
     // released: the B that closed the menu would otherwise also go "back" in the game.
     // The software keyboard's window (swkbd.c, input_block) blocks the game's controller the same way, so the Enter or
-    // A that confirmed the text does not also press A in the game.
-    static uint64_t prev, hidden;
-    static int was_open, prev_guide;
+    // A that confirmed the text does not also press A in the game. Every player's pad opens the menu and every
+    // player's controller goes idle while it is open; each player has their own held buttons.
+    static uint64_t prev[MAX_PLAYERS], hidden[MAX_PLAYERS];
+    static int was_open[MAX_PLAYERS], prev_guide[MAX_PLAYERS];
     const uint64_t combo = BIT(B_MINUS) | BIT(B_PLUS);
     int typing = __atomic_load_n(&text_entry_open, __ATOMIC_ACQUIRE);
-    if (!typing && (((b & combo) == combo && (prev & combo) != combo) || (guide && !prev_guide))) menu_toggle();
-    prev = b, prev_guide = guide;
+    if (!typing && (((b & combo) == combo && (prev[player] & combo) != combo) || (guide && !prev_guide[player])))
+        menu_toggle();
+    prev[player] = b, prev_guide[player] = guide;
     int open = menu_is_open() || typing;
-    if (open) hidden = ~0ull;
-    else if (was_open) hidden = b;
-    was_open = open;
-    hidden &= b;   // a released button counts again
-    b &= ~hidden;
+    if (open) hidden[player] = ~0ull;
+    else if (was_open[player]) hidden[player] = b;
+    was_open[player] = open;
+    hidden[player] &= b;   // a released button counts again
+    b &= ~hidden[player];
     if (open) lx = ly = rx = ry = 0;
     st->buttons = b;
     st->lx = lx, st->ly = ly, st->rx = rx, st->ry = ry;
@@ -601,9 +745,11 @@ static uint32_t id_of(Cpu *c, int arg, const char *fn) {
     return *id;
 }
 
+// NpadId No1 to No4 (0 to 3) while that player is connected (player_mask).
 static int connected(uint32_t id) {
+    if (id >= MAX_PLAYERS || !(__atomic_load_n(&player_mask, __ATOMIC_ACQUIRE) >> id & 1)) return 0;
     plat_mutex_lock_shared(&lock);
-    int on = initialized && id == ID_NO1 && (supported_styles & STYLE_FULL_KEY);
+    int on = initialized && (supported_styles & STYLE_FULL_KEY);
     plat_mutex_unlock_shared(&lock);
     return on;
 }
@@ -615,7 +761,7 @@ static void ov_initialize_npad(Cpu *c) {
     plat_mutex_lock(&lock);
     initialized = 1;
     plat_mutex_unlock(&lock);
-    rt_log("hid: one full-key controller as player 1");
+    rt_log("hid: full-key controllers, players 1 to %d", MAX_PLAYERS);
 }
 
 // void SetSupportedNpadIdType(const NpadIdType *ids, size_t count)
@@ -623,9 +769,11 @@ static void ov_supported_ids(Cpu *c) {
     const uint32_t *ids = arg_p(c, 0);
     uint64_t n = arg_x(c, 1);
     if (n > 10 || (!ids && n)) rt_fatal("nn::hid::SetSupportedNpadIdType: %llu ids", (unsigned long long)n);
-    int no1 = 0;
-    for (uint64_t i = 0; i < n; i++) no1 |= ids[i] == ID_NO1;
-    if (!no1) rt_log("hid: the game does not list NpadId No1 as supported; the controller stays player 1");
+    uint32_t have = 0;
+    for (uint64_t i = 0; i < n; i++)
+        if (ids[i] < MAX_PLAYERS) have |= 1u << ids[i];
+    if (have != (1u << MAX_PLAYERS) - 1)
+        rt_log("hid: the game supports NpadIds %#x of No1 to No4; its players stay No1 to No4", have);
 }
 
 // void SetSupportedNpadStyleSet(NpadStyleSet styles): a 32-bit flag set in w0
@@ -724,14 +872,16 @@ static void npad_state(Cpu *c, int full_key, const char *fn) {
         // fastball: one reading serves the calls of the next 1 ms. The game asks several times a frame on its main
         // thread, and each reading asks SDL (or XInput) for the pads, Windows for 26 keys and the foreground window:
         // 2% of that thread's time in the attract demo match at an unlocked frame rate. The console samples every 5 ms.
+        // Each player has their own reading. Player 1 is read every frame (always connected), so the held-button
+        // repeat pacing runs on that read alone: once a frame, for all the game's pad records.
         static PlatMutex poll_lock = PLAT_MUTEX_INIT;
-        static NpadState last;
-        static uint64_t last_ns;
+        static NpadState last[MAX_PLAYERS];
+        static uint64_t last_ns[MAX_PLAYERS];
         plat_mutex_lock(&poll_lock);
-        if (!last_ns || now - last_ns >= 1000000) poll(&last), last_ns = now;
-        st.buttons = last.buttons;
-        st.lx = last.lx, st.ly = last.ly, st.rx = last.rx, st.ry = last.ry;
-        repeat_pace(now);
+        if (!last_ns[id] || now - last_ns[id] >= 1000000) poll(&last[id], (int)id), last_ns[id] = now;
+        st.buttons = last[id].buttons;
+        st.lx = last[id].lx, st.ly = last[id].ly, st.rx = last[id].rx, st.ry = last[id].ry;
+        if (id == ID_NO1) repeat_pace(now);
         plat_mutex_unlock(&poll_lock);
         st.attributes = ATTR_CONNECTED | ATTR_WIRED;
     }
@@ -759,17 +909,26 @@ static void ov_touch_states(Cpu *c) {
 }
 
 // Result ShowControllerSupport(ControllerSupportResultInfo *out, const ControllerSupportArg &): the applet would let
-// the player pick controllers; one is always connected, so it returns at once with player 1 (TotK ov_input.c)
+// the players connect controllers; it returns at once with the players connected (player 1 always: the keyboard)
+// and player 1 as the one selected (TotK ov_input.c answers one controller). fastball: the argument (libnx
+// HidLaControllerSupportArg) starts {s8 players min, s8 players max, take over, left justify, permit dual, single
+// mode, ...}: MLB asks for up to n players for a local match of n (main+0x1344274, 1.0.20, n clamped to 1..4), single
+// mode for one.
 static void ov_controller_support(Cpu *c) {
     ControllerSupportResult *out = arg_p(c, 0);
-    if (out) *out = (ControllerSupportResult){1, {0}, ID_NO1};
-    rt_log("hid: controller support applet answered with one controller");
+    const int8_t *arg = arg_p(c, 1);
+    int players = __builtin_popcount(__atomic_load_n(&player_mask, __ATOMIC_ACQUIRE));
+    if (arg && arg[1] > 0 && players > arg[1]) players = arg[1];
+    if (arg && arg[5]) players = 1;
+    if (out) *out = (ControllerSupportResult){(int8_t)players, {0}, ID_NO1};
+    rt_log("hid: controller support applet (up to %d players) answered with %d", arg ? arg[1] : 0, players);
     ret_x(c, 0);
 }
 
-// ---- vibration: two devices (left, right motor) on the controller. A handle is {type, player, device, pad}.
+// ---- vibration: two devices (left, right motor) on each player's controller. A handle is {type, player, device,
+// pad}; the player byte is the NpadId.
 enum { VIB_TYPE_FULL_KEY = 3 };
-static float vib_low, vib_high;
+static float vib_low[MAX_PLAYERS], vib_high[MAX_PLAYERS];
 
 // int GetVibrationDeviceHandles(VibrationDeviceHandle *out, int n, const NpadIdType &id, NpadStyleSet style)
 static void ov_vib_handles(Cpu *c) {
@@ -800,14 +959,15 @@ static void ov_vib_send(Cpu *c) {
     const uint8_t *h = arg_p(c, 0);
     const VibrationValue *v = arg_p(c, 1);
     knobs();
-    if (!h || !v || !rumble_on) return;
+    if (!h || !v || !rumble_on || h[1] >= MAX_PLAYERS) return;
+    int p = h[1];
     plat_mutex_lock(&lock);
-    if (h[2]) vib_high = v->amp_high > v->amp_low ? v->amp_high : v->amp_low;
-    else vib_low = v->amp_low > v->amp_high ? v->amp_low : v->amp_high;
-    float lo = vib_low, hi = vib_high;
+    if (h[2]) vib_high[p] = v->amp_high > v->amp_low ? v->amp_high : v->amp_low;
+    else vib_low[p] = v->amp_low > v->amp_high ? v->amp_low : v->amp_high;
+    float lo = vib_low[p], hi = vib_high[p];
     plat_mutex_unlock(&lock);
     lo *= (float)rumble_gain, hi *= (float)rumble_gain;
-    pad_rumble((uint16_t)(fminf(fmaxf(lo, 0), 1) * 65535), (uint16_t)(fminf(fmaxf(hi, 0), 1) * 65535));
+    pad_rumble(p, (uint16_t)(fminf(fmaxf(lo, 0), 1) * 65535), (uint16_t)(fminf(fmaxf(hi, 0), 1) * 65535));
 }
 
 HOST_OVERRIDE("_ZN2nn3hid14InitializeNpadEv", ov_initialize_npad);

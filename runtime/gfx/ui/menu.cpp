@@ -286,7 +286,7 @@ static bool g_modal;            // a confirmation is open: B and Esc close it, n
 static const char *const kMenuKeys[] = {
     "RENDER_SCALE", "UPSCALER", "SHARPNESS", "DLSS", "DLSS_PRESET", "FSR", "FSR_VERSION", "FSR_SHARPNESS", "AA", "AA_STRENGTH", "ANISO", "COLOR_PRESET", "COLOR_BRIGHTNESS", "COLOR_CONTRAST", "COLOR_SATURATION",
     "COLOR_GAMMA", "FULLSCREEN", "WINDOW_SIZE", "VK_PRESENT", "FPS_LIMIT", "ASPECT", "GPU_INDEX", "PERF_OVERLAY", "FRAME_QUEUE",
-    "ASSUME_FOCUS", "KEEP_TUTORIALS", "RTTS_AUTOSAVE", "WALKUP_LIGHT", "WALKUP_LEADERS", "VOLUME", "PAD_MAP", "PROMPTS", "RUMBLE", "RUMBLE_STRENGTH", "STICK_DEADZONE", "LSTICK_DEADZONE",
+    "ASSUME_FOCUS", "KEEP_TUTORIALS", "RTTS_AUTOSAVE", "WALKUP_LIGHT", "WALKUP_LEADERS", "VOLUME", "PAD_MAP", "PAD_PLAYERS", "PROMPTS", "RUMBLE", "RUMBLE_STRENGTH", "STICK_DEADZONE", "LSTICK_DEADZONE",
     "RSTICK_DEADZONE", "ASYNC_PREEMPT", "REPLAY_ASYNC", "PIPE_WAIT", "PIPE_SKIP", "LIB_PREBUILD",
     "LIB_PREBUILD_THREADS", "PIPE_PREBUILD", "PREWARM_XLATE", "GPL", "ASTC", "MEMORY", "TEX_ALIAS",
     "TEX_VRAM_PRESSURE", "ASTC_BC", "LOD_GUARD", "FIX_C0", "FIX_ZERO", "BIND_SKIP", "SHADER_MEMO", "PIPE_MEMO",
@@ -687,11 +687,20 @@ static void tab_controls(float scale) {
                "swing with X or square). The button icons follow.\n\nBy label: always the menu layout, so gameplay "
                "controls move (the right and bottom buttons trade places, and so do the left and top ones).\n\nBy "
                "position: always the gameplay layout, so menus confirm with B or circle, as in the Switch version.");
+    static const char *const players[] = {"One player each", "All player 1"};
+    opt_choice("PAD_PLAYERS", "Controllers", players, 2,
+               "How the game sees several connected controllers.\n\nOne player each (default): the first controller "
+               "connected is player 1, the next player 2, up to 4, as on the console, for local multiplayer. A "
+               "controller keeps its number while connected; one that connects takes the lowest free number. The "
+               "keyboard is always player 1.\n\nAll player 1: every controller drives player 1 together.");
     static const char *const prompts[] = {"Automatic", "Nintendo", "Xbox", "PlayStation"};
     opt_choice("PROMPTS", "Button icons", prompts, 4,
-               "Whose buttons the game's prompts show.\n\nAutomatic: the controller you used last (Xbox or "
-               "PlayStation; the game's own Switch icons with a Nintendo controller, or with none). The face buttons "
-               "follow the Face buttons row, so each prompt names the button to press.");
+               "Whose buttons the game's prompts show.\n\nAutomatic: player 1's controller (Xbox or PlayStation; "
+               "the game's own Switch icons with a Nintendo controller, or with none). The game has one set of "
+               "prompts for all players, so with an Xbox and a PlayStation controller connected the prompts follow "
+               "player 1; choose Xbox or PlayStation here to show the other. With Controllers set to All player 1: "
+               "the controller you used last. The face buttons follow the Face buttons row, so each prompt names the "
+               "button to press.");
     opt_toggle("RUMBLE", "Vibration", "Controller rumble when the game asks for it.");
     opt_slider("RUMBLE_STRENGTH", "Vibration strength", 0, 300,
                "How strongly the controller vibrates. 100 % is the strength the game asks for; above it, weak "

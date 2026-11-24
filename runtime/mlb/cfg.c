@@ -32,6 +32,7 @@ static const CfgMeta metas[] = {
     {"WALKUP_LIGHT", "1", "0|1", RESTART},   // tools/data/patches-*.txt: no lighting freeze before each pitch
     {"WALKUP_LEADERS", "1", "0|1", RESTART},   // tools/data/patches-*.txt: league leaders built once per inning change
     {"PAD_MAP", "auto", "auto|label|position", LIVE},   // hid.c: face buttons by label in menus, by place in play
+    {"PAD_PLAYERS", "each", "each|one", LIVE},   // hid.c: each controller its own player (1 to 4), or all player 1
     {"RUMBLE", "1", "0|1", LIVE},   // hid.c: vibration on the controllers
     {"PAD_DRIVER", "sdl", "sdl|xinput", RESTART},   // hid.c: SDL3 (Xbox and PlayStation pads) or XInput (Xbox only)
     {"PROMPTS", "auto", "auto|nintendo|xbox|playstation", LIVE},   // prompts.c: whose buttons the game's prompts show

@@ -272,6 +272,8 @@ static struct {
         VkImage out, mv;
         VmaAllocation out_mem, mv_mem;
         VkImageView out_view, mv_view;
+        // fastball: the view of out the composite samples, alpha read as 1 (size_for says why)
+        VkImageView out_tex;
         NgxHandle *feat;
         void *ffx;               // fastball: the FSR context of this size (vk_ffx.c), with FSR
         // fastball, FSR only (mask_pass, made at its first FSR frame): the scene depth as clip w, this frame's into
@@ -365,6 +367,7 @@ static void free_size(struct Size *e) {
     rec_wait_submits();   // fastball: parts handed to the recorder are in the queue first (vk_rec.h rec_submit_part)
     vkDeviceWaitIdle(c->device);   // a fourth size (rare): the evicted images may still be in flight
     if (e->out_view) vkDestroyImageView(c->device, e->out_view, NULL);
+    if (e->out_tex) vkDestroyImageView(c->device, e->out_tex, NULL);
     if (e->mv_view) vkDestroyImageView(c->device, e->mv_view, NULL);
     if (e->out) vmaDestroyImage(c->vma, e->out, e->out_mem);
     if (e->mv) vmaDestroyImage(c->vma, e->mv, e->mv_mem);
@@ -417,6 +420,26 @@ static struct Size *size_for(VkCommandBuffer cb, uint32_t w, uint32_t h, uint32_
         !image2d(w, h, VK_FORMAT_R16G16_SFLOAT, u, &e->mv, &e->mv_mem, &e->mv_view)) {
         free_size(e);
         return NULL;
+    }
+    // fastball: the composite reads the scene's alpha. Its fragment shader (daf10a59) averages all four channels of
+    // the scene over 9 taps and, in shots where the game sets c5[9].z (the close-ups between pitches), blends the
+    // scene with something darker by that alpha; it also writes it as the picture's alpha. MLB's scene is B10G11R11,
+    // so the game always reads 1 there. The output here is RGBA16F and holds what the upscaler wrote in alpha: 1 from
+    // FSR 3.1, but not from FSR 4 (issue #27: between-pitch shots dark with a tile grid on an RX 9070 XT, black on an
+    // RX 6650 XT). So the composite samples a view that reads alpha as 1, as the scene does (out_view stays the
+    // upscalers' plain storage view; a swizzled view cannot be a storage image).
+    {
+        const VkCtx *c = vk_ctx();
+        VkImageViewCreateInfo vi = {.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO, .image = e->out,
+                                    .viewType = VK_IMAGE_VIEW_TYPE_2D, .format = VK_FORMAT_R16G16B16A16_SFLOAT,
+                                    .components = {VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_IDENTITY,
+                                                   VK_COMPONENT_SWIZZLE_IDENTITY, VK_COMPONENT_SWIZZLE_ONE},
+                                    .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1}};
+        if (vkCreateImageView(c->device, &vi, NULL, &e->out_tex) != VK_SUCCESS) {
+            e->out_tex = VK_NULL_HANDLE;
+            free_size(e);
+            return NULL;
+        }
     }
     VkImage im[2] = {e->out, e->mv};
     to_general(cb, im, 2);
@@ -879,7 +902,7 @@ static VkImageView evaluate(VkExec *ex, uint32_t ow, uint32_t oh) {
                (unsigned long long)D.mv_frames, (unsigned long long)D.mv_none, (unsigned long long)D.cuts,
                (unsigned long long)D.holds, (unsigned long long)D.why[0], (unsigned long long)D.why[1],
                (unsigned long long)D.why[2]);
-    return e->out_view;
+    return e->out_tex;
 }
 
 // NGX's DLSS on the armed scene into e->out. 0: it failed (DLSS off for the run).
