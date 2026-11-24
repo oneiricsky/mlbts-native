@@ -113,8 +113,16 @@ def read_scenario(path):
 
 
 def state(g):
-    o = g.counts_obj()
-    d = struct.unpack("<12I", g.rd(o, 0x30))
+    b = None
+    for _ in range(100):   # the count object is briefly unreadable while the game rebuilds it at some transitions
+        o = g.counts_obj()
+        b = g.rd(o, 0x30) if o else None
+        if b or not g.alive():
+            break
+        time.sleep(0.1)
+    if not b:
+        raise RuntimeError("the game's count object stayed unreadable for 10 s")
+    d = struct.unpack("<12I", b)
     return dict(away_score=d[2], home_score=d[3], balls=d[4], strikes=d[5], outs=d[6], half_index=d[8],
                 inning=d[8] // 2 + 1, half="bottom" if d[8] & 1 else "top")
 
@@ -172,6 +180,21 @@ def apply_runners(g, spec):
     return False
 
 
+TEAMS_PTR = BASE + 0x3AEB728   # two-team table T: team objects at T+0x18 and T+0x20
+
+
+def side_byte(g):
+    """The game's real batting side: byte [[T+0x20]+0x124]. It flips at every natural half-inning transition."""
+    t = g.u64(TEAMS_PTR)
+    b = g.u64(t + 0x20) if t else 0
+    r = g.rd(b + 0x124, 1) if b else None
+    return r[0] if r else None
+
+
+def expected_side(half_index):
+    return 1 if half_index % 2 == 0 else 0   # top of an inning has side 1 when the counter and the side agree (the game's start: 0 and 1)
+
+
 def half_index_of(sc):
     if "inning" in sc or "half" in sc:
         return (int(sc.get("inning", 1)) - 1) * 2 + (1 if sc.get("half", "top") == "bottom" else 0)
@@ -194,6 +217,23 @@ def apply_one(g, sc, a, watch):
         if want_half_index < cur:
             log("ERROR: cannot go back from half-inning %d to %d; put the scenarios in order" % (cur, want_half_index))
             return False
+        if want_half_index > cur:
+            s_now = side_byte(g)
+            if s_now is not None and want_half_index % 2 != s_now:
+                # One natural transition flips the side by one, but the counter jumps by any amount: only a target whose
+                # parity equals the current side comes out with the right team batting. Otherwise take one more real
+                # transition first.
+                log("batting side %d does not fit half-inning %d after one transition: one extra natural transition first" % (s_now, want_half_index))
+                put(g, 0x18, 2)
+                t0 = time.time()
+                while time.time() - t0 < a.transition_timeout and state(g)["half_index"] == cur:
+                    if not g.alive():
+                        log("ERROR: the game exited during the extra transition")
+                        return False
+                    time.sleep(0.2)
+                time.sleep(2.5)
+                cur = state(g)["half_index"]
+                log("extra transition done, half-inning index now", cur)
         if want_half_index > cur:
             put(g, 0x20, want_half_index - 1)
             put(g, 0x18, 2)
@@ -221,6 +261,11 @@ def apply_one(g, sc, a, watch):
             same = got == want
             ok &= same
             log("FIELD %-11s want %-6s got %-6s %s" % (key, want, got, "OK" if same else "MISMATCH"))
+    if want_half_index is not None:
+        got_side, want_side = side_byte(g), expected_side(want_half_index)
+        same = got_side == want_side
+        ok &= same
+        log("FIELD %-11s want %-6s got %-6s %s" % ("batting_side", want_side, got_side, "OK" if same else "MISMATCH (the wrong team is batting)"))
     if "runners" in sc:
         occ = occupied(g)
         want = RUNNER_SETS.get(norm_runners(sc["runners"]))

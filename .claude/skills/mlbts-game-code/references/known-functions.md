@@ -228,3 +228,17 @@ Detail on [Lighting](Lighting) (which covers the animation core it found next do
 | the 119-slot vtable family is "the AI decision layer" (Region A, [I]) | it is the actor/play-control API the AI drives; 47 tables, not about 40, and no AI scoring inside | C | [AI actor API](AI-actor-API) |
 | `0x7000e0fb10` is "the game-mode table" (game-binary.md) | an end-of-game telemetry builder that also maps settings to a mode description; the mode choice is that ladder | C | [Game modes](Game-modes) |
 | `0x70012d20a0` "one step a frame, ~50 frames" (walkup-freeze.md) | flag `0xec01` confirmed; the bit-9 path loops all stages with a GPU wait, which the 1.0.20 stage code does not reconcile with 50 frames | C flag, open count | [Lighting](Lighting) |
+
+## Teams, batting side and the live count object (2026-11-24, found while building the scenario tool)
+
+| Address | What | Tag | Evidence |
+|---|---|---|---|
+| global `main+0x3aeb728` | pointer to the two-team table T: team object A at `T+0x18`, team object B at `T+0x20` | C | disassembly of `0xd1cd78` / `0xd1cd98` |
+| byte `[B+0x124]` (B = `[T+0x20]`) | the BATTING side, 0 or 1: index of the batting team object in T | C | `0xd1cd78` returns `T[0x18 + 8*side]`; read live: write after the transition trick unproven |
+| `0x700d1cd78` | `GetBattingTeam()`: `[T + 0x18 + 8 * byte([[T+0x20]+0x124])]` | C | disassembly |
+| `0x700d1cd98` | `GetFieldingTeam()`: the other one: `[T + 0x18 + 8 * (byte == 0)]` | C | disassembly |
+| `[teamobj+0x120]` | the team's id (0..29) | I | `0x7000e32230` (half-inning start) loads it from both accessors |
+| `0x7000e32230` | half-inning start (`[HALF INNING]`, "Half Inning Start: Cleared Event Buffer"): resets per-half fields, calls both team accessors | C | strings, body |
+| `0x7000fe0cd0` / `0x7000f94700` | lineup setup / pitcher intro for the half-inning (`[DefensiveLineup: ...]`, `[Pitcher Intro: ...]`) | C strings, I role | map_find |
+| `[[main+0x227e6b8]]` = count object O | `+0x8` away score, `+0xc` home score, `+0x10` balls, `+0x14` strikes, `+0x18` outs, `+0x20` half-inning index (even top, odd bottom): all write-proven; `+0x19c/+0x1ac/+0x1bc` base array is rebuilt from the real runners within about 3 s | C (live writes) | `tools/scenario.py`, five passing scenarios |
+| `0x70001824b74` | `GetConfig(k)`: byte `settings+0x3e+k`; k=1 home team, k=2 away team: only the stadium and uniforms follow them, not the players | C | live runs and screenshots |
