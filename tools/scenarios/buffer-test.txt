@@ -1,0 +1,9 @@
+# Tests buffer dumps and the frame log: dumps the 8-byte pointer to the match settings (main+0x4651350) twice,
+# once at the match_settings marker and once at stop; stops at the field texture marker.
+name = buftest
+home = 0
+away = 1
+framelog = buftest-frames.txt
+stop_at_marker = field_texture
+dump = buffer:addr=0x7004651350,size=8,at=match_settings
+dump = buffer:addr=0x7004651350,size=8
