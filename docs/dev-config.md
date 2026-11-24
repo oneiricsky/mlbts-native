@@ -170,6 +170,28 @@ anything. `compare` also takes old logs with a `label=` prefix. The summary read
 starts with a timestamp (`MLB_LOG_TIME=1` puts `[ 12.345] ` in front of every line): its patterns are not anchored
 to the start of the line.
 
+## Headless test runs
+
+A run nobody watches needs no window, no sound and no keyboard focus. These settings (environment variables or
+`mlb.cfg` lines, all off by default) make that possible; the game, its memory and its own screenshots run as usual.
+
+| Setting | What it does |
+|---|---|
+| `TOTK_HIDDEN_WINDOW=1` | The window is hidden right after it is made: nothing on screen or on the taskbar. (`TOTK_BACKGROUND_WINDOW=1` only keeps it behind other windows.) |
+| `TOTK_AUDIO=paced` | A fake audio device plays the queue out at 48,000 frames a second and never opens the real device. A run needs no sound hardware, and the game does not stall at the loading screen when there is none. |
+| `MLB_HARNESS_PAD=1` | The game logs the address of a 64-bit word at start (`hid: MLB_HARNESS_PAD: external buttons word at ...`). Another process writes bits there to hold buttons (bit n = Switch button n: 0 A, 1 B, 2 X, 3 Y, 10 PLUS, 11 MINUS, 12 LEFT, 13 UP, 14 RIGHT, 15 DOWN). |
+| `MLB_HARNESS_PRESS=<ms>[,A\|B\|X\|Y\|PLUS]` | Holds one button for 120 ms every period, for cutscenes and prompts that wait for a press. |
+| `MLB_SHOT=<frame>[,<frame>...]` | Saves the presented picture of those frames as `<profile>/shot-<frame>.png`, whatever the window does. |
+| `MLB_ROMFS_OVERRIDE=<folder>` | A game file that also exists at the same relative path in that folder is read from there (a patched `FRONTEND/STATS/GAMEDATA.BIN` changes the default match options). |
+| `MLB_RUN_LABEL=<name>` | Shows `[name]` in the title bar when a window is visible, to tell games running side by side apart. |
+
+Give each run its own slot: its own folder with its own copy of the exe under its own program name, its own profile and
+its own log, so runs and the tools that stop them never touch each other or the owner's game. Stop a test game by its
+process id or its unique program name, never by `mlb.exe`.
+
+What was checked (2026-11-24): with the first four settings a whole AI-vs-AI match, the post-game menu (right five
+times, A, A to confirm) and a second match in the same process ran with the window hidden and no sound device in use.
+
 ## Dev harness plan
 
 Status: design only, nothing here is built yet. It records what the owner settled. Anything not settled is marked
