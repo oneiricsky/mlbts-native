@@ -87,3 +87,18 @@ A game run needs an audio output. With none, the log says `audout: no output dev
 ## Harness scenarios
 
 `tools/scenario.py` and `tools/scenarios/*.txt` drive the game into a chosen match (teams, stadium, a stop condition, dumps). A dump such as `texture:fmt=0x25,size=512x512` writes the 512x512 field texture at the graphics call that creates it, and `tools/harness.py compare` byte-compares two dump folders. That is how the [Match-start freeze](Match-start-freeze) patch was shown to leave the picture unchanged. Open: where the game stores time of day and weather, and how to call its own scenario code (Situation, Moment, Storyline).
+
+## Choosing the teams of a run (found 2026-11-24)
+
+Problem: the players, cards and scorebug stayed Blue Jays against Dodgers in every run, whatever team numbers were written into the match settings block, the saved default record or the team objects.
+
+What is established (all measured):
+
+- The settings block (pointer at `main+0x4651350`) is a keyed option table. `f_7001824c18(key, value)` stores a byte at block+0x3e+key and `f_7001824b74(key)` reads it; key 1 is the home team (`+0x3f`) and key 2 the away team (`+0x40`). Team ids follow division order: 0 BAL, 1 BOS, 2 NYY, 3 TB, 4 TOR, 5 to 9 AL Central, 10 to 14 AL West, 15 to 19 NL East, 20 to 24 NL Central, 25 ARI, 26 COL, 27 LAD, 28 SD, 29 SF (0 to 4, 25 and 27 confirmed against the game's own picks).
+- The game reads those bytes once, as the menus leave team select, and builds the rosters, cards and scorebug then. The same bytes written after the match is built change only the stadium and uniforms (control: Ohtani in a Red Sox uniform at Fenway, scorebug TOR/LAD).
+- An untouched default pick (TOR at LAD) keeps rosters loaded earlier, so the cursor has to be moved once before confirming.
+- `tools/exhibition.py` presses the real menu buttons, overwrites the block right after the team-select confirm and checks it at the first batter. Four cold launches, four pairings, all matching on screen and in the block: BAL at BOS (Taylor Ward, Garrett Crochet), LAD at TOR (Ohtani, Gausman), BOS at BAL (Roman Anthony, Trevor Rogers), BOS at BAL again under a full function trace.
+
+Plain words: the game decides the two teams at one moment in the menu. Fill the table then and the right players play; fill it later and nothing but the stadium and shirts change.
+
+Still open: the function that copies the picked ids into the rosters. A first-call trace of all game functions (`MLB_FNTRACE=0x7000000000-0x7004c00000`) puts the build between the team-select confirm and the starters screen; the candidates there are the game-entry builder `f_700066f390` and its callee `f_700066f770`, reached through `f_7000bab324`.
