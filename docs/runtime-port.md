@@ -265,8 +265,8 @@ linker. `tools/shader_smoke.py` translates a sample of MLB's FXB shaders offline
     menu commands that buy or refund upgrades; after one, the game's own after-game autosave (with its own checks)
     runs at the next screen change, normally when the player leaves the Perks, Tools or pitch upgrade screen. While
     a new player is made (from the BpCreation screen until the Road to the Show home opens) the runtime saves
-    nothing: making a player runs the same commands, and saving there wrote a half-made career that kept the default
-    name "Joe Random". With the setting off nothing is installed.
+    nothing: making a player runs the same commands, and a save there left a half-made career with the default name
+    "Joe Random" when the game closed before its own next save. With the setting off nothing is installed.
 23. **Cache storage** (`MLB_CACHE_STORAGE`, on by default; `runtime/mlb/cache_storage.c`). The game mounts cache
     storage 0 as `FS_GameData` and keeps custom batting cameras, Audio Unlockables, an inventory copy and other files
     there, but never creates it and its NACP declares none, so the mount failed and those files were never kept

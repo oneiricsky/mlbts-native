@@ -27,8 +27,10 @@
 //
 // Not while a new player is made. Making a player runs the same commands (the position's confirm, the first tokens
 // spent on the TokenAllocation screen, the same screen as the hub's Tools), and the game's autosave then saved the
-// half-made player as a career: before the name was typed, so the career kept the default name "Joe Random", and it
-// then opened straight in the hub instead of the rest of creation (seen 2026-11-23, a player's report and test runs).
+// half-made player as a career, before the name was typed. When the game closed or stopped before its own next save,
+// that save was what was left: a career with the default name "Joe Random" that opened straight in the hub instead of
+// the rest of creation (seen 2026-11-23, a player's report and test runs; a creation that runs on to the game's next
+// save was not followed).
 // Making a player starts at the BpCreation screen and ends when the Road to the Show home (RttSHomeMain) opens, and
 // in between this module saves nothing, so the game saves when it would without it. services.c hands every game log
 // line to rtts_autosave_game_log, which follows those two screens.
