@@ -242,3 +242,10 @@ Detail on [Lighting](Lighting) (which covers the animation core it found next do
 | `0x7000fe0cd0` / `0x7000f94700` | lineup setup / pitcher intro for the half-inning (`[DefensiveLineup: ...]`, `[Pitcher Intro: ...]`) | C strings, I role | map_find |
 | `[[main+0x227e6b8]]` = count object O | `+0x8` away score, `+0xc` home score, `+0x10` balls, `+0x14` strikes, `+0x18` outs, `+0x20` half-inning index (even top, odd bottom): all write-proven; `+0x19c/+0x1ac/+0x1bc` base array is rebuilt from the real runners within about 3 s | C (live writes) | `tools/scenario.py`, five passing scenarios |
 | `0x70001824b74` | `GetConfig(k)`: byte `settings+0x3e+k`; k=1 home team, k=2 away team. The rosters, cards and scorebug follow them only when they are written as the menus leave team select (`tools/exhibition.py`); `f_7001824c18` is the matching SetConfig | C | live runs and screenshots |
+
+## Main-menu data object (2026-11-24, hides the offline panel)
+
+- `f_7000c0da4c` (vtable 0x70021bd438 slot 6) sets obj+0x129 (online) and obj+0x128 (server allows panels). [C, read, logged 0/0 offline]
+- `f_7000c0dc6c` (slot 8) hands field values to the menu script; SHOW_DYNAMIC_PANELS = obj+0x129 && obj+0x128. [C]
+- Fields of the class "GameModesMain" (slot 4 `f_7000c0df84`): HAS_ANNOUNCEMENTS, ANNOUNCMENT_NUMBER, SHOW_DYNAMIC_PANELS, STUBS_CAP (`f_7000c0d970`). [C]
+- See docs/menu-offline-panel.md and runtime/mlb/menu_offline.c.

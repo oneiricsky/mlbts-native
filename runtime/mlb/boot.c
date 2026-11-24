@@ -138,6 +138,8 @@ void rt_boot(void) {
     tutorials_apply();   // tutorials.c: MLB_KEEP_TUTORIALS, the list of finished tutorials kept in the profile
     void rtts_autosave_apply(void);
     rtts_autosave_apply();   // rtts_autosave.c: MLB_RTTS_AUTOSAVE, hub upgrades saved when their screen is left
+    void menu_offline_apply(void);
+    menu_offline_apply();   // menu_offline.c: MLB_HIDE_OFFLINE_BANNER
     void cache_storage_apply(void);
     cache_storage_apply();   // cache_storage.c: MLB_CACHE_STORAGE, <profile>/cache/0 for the game's FS_GameData
     rt_patches_init();
