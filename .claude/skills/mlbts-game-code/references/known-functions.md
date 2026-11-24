@@ -228,3 +228,39 @@ Detail on [Lighting](Lighting) (which covers the animation core it found next do
 | the 119-slot vtable family is "the AI decision layer" (Region A, [I]) | it is the actor/play-control API the AI drives; 47 tables, not about 40, and no AI scoring inside | C | [AI actor API](AI-actor-API) |
 | `0x7000e0fb10` is "the game-mode table" (game-binary.md) | an end-of-game telemetry builder that also maps settings to a mode description; the mode choice is that ladder | C | [Game modes](Game-modes) |
 | `0x70012d20a0` "one step a frame, ~50 frames" (walkup-freeze.md) | flag `0xec01` confirmed; the bit-9 path loops all stages with a GPU wait, which the 1.0.20 stage code does not reconcile with 50 frames | C flag, open count | [Lighting](Lighting) |
+
+## Teams, batting side and the live count object (2026-11-24, found while building the scenario tool)
+
+| Address | What | Tag | Evidence |
+|---|---|---|---|
+| global `main+0x3aeb728` | pointer to the two-team table T: team object A at `T+0x18`, team object B at `T+0x20` | C | disassembly of `0xd1cd78` / `0xd1cd98` |
+| byte `[B+0x124]` (B = `[T+0x20]`) | the BATTING side, 0 or 1: index of the batting team object in T | C | `0xd1cd78` returns `T[0x18 + 8*side]`; read live: write after the transition trick unproven |
+| `0x700d1cd78` | `GetBattingTeam()`: `[T + 0x18 + 8 * byte([[T+0x20]+0x124])]` | C | disassembly |
+| `0x700d1cd98` | `GetFieldingTeam()`: the other one: `[T + 0x18 + 8 * (byte == 0)]` | C | disassembly |
+| `[teamobj+0x120]` | the team's id (0..29) | I | `0x7000e32230` (half-inning start) loads it from both accessors |
+| `0x7000e32230` | half-inning start (`[HALF INNING]`, "Half Inning Start: Cleared Event Buffer"): resets per-half fields, calls both team accessors | C | strings, body |
+| `0x7000fe0cd0` / `0x7000f94700` | lineup setup / pitcher intro for the half-inning (`[DefensiveLineup: ...]`, `[Pitcher Intro: ...]`) | C strings, I role | map_find |
+| `[[main+0x227e6b8]]` = count object O | `+0x8` away score, `+0xc` home score, `+0x10` balls, `+0x14` strikes, `+0x18` outs, `+0x20` half-inning index (even top, odd bottom): all write-proven; `+0x19c/+0x1ac/+0x1bc` base array is rebuilt from the real runners within about 3 s | C (live writes) | `tools/scenario.py`, five passing scenarios |
+| `0x70001824b74` | `GetConfig(k)`: byte `settings+0x3e+k`; k=1 home team, k=2 away team. The rosters, cards and scorebug follow them only when they are written as the menus leave team select (`tools/exhibition.py`); `f_7001824c18` is the game's matching setter, `f_7001824fa0(block,k,v)` the block-level writer. The read is `f_7000bab324` (next rows) | C | live runs, screenshots, first-call trace |
+| `0x7000bab324` | Game-entry handler (vtable method, no direct caller in the generated C): reads option 2 (away) then option 1 (home) and hands both ids to `f_700066f324`; the settings write has to land before this call | C | body, main_0081.c:41346-41359; first call at 61.426 s in `work/runs/sonnet/logs/mlb.log` |
+| `0x700181ad34` | Team-table accessor: base `[x0+8]`, count `[x0+0x3c]`, stride 0x550, team id at record+0xc; 57 callers | C | body, main_0169.c |
+| `0x700066f390` | Game-entry builder: fills the match's two 0x550-byte team slots with `f_700185d058` (once per side), then builds each side with `f_700066f770` | C | body, main_0050.c; first call at 61.426 s with x0 = the away team record |
+| `0x700185d058` | Copies one whole 0x550-byte team record into a match slot: 0x368-byte block at +0x50 (via `f_70018492c4`: 0x2f8 memcpy plus fields through +0x364), 0x148 bytes at +0x3b8, 0x39 bytes at +0x500, pointers at +0x540/+0x548 | C | body, main_0170.c; 3 callers |
+| `0x700066f770` | Builds one side's player entries from the player list in the copied team block, 0x138 bytes each into a 40-slot array; carries the "ERROR: Entering MLB game when minor leagues are not active but player is not on an MLB team" check | C body, I role | main_0050.c; first call at 61.426 s |
+
+## Main-menu data object (2026-11-24, hides the offline panel)
+
+- `f_7000c0da4c` (vtable 0x70021bd438 slot 6) sets obj+0x129 (online) and obj+0x128 (server allows panels). [C, read, logged 0/0 offline]
+- `f_7000c0dc6c` (slot 8) hands field values to the menu script; SHOW_DYNAMIC_PANELS = obj+0x129 && obj+0x128. [C]
+- Fields of the class "GameModesMain" (slot 4 `f_7000c0df84`): HAS_ANNOUNCEMENTS, ANNOUNCMENT_NUMBER, SHOW_DYNAMIC_PANELS, STUBS_CAP (`f_7000c0d970`). [C]
+- See docs/menu-offline-panel.md and runtime/mlb/menu_offline.c.
+
+## Trainer targets: settings, pitcher state, contact result (2026-11-24, read only, nothing written live)
+
+| Address | What | Tag | Evidence |
+|---|---|---|---|
+| `[main+0x4651350]` = match settings S | `GetConfig(k)` (`0x7001824b74`) and the setter `0x7001824c18`: byte keys 0..0x53 at `S+0x3e+k`, 16-bit keys from 0x54 at `S+0x2c..0x3c` | C | both bodies |
+| key names for 0..0x53 | key = field offset in the save class `D_GAME_OPTIONS` (`tools/save_schema.py`): 1/2 teams, 4 innings, 5 temperature, 6 cloud, 9 stadium, 19 game mode, 22..25 training mode/player/data/pitches, 68 time of day, 70 humidity, 72 retro, 73 fog, 78 extra-inning runner | I | 1/2 written live; 19, 24 and 72 match the mode tests in `docs/map/bodies/modes.md`; other keys unchecked |
+| `0x70002e9dc4` (`RolePitcher::PitchStoreFatigue`), third argument P | pitcher state: floats `P+0x20` stamina, `+0x0c/+0x10/+0x14` H/K/BB, `+0xf4` energy, `+0xf8` confidence | C offsets, not read live | the two "PITCH DIAGNOSTICS" printf argument loads |
+| `0x700167bb7c` contact model, result struct R | floats `R+0x40` incline, `+0x44` azimuth (radians), `+0x48` exit scalar, `+0x34/38/3c` spin; ints `R+8` hit type, `+0xc` hit direction | I | the "AUTO HIT" and "Hit Type" printf argument loads |
+| `[main+0x227e6e0]` W | `W+0x28` flag, `W+0x64/68/6c` floats printed as "AUTO WIND x y z": looks like a wind override | H | same function |

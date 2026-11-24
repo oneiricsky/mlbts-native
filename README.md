@@ -6,22 +6,34 @@ below, unchanged. Its download links and release instructions point to upstream,
 
 ## What this fork is for
 
-Making the game run and look better on an AMD Radeon RX 6700 XT. Changes so far:
+Making the game run and look better on an AMD Radeon RX 6700 XT, and mapping enough of it to work on: a function
+map, the save format, and test runs that need nobody at the PC. Changes so far:
 
 | Feature | Behavior | Usage | Depends On |
 | --- | --- | --- | --- |
-| Background pipeline builds | Shader pipelines build on background workers, and ones recorded by earlier runs are built at boot, so a draw doesn't wait on a shader compile. | Built-In | Nothing |
-| Skip boot intro | Skips the two boot intro movies, so the game goes from the loading screen to the title. | `MLB_SKIP_INTRO`, or F1 → Game → Skip intro logos | Nothing |
-| Dev options | The game's own hidden dev options work. `AIvAI` plus `GameOnly` boots straight into an AI-vs-AI game with no input. | Option table and hashes: [docs/dev-config.md](docs/dev-config.md) | Nothing |
-| PS5 face normal maps | Swaps each player's face normal map (skin detail, stubble) for the PS5 one, for 2,370 heads. | Build an index with `tools/make_hd_index.py`; `MLB_HD_TEXTURES=off` turns it off | Your own PS5 dump |
-| PS5 face colour maps | The same swap for colour maps. They used to turn faces yellow; that is fixed, but only a few faces have been checked, so they stay off unless asked for. | Add `--color` when building the index | Your own PS5 dump |
-| Run summary | Turns one test run's log into a JSON summary of frame rate, slow frames and PS5 texture loads. | `python -I tools/perf_summary.py <log>` | A run log |
-| Shorter match-start freeze | At match start the game builds a 512x512 picture of the field's edges, and about 97 % of it is empty space that the game's clean-up pass still checks pixel by pixel. The skip leaves those pixels out: that step goes from about 0.7 s to about 0.2 s, and the finished picture is byte for byte the same on the two stadiums tested (Dodger Stadium and Baltimore). | `MLB_MSDF_SKIP` (on by default); settings menu, Shorter freeze at match start; game 1.0.20 only so far; branch `research/msdf-skip`; report: [docs/reports/2026-11-23-msdf-skip.md](docs/reports/2026-11-23-msdf-skip.md) | Nothing |
-| Dev harness (in progress) | A scenario file per run (teams, stadium, seed, what to record, when to stop) so a test can be repeated, run without anyone at the PC, and compared run against run. Being built: team and stadium picking (shown to work in a test), a fixed seed and clock, texture dumps, a smoke test and an in-game dev panel. | `MLB_HARNESS=<scenario file>` in dev builds; plan and status: [docs/dev-config.md](docs/dev-config.md) | A game run needs a live audio output |
+| Background pipeline builds | Shader pipelines build on background workers and at boot, so a draw does not wait on a compile. | Built-In | Nothing |
+| Skip boot intro | Skips the two boot movies, so the loading screen goes straight to the title. | `MLB_SKIP_INTRO`, or F1 → Game → Skip intro logos | Nothing |
+| Dev options | The game's hidden dev options work, so `AIvAI` with `GameOnly` boots straight into an AI-vs-AI game. | Option table and hashes: [docs/dev-config.md](docs/dev-config.md) | Nothing |
+| PS5 face normal maps | Replaces each player's face normal map with the PS5 one, for 2,370 heads. | Build an index with `tools/make_hd_index.py`; `MLB_HD_TEXTURES=off` turns it off | A PS5 dump |
+| PS5 face colour maps | Does the same for colour maps, off by default because only a few faces have been checked. | Add `--color` when building the index | A PS5 dump |
+| Run summary | Turns one run's log into a JSON summary of frame rate, slow frames and PS5 texture loads. | `python -I tools/perf_summary.py <log>` | A run log |
+| Shorter match-start freeze | Skips the empty-space pixels in the match-start field pass, cutting that step from about 0.7 s to about 0.2 s with the same finished picture on the two stadiums tested. | `MLB_MSDF_SKIP` (on by default); settings menu, Shorter freeze at match start; game 1.0.20 only so far; branch `research/msdf-skip`; report: [docs/reports/2026-11-23-msdf-skip.md](docs/reports/2026-11-23-msdf-skip.md) | Nothing |
+| Function map | Indexes every recompiled function and reads 47,308 of them into one-line roles, with a per-class field index and a generated wiki. | `python -I tools/map_find.py fn 0xADDR` (also `str "text"`, `callers 0xADDR`, `role 0xADDR`); [wiki](https://github.com/oneiricsky/mlbts-native/wiki) | Nothing |
+| Save files | Decodes the save container and class schema, and edits a field by name, recompresses and rewrites the hash. | `python -I tools/save_schema.py`; `python -I tools/save_edit.py info` (also `verify`, `rename`, `rehash`, `set-field`) | Your save files |
+| Headless test runs | Runs the game with its window hidden, a fake audio device and scripted buttons. | `TOTK_HIDDEN_WINDOW=1`, `TOTK_AUDIO=paced`, `MLB_HARNESS_PAD=1`, `MLB_SHOT=<frame>`; details: [docs/dev-config.md](docs/dev-config.md#headless-test-runs) | A Vulkan-capable GPU |
+| Exhibition on demand | Starts a match between two chosen teams by pressing the menus and rewriting the match-settings block before the lineups are built. | `python -I tools/exhibition.py --exe mlb_sonnet --log RUN.out --away 1 --home 0` | `MLB_HARNESS_PAD=1`, and a run that goes through the menus (not the AIvAI autostart) |
+| Dev harness (in progress) | A scenario file per run makes a test repeatable and runnable with nobody at the PC. | `MLB_HARNESS=<scenario file>` in dev builds; plan and status: [docs/dev-config.md](docs/dev-config.md) | Nothing with `TOTK_AUDIO=paced` |
 
 In six 400-second test runs on an RX 6700 XT the game ran at about 59 fps with and without PS5 textures, memory did not
-grow, and loading the faces took 0.5 to 0.8 seconds once per match. The textures are read from your own dump and are not
+grow, and loading the faces took 0.5 to 0.8 seconds once per match. The textures are read from your dump and are not
 part of any release. Details and numbers: [docs/ps5-textures.md](docs/ps5-textures.md) and [docs/reports](docs/reports/).
+
+## Research and the wiki
+
+The function map, the read roles, the per-class field index and the save schema are published on the fork's wiki:
+<https://github.com/oneiricsky/mlbts-native/wiki>. Those pages are generated from `work/map/` by `tools/map_roles.py`
+and `tools/wiki_build.py`, so they can be rebuilt from the generated C at any time. The code map behind them is
+explained in [docs/map/README.md](docs/map/README.md).
 
 
 <details>

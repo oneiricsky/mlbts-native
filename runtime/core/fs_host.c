@@ -850,6 +850,24 @@ static uint32_t host_path_kind(const char *path, char *out, size_t cap, int *kin
     }
     if (!rn) rest[rn++] = '/';
     rest[rn] = 0;
+    // fastball: MLB_ROMFS_OVERRIDE=<folder> (test runs): a file of the game's RomFS that also exists at the same relative
+    // path in that folder is read from there, so one run can use a changed default (the match options in
+    // FRONTEND/STATS/GAMEDATA.BIN: teams, stadium, weather) without touching the installed game data.
+    if (k == M_ROM) {
+        static const char *ovr;
+        static int ovr_read;
+        if (!ovr_read) {
+            ovr = cfg_get("MLB_ROMFS_OVERRIDE");
+            if (ovr && !*ovr) ovr = NULL;
+            ovr_read = 1;
+        }
+        char alt[PATH_CAP];
+        if (ovr && snprintf(alt, sizeof alt, "%s%s", ovr, rest) < (int)sizeof alt && plat_file_exists(alt) &&
+            strlen(alt) < cap) {
+            strcpy(out, alt);
+            return 0;
+        }
+    }
     if (snprintf(out, cap, "%s%s", root, rest) >= (int)cap) return FS_R_INVALID_PATH;
     size_t L = strlen(out);
     while (L > strlen(root) && out[L - 1] == '/') out[--L] = 0;

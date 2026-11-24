@@ -286,7 +286,7 @@ static bool g_modal;            // a confirmation is open: B and Esc close it, n
 static const char *const kMenuKeys[] = {
     "RENDER_SCALE", "UPSCALER", "SHARPNESS", "DLSS", "DLSS_PRESET", "FSR", "FSR_VERSION", "FSR_SHARPNESS", "AA", "AA_STRENGTH", "ANISO", "COLOR_PRESET", "COLOR_BRIGHTNESS", "COLOR_CONTRAST", "COLOR_SATURATION",
     "COLOR_GAMMA", "FULLSCREEN", "WINDOW_SIZE", "VK_PRESENT", "FPS_LIMIT", "ASPECT", "GPU_INDEX", "PERF_OVERLAY", "FRAME_QUEUE",
-    "ASSUME_FOCUS", "KEEP_TUTORIALS", "RTTS_AUTOSAVE", "WALKUP_LIGHT", "WALKUP_LEADERS", "VOLUME", "PAD_MAP", "PROMPTS", "RUMBLE", "RUMBLE_STRENGTH", "STICK_DEADZONE", "LSTICK_DEADZONE",
+    "ASSUME_FOCUS", "KEEP_TUTORIALS", "RTTS_AUTOSAVE", "HIDE_OFFLINE_BANNER", "WALKUP_LIGHT", "WALKUP_LEADERS", "VOLUME", "PAD_MAP", "PROMPTS", "RUMBLE", "RUMBLE_STRENGTH", "STICK_DEADZONE", "LSTICK_DEADZONE",
     "RSTICK_DEADZONE", "ASYNC_PREEMPT", "REPLAY_ASYNC", "PIPE_WAIT", "PIPE_SKIP", "LIB_PREBUILD",
     "LIB_PREBUILD_THREADS", "PIPE_PREBUILD", "PREWARM_XLATE", "GPL", "ASTC", "MEMORY", "TEX_ALIAS",
     "TEX_VRAM_PRESSURE", "ASTC_BC", "LOD_GUARD", "FIX_C0", "FIX_ZERO", "BIND_SKIP", "SHADER_MEMO", "PIPE_MEMO",
@@ -659,6 +659,10 @@ static void tab_game(float scale) {
                "On (the default), when you buy perk or attribute upgrades in Road to the Show, the game's own "
                "autosave runs as you leave that screen. Off, they are kept only by a manual save or the autosave "
                "after your next game. Applies after a restart.");
+    opt_toggle("HIDE_OFFLINE_BANNER", "Hide the offline panel",
+               "Without a connection the game-modes menu fills its top with a large panel, \"You are currently "
+               "disconnected\", that lists what a connection would give you. On (the default), the panel and its "
+               "frame are not shown; the mode buttons below are unchanged. Applies after a restart.");
     opt_unavailable(rt_patch_set("walkup_light") < 0 ? no_patches : nullptr);
     opt_toggle("WALKUP_LIGHT", "No freeze before each pitch",
                "Before each pitch the game redid its stadium lighting in one frame, a freeze of about a quarter "

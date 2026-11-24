@@ -170,6 +170,28 @@ anything. `compare` also takes old logs with a `label=` prefix. The summary read
 starts with a timestamp (`MLB_LOG_TIME=1` puts `[ 12.345] ` in front of every line): its patterns are not anchored
 to the start of the line.
 
+## Headless test runs
+
+A run nobody watches needs no window, no sound and no keyboard focus. These settings (environment variables or
+`mlb.cfg` lines, all off by default) make that possible; the game, its memory and its own screenshots run as usual.
+
+| Setting | What it does |
+|---|---|
+| `TOTK_HIDDEN_WINDOW=1` | The window is hidden right after it is made: nothing on screen or on the taskbar. (`TOTK_BACKGROUND_WINDOW=1` only keeps it behind other windows.) |
+| `TOTK_AUDIO=paced` | A fake audio device plays the queue out at 48,000 frames a second and never opens the real device. A run needs no sound hardware, and the game does not stall at the loading screen when there is none. |
+| `MLB_HARNESS_PAD=1` | The game logs the address of a 64-bit word at start (`hid: MLB_HARNESS_PAD: external buttons word at ...`). Another process writes bits there to hold buttons (bit n = Switch button n: 0 A, 1 B, 2 X, 3 Y, 10 PLUS, 11 MINUS, 12 LEFT, 13 UP, 14 RIGHT, 15 DOWN). |
+| `MLB_HARNESS_PRESS=<ms>[,A\|B\|X\|Y\|PLUS]` | Holds one button for 120 ms every period, for cutscenes and prompts that wait for a press. |
+| `MLB_SHOT=<frame>[,<frame>...]` | Saves the presented picture of those frames as `<profile>/shot-<frame>.png`, whatever the window does. |
+| `MLB_ROMFS_OVERRIDE=<folder>` | A game file that also exists at the same relative path in that folder is read from there (a patched `FRONTEND/STATS/GAMEDATA.BIN` changes the default match options). |
+| `MLB_RUN_LABEL=<name>` | Shows `[name]` in the title bar when a window is visible, to tell games running side by side apart. |
+
+Give each run its own slot: its own folder with its own copy of the exe under its own program name, its own profile and
+its own log, so runs and the tools that stop them never touch each other or the owner's game. Stop a test game by its
+process id or its unique program name, never by `mlb.exe`.
+
+What was checked (2026-11-24): with the first four settings a whole AI-vs-AI match, the post-game menu (right five
+times, A, A to confirm) and a second match in the same process ran with the window hidden and no sound device in use.
+
 ## Dev harness plan
 
 Status: design only, nothing here is built yet. It records what the owner settled. Anything not settled is marked
@@ -321,3 +343,37 @@ The panel grows with each step.
 - Stop conditions, state-snapshot contents, and the "sane frame rate" number.
 - Whether team id 12 is the Athletics.
 - 1.0.15: needs its exefs, then `tools/addrmap.py` and a test.
+
+## Choosing the teams of a run (2026-11-24)
+
+The lineups, rotations, cards and scorebug come from the match settings block (home team +0x3f, away +0x40 and their
+copies) at the moment the menus build the match, not from a live write into a match that is already loaded.
+`tools/exhibition.py --exe <name> --log <game log> --away <id> --home <id> --from title` presses the game's own menu
+buttons (needs `MLB_HARNESS_PAD=1`), overwrites the block right after the team-select confirm, and goes on to the first
+batter. Two traps found: the untouched default pick (TOR at LAD) keeps preloaded rosters, so the tool moves the home
+cursor once first; and the pause menu remembers its cursor, so leaving a match by menu is unreliable (start a fresh game
+instead). Check on a cold start: away 0 (BAL), home 1 (BOS): scorebug BAL/BOS, Taylor Ward batting, Garrett Crochet
+pitching, Fenway Park. Failed controls: a write made after the match was built gave Ohtani in a Red Sox uniform and a
+TOR/LAD scorebug.
+
+Repeat check (2026-11-24, three cold starts, each a fresh game): away 0 / home 1 (BAL at BOS: Taylor Ward, Crochet),
+away 27 / home 4 (LAD at TOR, the reverse of the default: Ohtani batting, Gausman pitching, Rogers Centre), away 1 /
+home 0 (BOS at BAL: Roman Anthony batting, Trevor Rogers pitching). Each logged RESULT PASS and the scorebug matched.
+The field that picks the players is the settings block's home byte (+0x3f) and away byte (+0x40), read as the menus
+leave team select; the lineups follow a change of those bytes made then, and ignore one made later.
+
+Traced 2026-11-24 (first-call trace of all of `main` on a cold exhibition run, block at 0x1c71dab80 that run): the
+match settings block is a keyed option object. `f_7001824fa0(block, key, value)` stores option `key` at block+0x3e+key
+(key 4 also forces +0x42 = 9; keys up to 0x53 are plain bytes), so HOMETEAM (key 1) is +0x3f and AWAYTEAM (key 2) is
++0x40. `f_7001824f08` reads +0x3e (game mode, 3 = a mode test) through the pointer at main+0x4651350. The game's own
+matching setter is `f_7001824c18(key, value)`.
+
+Found 2026-11-24: the game reads the two bytes in `f_7000bab324`, the screen handler the menus run on the way out of
+team select. It passes both ids to `f_700066f324`, which resolves each one through the league's 30-entry team table
+(`f_700181ad34`, stride 0x550, team id at record+0xc) and calls the game-entry builder `f_700066f390` with the two
+team records. The builder copies each record into the match's two 0x550-byte team slots with `f_700185d058`, and the
+per-player work is in `f_700066f770`, which builds the side's 0x138-byte player entries from the player list in the
+copied record. So the ids are not written into roster rows: each id selects a team record that carries the roster,
+and the match builds its own copy. First-call trace of the fourth run (BOS at BAL,
+`work/runs/sonnet/logs/mlb.log`): team select at 45.759 s, the four functions above first called together at 61.426 s,
+GAME ENTERED at 88.886 s. Details on the wiki page [Dev harness and measuring](wiki/Dev-harness-and-measuring.md).
