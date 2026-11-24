@@ -84,16 +84,25 @@ def main():
         body = relink(strip_front_and_title(read(f"{ROOT}/docs/map/regions/{stem}.md")))
         write(a.out, f"Region-{letter}", body, f"docs/map/regions/{stem}.md")
         pages.append(f"Region-{letter}")
+    bodies = {"intro-states": "Intro-states", "batter-up": "Batter-up-state", "pre-play-in-play": "Play-states",
+              "play-inning-game-over": "End-states"}
+    for stem, page in bodies.items():
+        body = relink(strip_front_and_title(read(f"{ROOT}/docs/map/bodies/{stem}.md")))
+        write(a.out, page, body, f"docs/map/bodies/{stem}.md")
+        pages.append(page)
     readme = relink(strip_front_and_title(read(ROOT + "/docs/map/README.md")))
     readme = re.sub(r"\[(source/[^\]]+)\]\([^)]*\)", r"`docs/map/\1`", readme)
     readme = readme.replace("[coverage.md](coverage.md)", "`docs/map/coverage.md`").replace("[binary.md](binary.md)", "[The game binary](The-game-binary)")
     readme = re.sub(r"\[regions/\]\(regions/\)", "the region pages", readme)
+    readme = re.sub(r"\[bodies/\]\(bodies/\)", "the game flow pages", readme)
     write(a.out, "Tools-and-the-code-map", readme, "docs/map/README.md")
     pages.append("Tools-and-the-code-map")
     side = ["[Home](Home)", "", "Findings"] + [f"- [{p.replace('-', ' ')}]({p})" for p in
             ("Walk-up-freeze", "Match-start-freeze", "Load-stalls", "Frame-rate-and-GPU-waits", "PS5-textures", "Upstream-bug-research")]
     side += ["", "How it works"] + [f"- [{p.replace('-', ' ')}]({p})" for p in
              ("How-the-port-works", "The-game-binary", "Known-game-functions", "Tracing-playbook", "Dev-harness-and-measuring")]
+    side += ["", "Game flow"] + [f"- [{p.replace('-', ' ')}]({p})" for p in
+             ("Game-state-machine", "Intro-states", "Batter-up-state", "Play-states", "End-states")]
     side += ["", "Game binary regions"] + [f"- [Region {l}](Region-{l})" for l in REGIONS]
     side += ["", "Reference"] + [f"- [{p.replace('-', ' ')}]({p})" for p in
              ("History-and-open-questions", "Tools-and-the-code-map", "Start-here")]

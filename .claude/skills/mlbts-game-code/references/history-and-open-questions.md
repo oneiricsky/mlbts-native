@@ -27,7 +27,7 @@ Read before reopening something. Sources: `docs/reports/*.md`, `docs/walkup-free
 | Issue 18 | no ball in one batting-cage mode above 60 fps; cause unknown; the 0.2.0 step guard is unconfirmed | same mode at 60, 144 and 240; `frame rate:` log lines; an F12 capture |
 | Issues 21 and 26 | local 2-player is a design limit (all pads merged into Player 1) | how the game asks for pad 2 |
 | Frame timing | which screens use whole-vsync timing; MLB's lowest safe frame step | log the mode per screen |
-| Game state machine | which of slots 5 and 7 is update and which is transition; who calls them; the base class | read the handlers' bodies |
+| Game state machine | slots 5, 6, 7 read as enter, exit and update in all 12 states (checked); still open: who owns and calls the states, what ends an inning or a game, how BATTER_UP hands over, what most event ids mean | find the caller through the vtable address, then the owner's loop |
 | Harness | where time of day and weather are stored; whether scenario code (Situation, Moment, Storyline) is callable | `MLB_WATCH` and state diffs |
 | Anonymous functions | about 95,000 `main` functions, about 12,800 with a string | the region notes list what is unexamined |
 

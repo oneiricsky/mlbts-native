@@ -382,145 +382,327 @@ Every `f_70…` address that appears in a doc, source file or script, with what 
 
 | Address | Callers | Direct callees | Lines | Mentioned in | Context |
 |---|---|---|---|---|---|
-| 0x7000000000 | 0 | 0 | 6 | `docs/map/binary.md:385` (+1 more) | \| 0x7000000000 \| 0 \| 0 \| 6 \| `tools/prof_report.py:26` \| # " 0001:000e8c00 f_7000000000 00000001400e9c00 main_0000.o" \| |
-| 0x700000b140 | 0 | 12 | 84 | `docs/map/binary.md:386` (+2 more) | \| 0x700000b140 \| 0 \| 12 \| 84 \| `docs/walkup-freeze.md:14` \| `f_70012e0150` runs (once a frame, from `f_700000b140`). \| |
+| 0x7000000000 | 0 | 0 | 6 | `docs/map/binary.md:385` (+1 more) | \| 0x7000000000 \| 0 \| 0 \| 6 \| `docs/map/binary.md:385` (+1 more) \| \\| 0x7000000000 \\| 0 \\| 0 \\| 6 \\| `tools/prof_report… |
+| 0x700000b140 | 0 | 12 | 84 | `docs/map/binary.md:386` (+2 more) | \| 0x700000b140 \| 0 \| 12 \| 84 \| `docs/map/binary.md:386` (+2 more) \| \\| 0x700000b140 \\| 0 \\| 12 \\| 84 \\| `docs/walkup-f… |
 | 0x7000030ec0 | 1 | 15 | 1074 | `CLAUDE.md:68` (+4 more) | and the picture's signs trace a clean field outline. msdfgen's error-correction pass (`f_7000030ec0`, with |
-| 0x7000031e70 | 1 | 1 | 152 | `CLAUDE.md:69` (+4 more) | `f_7000031e70`, `f_7000033530`) then visits every pixel and computes `(a - 0.5) / (a - b)`; with infinities that is |
-| 0x7000033530 | 1 | 1 | 113 | `CLAUDE.md:69` (+7 more) | `f_7000031e70`, `f_7000033530`) then visits every pixel and computes `(a - 0.5) / (a - b)`; with infinities that is |
-| 0x70000336bc | 3 | 3 | 115 | `CLAUDE.md:87` (+6 more) | (`f_70000336bc`, `f_7000033530`); the divide-based range tests give NaN for an infinite pixel whatever its neighbours |
-| 0x70000339a0 | 1 | 2 | 345 | `docs/reports/2026-11-23-msdf-skip.md:27` (+1 more) | The pass (`f_7000030ec0`, that is main+0x30ec0, with `f_7000031e70`, `f_7000033530`, `f_70000339a0`, `f_70000336bc`) |
-| 0x7000095390 | 1 | 27 | 1083 | `docs/wiki/Match-start-freeze.md:19` | \| `f_7000095390` \| drives the step and logs "MSDF took ..." \| |
-| 0x70003eea50 | ? | ? | ? | `runtime/mlb/cache_storage.c:10` | // PXP_SAVE.BIN, PA_SAVE.BIN read back through "ReloadSaveData" (f_7001029cd8, f_70003eea50) |
-| 0x70004408e4 | ? | ? | ? | `docs/map/binary.md:393` (+2 more) | \| 0x70004408e4 \| ? \| ? \| ? \| `docs/map/binary.md:394` (+1 more) \| \\| 0x700045c704 \\| ? \\| ? \\| ? \\| `runtime/mlb/rtts_… |
-| 0x700045c704 | ? | ? | ? | `runtime/mlb/rtts_autosave.c:13` (+1 more) | // tokens through f_70004408e4, which stores them as a u16 at +0x12c0 of the record that f_700045c704(&record) |
-| 0x70004c779c | ? | ? | ? | `docs/map/binary.md:395` (+1 more) | \| 0x70004c779c \| ? \| ? \| ? \| `runtime/mlb/rtts_autosave.c:15` \| // f_70004c779c (slot 0x700217d580, three arguments, no res… |
-| 0x7000570280 | ? | ? | ? | `runtime/mlb/cache_storage.c:4` | // What the game does [C, 1.0.15 addresses; read 2026-11-20]: at start f_7000570280 mounts cache storage 0 as |
-| 0x7000570c50 | ? | ? | ? | `runtime/mlb/cache_storage.c:6` | // The game keeps files there through its file layer (location 3 in f_7000570c50): |
-| 0x70005a1300 | 22 | 2 | 17 | `docs/map/binary.md:398` (+1 more) | \| 0x70005a1300 \| 22 \| 2 \| 17 \| `docs/walkup-freeze.md:23` \| (`f_70005a1300(2)`, `f_70005a1a90()`). That is the freeze, the … |
-| 0x70005a1310 | ? | ? | ? | `runtime/gfx/vk_exec_xfer.c:410` (+1 more) | // nvnEventGetValue for such an event (f_70005a1310: 400,000-670,000 nvnSyncWait and GetValue calls a frame in the draft |
+| 0x7000031e70 | 1 | 1 | 152 | `CLAUDE.md:69` (+5 more) | `f_7000031e70`, `f_7000033530`) then visits every pixel and computes `(a - 0.5) / (a - b)`; with infinities that is |
+| 0x7000033530 | 1 | 1 | 113 | `CLAUDE.md:69` (+8 more) | `f_7000031e70`, `f_7000033530`) then visits every pixel and computes `(a - 0.5) / (a - b)`; with infinities that is |
+| 0x70000336bc | 3 | 3 | 115 | `CLAUDE.md:87` (+7 more) | (`f_70000336bc`, `f_7000033530`); the divide-based range tests give NaN for an infinite pixel whatever its neighbours |
+| 0x70000339a0 | 1 | 2 | 345 | `docs/map/binary.md:391` (+2 more) | \| 0x70000339a0 \| 1 \| 2 \| 345 \| `docs/reports/2026-11-23-msdf-skip.md:27` (+1 more) \| The pass (`f_7000030ec0`, that is main… |
+| 0x7000095390 | 1 | 27 | 1083 | `docs/map/binary.md:392` (+1 more) | \| 0x7000095390 \| 1 \| 27 \| 1083 \| `docs/wiki/Match-start-freeze.md:19` \| \\| `f_7000095390` \\| drives the step and logs "MS… |
+| 0x70000a7360 | 403 | 0 | 19 | `docs/map/bodies/batter-up.md:100` (+7 more) | \| `f_70000a7360` \| true when the pointer at `0x7003abfa98` is set and its field +0x18c is 1 \| C \| main_0006.c:29808; same poi… |
+| 0x70000a7430 | 24 | 0 | 19 | `docs/map/bodies/play-inning-game-over.md:66` | 1. Calls `f_70000a7360` and `f_70000a7430` and updates two settings objects through `f_7000df2bb0` and `f_7000df7b28` (3140-3225). |
+| 0x70000a8220 | 42 | 1 | 8 | `docs/map/bodies/play-inning-game-over.md:75` (+1 more) | \| else `f_70000a8220()` or `f_70000a82e0()` is true \| sub-state 13 PRES_MOMENTS_OUTRO \| 3435 \| |
+| 0x70000a82d0 | 5 | 0 | 9 | `docs/map/bodies/intro-states.md:92` | \| Slot 5 \| [C] logs "ATT_SCREEN: OptionsOnRamp.", clears `+0x26`, `+0x8`, `+0x3a`, `+0x44`, sets `+0x30`, checks `f_70000a82d0`… |
+| 0x70000a82e0 | 9 | 0 | 9 | `docs/map/bodies/play-inning-game-over.md:75` (+1 more) | \| else `f_70000a8220()` or `f_70000a82e0()` is true \| sub-state 13 PRES_MOMENTS_OUTRO \| 3435 \| |
+| 0x70000aa6c0 | 146 | 1 | 14 | `docs/map/bodies/intro-states.md:63` (+3 more) | \| Slot 5 \| [C] logs "ATT_SCREEN: Lineup intro." (`f_7001c1fb00`, 23 callers), stores a start time at `+0x8`, sets byte `+0x28` … |
+| 0x70000aaae0 | 90 | 0 | 13 | `docs/map/bodies/pre-play-in-play.md:54` (+1 more) | \| 13 \| CAREER_INTRO \| `f_700106ea54` at 15890; chosen by `f_700106e968` when `f_70000aaae0` is true \| C \| |
+| 0x70001c8500 | 46 | 0 | 70 | `docs/map/bodies/pre-play-in-play.md:108` | \| 0x213 \| IN_PLAY (2) or POST_PITCH (3) \| reads flag bytes in the event data (x1): +0x29 set goes to POST_PITCH; +0x21, +0x2b,… |
+| 0x70001e8834 | 3 | 11 | 2158 | `docs/map/bodies/play-inning-game-over.md:148` (+1 more) | The EXIT handler `f_700109cf7c` (19034-19330, 292 lines) sets sub-state 10 and prints EXIT (19314-19315). It calls `f_700107e208`… |
+| 0x7000231000 | 5 | 0 | 23 | `docs/map/bodies/intro-states.md:47` | \| Helper `f_700108ab40` \| [C] gets the singleton at `[0x700227e128]`, sets bit 0x800000 in a flag word at `[obj+0x34]` of `[0x7… |
+| 0x70002803f0 | 283 | 2 | 10 | `docs/map/bodies/pre-play-in-play.md:124` (+1 more) | \| 6 \| Event 0x5b or 0x21a arrives: sub-state 3, POST_PITCH. The run function `f_7001094afc` checks the options object from `f_7… |
+| 0x700029b5c8 | 65 | 2 | 10 | `docs/map/bodies/pre-play-in-play.md:124` | \| 6 \| Event 0x5b or 0x21a arrives: sub-state 3, POST_PITCH. The run function `f_7001094afc` checks the options object from `f_7… |
+| 0x70002a15d4 | 6 | 4 | 74 | `docs/map/bodies/pre-play-in-play.md:124` | \| 6 \| Event 0x5b or 0x21a arrives: sub-state 3, POST_PITCH. The run function `f_7001094afc` checks the options object from `f_7… |
+| 0x70002e2348 | 293 | 2 | 10 | `docs/map/bodies/play-inning-game-over.md:126` | 4. Calls `f_700109aa1c` (below) and then loops over a few checks on `f_70002e2348` (play data) that end in `f_700109ab58` when a … |
+| 0x70003aaf00 | 4 | 1 | 10 | `docs/map/bodies/play-inning-game-over.md:20` (+2 more) | Per-frame time: PLAY_OVER slot 7 adds the time step into `[state+8]` at main_0121.c:16719. INNING_OVER slot 7 keeps it in s8 and … |
+| 0x70003e53e0 | 22 | 0 | 9 | `docs/map/bodies/pre-play-in-play.md:73` | \| next of `f_700106f0d0` \| 6 or 21 \| decided from `f_70003e53e0` and `f_70003e56bc` results \| 17796 to 17901 \| |
+| 0x70003e56bc | 8 | 2 | 31 | `docs/map/bodies/pre-play-in-play.md:73` | \| next of `f_700106f0d0` \| 6 or 21 \| decided from `f_70003e53e0` and `f_70003e56bc` results \| 17796 to 17901 \| |
+| 0x70003eea50 | ? | ? | ? | `docs/map/binary.md:393` (+2 more) | \| 0x70003eea50 \| ? \| ? \| ? \| `runtime/mlb/cache_storage.c:10` \| // PXP_SAVE.BIN, PA_SAVE.BIN read back through "ReloadSaveD… |
+| 0x70004408e4 | ? | ? | ? | `docs/map/binary.md:395` (+1 more) | \| 0x700045c704 \| ? \| ? \| ? \| `runtime/mlb/rtts_autosave.c:13` (+1 more) \| // tokens through f_70004408e4, which stores them… |
+| 0x700045c704 | ? | ? | ? | `docs/map/binary.md:395` (+2 more) | \| 0x700045c704 \| ? \| ? \| ? \| `runtime/mlb/rtts_autosave.c:13` (+1 more) \| // tokens through f_70004408e4, which stores them… |
+| 0x70004c779c | ? | ? | ? | `docs/map/binary.md:396` (+1 more) | \| 0x70004c779c \| ? \| ? \| ? \| `docs/map/binary.md:395` (+1 more) \| \\| 0x70004c779c \\| ? \\| ? \\| ? \\| `runtime/mlb/rtts_… |
+| 0x70004d2aac | 8 | 1 | 18 | `docs/map/bodies/batter-up.md:84` | \| 0x152 \| calls `f_70004d2aac(7)` and `f_7000d9b008` with 4.0 \| C \| |
+| 0x70005398c0 | 233 | 0 | 33 | `docs/map/bodies/batter-up.md:136` (+2 more) | - Slot 5's first act is a call to `f_70005398c0` with the value 0xace9617f (main_0120.c:52150 to 52156). If it returns true the h… |
+| 0x700054aab8 | 665 | 1 | 5 | `docs/map/bodies/intro-states.md:44` | \| Slot 5 \| [C] clears a global byte (`[0x7002284000+0x9a8]`), asks `f_70000a7360` (true when `[[0x7003abfa98]+0x18c]` is 1), bu… |
+| 0x7000570280 | ? | ? | ? | `docs/map/binary.md:397` (+1 more) | \| 0x7000570280 \| ? \| ? \| ? \| `runtime/mlb/cache_storage.c:4` \| // What the game does [C, 1.0.15 addresses; read 2026-11-20]… |
+| 0x7000570c50 | ? | ? | ? | `docs/map/binary.md:398` (+1 more) | \| 0x7000570c50 \| ? \| ? \| ? \| `runtime/mlb/cache_storage.c:6` \| // The game keeps files there through its file layer (locati… |
+| 0x70005748ac | 84 | 2 | 18 | `docs/map/bodies/intro-states.md:54` (+2 more) | \| Slot 5 \| [C] zeroes phase and step, stores a start time at `+0x8` (seconds: `f_70005748ac` returns an integer tick count; the… |
+| 0x7000574c40 | 343 | 3 | 144 | `docs/map/bodies/batter-up.md:97` (+6 more) | \| `f_7000574c40` \| writes a log line; always followed by a newline call \| I \| 343 callers \| |
+| 0x70005a1300 | 22 | 2 | 17 | `docs/map/binary.md:399` (+1 more) | \| 0x70005a1300 \| 22 \| 2 \| 17 \| `docs/map/binary.md:398` (+1 more) \| \\| 0x70005a1300 \\| 22 \\| 2 \\| 17 \\| `docs/walkup-f… |
+| 0x70005a1310 | ? | ? | ? | `docs/map/binary.md:400` (+2 more) | \| 0x70005a1310 \| ? \| ? \| ? \| `runtime/gfx/vk_exec_xfer.c:410` (+1 more) \| // nvnEventGetValue for such an event (f_70005a13… |
 | 0x70005a1a90 | 47 | 1 | 65 | `docs/frame-rate.md:75` (+8 more) | thread polls an event word (`nvnEventGetValue`, 1.0.20 `f_70005a1a90`) until the GPU signal at the end of the frame |
 | 0x70005a4634 | ? | ? | ? | `docs/graphics-plan.md:131` (+3 more) | `nvnTextureBuilderSetSize2D`: three 1440x810 targets made by f_70005a4b88, called from f_70005a4634). The output |
 | 0x70005a4b88 | ? | ? | ? | `docs/graphics-plan.md:131` (+3 more) | `nvnTextureBuilderSetSize2D`: three 1440x810 targets made by f_70005a4b88, called from f_70005a4634). The output |
 | 0x70005a5368 | ? | ? | ? | `docs/graphics-plan.md:128` (+2 more) | - **Internal resolution (`MLB_RENDER_SCALE`, 2026-11-13).** The scene's size is not computed: f_70005a5368 returns entry |
-| 0x70005a5388 | 2 | 0 | 14 | `runtime/mlb/resolution.c:12` | // 1.0.20 moved them (tools/addrmap.py, checked in the disassembly): f_70005a5388 loads the table's address from |
+| 0x70005a5388 | 2 | 0 | 14 | `docs/map/binary.md:405` (+1 more) | \| 0x70005a5388 \| 2 \| 0 \| 14 \| `runtime/mlb/resolution.c:12` \| // 1.0.20 moved them (tools/addrmap.py, checked in the disass… |
+| 0x70005e6830 | 258 | 0 | 120 | `docs/map/bodies/batter-up.md:73` (+4 more) | Slot 9 calls `f_70005e6830(id, bus, this, mode)` for 17 ids on the bus at `[0x7002298000+0x428]`; slot 10 calls `f_70005e69d0(id,… |
+| 0x70005e69d0 | 215 | 0 | 108 | `docs/map/bodies/batter-up.md:73` (+4 more) | Slot 9 calls `f_70005e6830(id, bus, this, mode)` for 17 ids on the bus at `[0x7002298000+0x428]`; slot 10 calls `f_70005e69d0(id,… |
+| 0x70005e6b40 | 964 | 2 | 140 | `docs/map/bodies/batter-up.md:73` (+6 more) | Slot 9 calls `f_70005e6830(id, bus, this, mode)` for 17 ids on the bus at `[0x7002298000+0x428]`; slot 10 calls `f_70005e69d0(id,… |
+| 0x700066cf68 | 11 | 1 | 23 | `docs/map/bodies/pre-play-in-play.md:70` | \| 1 \| 2, 13 or 14 \| 13 if `f_70000aaae0` is true and `[[0x700227e688]+0x28] == 0` and `f_700066cf68` is true; 14 if the last t… |
+| 0x70008898c4 | 94 | 0 | 16 | `docs/map/bodies/play-inning-game-over.md:76` | \| else (after `f_70008898c4` and two bytes) \| sub-state 4 PRES_GROUP_A \| 3468 \| |
+| 0x70008a846c | 13 | 5 | 58 | `docs/map/bodies/play-inning-game-over.md:80` | MERCY_RULE (value 1) is entered by `f_70010906bc` (main_0121.c:4137-4227). It calls `f_7000e23cec` with the current sub-state, se… |
 | 0x70008c6460 | ? | ? | ? | `docs/map/source/runtime-gfx.md:736` (+3 more) | \| `obs_release_read` \| 778-793 \| static void (Cpu *) \| rt_original, cfg_bool, kern_core_away, plat_sleep_ms, fence_done, gfx_… |
-| 0x70008dc5b0 | ? | ? | ? | `docs/map/binary.md:406` (+1 more) | \| 0x70008dc5b0 \| ? \| ? \| ? \| `runtime/mlb/tutorials.c:7` \| // P = *(*(*0x7003abda98 + 0x198) + 0x318) (f_70008dc5b0 returns… |
-| 0x700092ae20 | 147 | 1 | 140 | `docs/map/binary.md:407` (+5 more) | \| 0x700092ae20 \| 147 \| 1 \| 140 \| `tools/packages/codec.py:22` (+1 more) \| f_70015351a4 raw bytes, f_700092ce50/f_700092ae20… |
-| 0x700092ce50 | 152 | 0 | 161 | `docs/map/binary.md:407` (+4 more) | \| 0x700092ae20 \| 147 \| 1 \| 140 \| `tools/packages/codec.py:22` (+1 more) \| f_70015351a4 raw bytes, f_700092ce50/f_700092ae20… |
-| 0x700093b09c | 0 | 2 | 68 | `tools/packages/server_msgs.py:252` | # 0x1b26202c -> CPartyManager::OnConductorAnswer(endpoint, success) = f_700093b09c. |
-| 0x7000946e20 | 1 | 3 | 24 | `tools/packages/profile_state.py:3` | u8 counter} and only the server message 0xAFE1519A {u32, u64, u8} (handler f_7000946e20) sets it back after a login. |
-| 0x70009a6e58 | 3 | 5 | 32 | `tools/packages/server_msgs.py:246` | # echo choice: CPluginAuth+0x54 (= CNetSession+0x59, set only by f_70009b2a54 <- f_70009a6e58 re-authorize) |
-| 0x70009a7454 | 1 | 10 | 207 | `docs/map/binary.md:412` (+3 more) | \| 0x70009a7454 \| 1 \| 10 \| 207 \| `docs/map/binary.md:498` (+2 more) \| \\| 0x700151c1dc \\| 3 \\| 20 \\| 358 \\| `tools/packa… |
-| 0x70009a7800 | 0 | 4 | 48 | `tools/packages/server_msgs.py:251` | # 0x07b7014f -> OnConductorAnswer(endpoint, plugin guid, u64, keep==0) = f_70009a7800, |
-| 0x70009b29b0 | 2 | 4 | 46 | `tools/packages/server_msgs.py:162` | keep_session=0 makes CNetPlayer wipe its cached AccountSession (f_70009b29b0) -> send 1. |
-| 0x70009b2a54 | 1 | 0 | 8 | `tools/packages/server_msgs.py:246` | # echo choice: CPluginAuth+0x54 (= CNetSession+0x59, set only by f_70009b2a54 <- f_70009a6e58 re-authorize) |
-| 0x70009e7fb4 | 0 | 38 | 1031 | `tools/packages/server_msgs.py:15` (+1 more) | # auth connection (CPluginAuth, f_70009e7fb4 handles S->C) |
-| 0x70009e8e10 | 1 | 13 | 252 | `docs/map/binary.md:417` (+1 more) | \| 0x70009e8e10 \| 1 \| 13 \| 252 \| `tools/packages/server_msgs.py:247` \| # -> 0x0ca403f1; else f_70009e8e10 'AttemptLinkDevice… |
-| 0x70009f100c | 2 | 9 | 174 | `tools/packages/server_msgs.py:30` (+1 more) | # conductor connection (conductor plugin f_70009f100c sends, f_70009f1400 handles) |
-| 0x70009f1400 | 0 | 0 | 69 | `tools/packages/server_msgs.py:30` (+1 more) | # conductor connection (conductor plugin f_70009f100c sends, f_70009f1400 handles) |
-| 0x70009f85a0 | 29 | 0 | 14 | `docs/map/binary.md:420` (+1 more) | \| 0x70009f85a0 \| 29 \| 0 \| 14 \| `tools/packages/rpc.py:8` \| f_70009f85a0 request_id = global counter @0x7003abf068 (returns … |
-| 0x70009f85c0 | 6 | 8 | 234 | `docs/map/source/tools-packages.md:119` (+2 more) | \| `pending_key` \| 185-191 \| \| encode \| Key of the client's pending-request map (f_70009f85c0 / f_70009f9070): BKDR*131 seede… |
-| 0x70009f8c4c | 0 | 4 | 46 | `tools/packages/rpc.py:49` | 0x7C335915 ServiceConnect C->S, sent once when the plugin attaches (f_70009f8c4c): |
-| 0x70009f8cf0 | 0 | 6 | 253 | `docs/map/binary.md:423` (+2 more) | \| 0x70009f8cf0 \| 0 \| 6 \| 253 \| `tools/packages/rpc.py:21` (+1 more) \| Timeout: f_70009f8cf0 synthesises a ServiceResponse w… |
-| 0x70009f9070 | 0 | 13 | 378 | `docs/map/source/tools-packages.md:119` (+2 more) | \| `pending_key` \| 185-191 \| \| encode \| Key of the client's pending-request map (f_70009f85c0 / f_70009f9070): BKDR*131 seede… |
-| 0x7000a12970 | 30 | 33 | 492 | `docs/map/binary.md:425` (+1 more) | \| 0x7000a12970 \| 30 \| 33 \| 492 \| `tools/packages/rpc.py:7` \| f_7000a12970 Transaction::Run "STARTING SERVICE [%s]" ... "SEN… |
-| 0x7000a13298 | 0 | 16 | 281 | `docs/map/source/tools-packages.md:117` (+6 more) | \| `make_response_xml` \| 152-159 \| \| \| Minimal document f_7000a13298 accepts. Root name is not checked; status/message/id mus… |
-| 0x7000a15440 | 11 | 13 | 177 | `docs/map/binary.md:427` (+1 more) | \| 0x7000a15440 \| 11 \| 13 \| 177 \| `tools/packages/rpc.py:9` \| f_7000a15440 params map -> JSON text (types 1..8); type-9 para… |
-| 0x7000a32a5c | ? | ? | ? | `docs/map/binary.md:428` (+2 more) | \| 0x7000a32a5c \| ? \| ? \| ? \| `runtime/mlb/tutorials.c:11` (+1 more) \| // the name is there. f_7000a32a5c(P, name) adds a na… |
-| 0x7000a32ce0 | ? | ? | ? | `docs/map/binary.md:429` (+1 more) | \| 0x7000a32ce0 \| ? \| ? \| ? \| `runtime/mlb/tutorials.c:10` \| // f_7000a32ce0(P, name) says whether a name is in the list; th… |
-| 0x7000a62db4 | 32 | 9 | 84 | `docs/map/binary.md:430` (+1 more) | \| 0x7000a62db4 \| 32 \| 9 \| 84 \| `tools/packages/rpc.py:19` \| msg.xml != "timedout"; parses msg.xml (f_7000a62db4: TinyXML2 d… |
-| 0x7000bd1da0 | ? | ? | ? | `docs/map/binary.md:431` (+2 more) | \| 0x7000bd1da0 \| ? \| ? \| ? \| `docs/map/binary.md:432` (+1 more) \| \\| 0x7000bd3140 \\| 0 \\| 12 \\| 177 \\| `runtime/mlb/rt… |
-| 0x7000bd3140 | 0 | 12 | 177 | `runtime/mlb/rtts_autosave.c:14` | // returns. A trigger upgrade goes through f_7000bd1da0 (1.0.20 f_7000bd3140), whose cost can be 0. |
-| 0x7000d197fc | ? | ? | ? | `runtime/mlb/cache_storage.c:7` | // CUSTOMCAMS_<n>.CAM custom batting cameras (looked up by f_7000d197fc when a mode starts, written by |
-| 0x7000d199bc | ? | ? | ? | `docs/map/binary.md:434` (+1 more) | \| 0x7000d199bc \| ? \| ? \| ? \| `runtime/mlb/cache_storage.c:8` \| // f_7000d199bc) \| |
-| 0x7000d52680 | 7 | 8 | 235 | `docs/map/binary.md:435` (+2 more) | \| 0x7000d52680 \| 7 \| 8 \| 235 \| `docs/walkup-freeze.md:11` \| batter and inning, `f_7000d52680`), and the lighting is baked a… |
-| 0x7000de6728 | ? | ? | ? | `docs/map/binary.md:436` (+1 more) | \| 0x7000de6728 \| ? \| ? \| ? \| `runtime/mlb/rtts_autosave.c:8` \| // f_7000de6728 (no arguments) is the career autosave the ga… |
-| 0x7000e53620 | 1 | 4 | 18 | `docs/map/binary.md:437` (+3 more) | \| 0x7000e53620 \| 1 \| 4 \| 18 \| `docs/map/binary.md:438` (+2 more) \| \\| 0x7000e53654 \\| 2 \\| 18 \\| 675 \\| `docs/walkup-f… |
-| 0x7000e53654 | 2 | 18 | 675 | `docs/walkup-freeze.md:56` (+4 more) | game-start sequence `f_7000e53620` both call `f_7000e53654`, which clears the object and builds the lists |
-| 0x7000e54080 | 3 | 0 | 211 | `docs/map/binary.md:439` (+3 more) | \| 0x7000e54080 \| 3 \| 0 \| 211 \| `docs/map/binary.md:441` (+2 more) \| \\| 0x7000e545f0 \\| 3 \\| 10 \\| 406 \\| `docs/walkup-… |
-| 0x7000e543a4 | 3 | 4 | 156 | `docs/map/binary.md:440` (+3 more) | \| 0x7000e543a4 \| 3 \| 4 \| 156 \| `docs/walkup-freeze.md:57` (+2 more) \| (`main+0xe53808`), and then `f_7000e543a4`, which bui… |
-| 0x7000e545f0 | 3 | 10 | 406 | `docs/walkup-freeze.md:88` | right after the first build (entry of `f_7000e54080`) and right after the second (entry of `f_7000e545f0`) at the |
-| 0x7000e54c00 | 2 | 11 | 685 | `docs/walkup-freeze.md:54` (+4 more) | broadcast "moments" refresh: `f_7000e5640c` (from the batter-up event) -> `f_7000e54c00`, which builds top-10 lists |
-| 0x7000e5640c | 1 | 26 | 694 | `docs/map/binary.md:442` (+3 more) | \| 0x7000e54c00 \| 2 \| 11 \| 685 \| `docs/map/binary.md:442` (+5 more) \| \\| 0x7000e54c00 \\| 2 \\| 11 \\| 685 \\| `docs/walkup… |
-| 0x7001029cd8 | ? | ? | ? | `runtime/mlb/cache_storage.c:10` | // PXP_SAVE.BIN, PA_SAVE.BIN read back through "ReloadSaveData" (f_7001029cd8, f_70003eea50) |
-| 0x700108b628 | 0 | 73 | 587 | `docs/walkup-freeze.md:19` (+2 more) | 2. **When the next pitch's batter-up state starts**, the handler `f_700108b628` asks for the lighting again, |
-| 0x700109a6a8 | 0 | 26 | 197 | `docs/map/binary.md:446` (+1 more) | \| 0x700109a6a8 \| 0 \| 26 \| 197 \| `docs/walkup-freeze.md:17` \| `f_700109a6a8`) sets flags `0xec01`, and the bake runs one ste… |
-| 0x70010c3298 | ? | ? | ? | `runtime/gfx/vk_exec_xfer.c:17` | // TOTK resets and reports it 3 to 8 times a frame in the field and its CPU reads the results back (f_70010c3298); a 0 |
+| 0x70008dc5b0 | ? | ? | ? | `docs/map/binary.md:407` (+1 more) | \| 0x70008dc5b0 \| ? \| ? \| ? \| `docs/map/binary.md:406` (+1 more) \| \\| 0x70008dc5b0 \\| ? \\| ? \\| ? \\| `runtime/mlb/tutor… |
+| 0x70008e40a4 | 1 | 0 | 9 | `docs/map/bodies/intro-states.md:44` | \| Slot 5 \| [C] clears a global byte (`[0x7002284000+0x9a8]`), asks `f_70000a7360` (true when `[[0x7003abfa98]+0x18c]` is 1), bu… |
+| 0x700092ae20 | 147 | 1 | 140 | `docs/map/binary.md:408` (+5 more) | \| 0x700092ae20 \| 147 \| 1 \| 140 \| `docs/map/binary.md:407` (+5 more) \| \\| 0x700092ae20 \\| 147 \\| 1 \\| 140 \\| `tools/pac… |
+| 0x700092ce50 | 152 | 0 | 161 | `docs/map/binary.md:408` (+4 more) | \| 0x700092ae20 \| 147 \| 1 \| 140 \| `docs/map/binary.md:407` (+5 more) \| \\| 0x700092ae20 \\| 147 \\| 1 \\| 140 \\| `tools/pac… |
+| 0x700093b09c | 0 | 2 | 68 | `docs/map/binary.md:410` (+1 more) | \| 0x700093b09c \| 0 \| 2 \| 68 \| `tools/packages/server_msgs.py:252` \| # 0x1b26202c -> CPartyManager::OnConductorAnswer(endpoi… |
+| 0x7000946e20 | 1 | 3 | 24 | `docs/map/binary.md:411` (+1 more) | \| 0x7000946e20 \| 1 \| 3 \| 24 \| `tools/packages/profile_state.py:3` \| u8 counter} and only the server message 0xAFE1519A {u32… |
+| 0x70009a6e58 | 3 | 5 | 32 | `docs/map/binary.md:412` (+2 more) | \| 0x70009a6e58 \| 3 \| 5 \| 32 \| `tools/packages/server_msgs.py:246` \| # echo choice: CPluginAuth+0x54 (= CNetSession+0x59, se… |
+| 0x70009a7454 | 1 | 10 | 207 | `docs/map/binary.md:499` (+2 more) | \| 0x700151c1dc \| 3 \| 20 \| 358 \| `tools/packages/server_msgs.py:253` \| # - Service connect f_70009a7454: inet_ntop(Endpoint … |
+| 0x70009a7800 | 0 | 4 | 48 | `docs/map/binary.md:414` (+1 more) | \| 0x70009a7800 \| 0 \| 4 \| 48 \| `tools/packages/server_msgs.py:251` \| # 0x07b7014f -> OnConductorAnswer(endpoint, plugin guid… |
+| 0x70009b29b0 | 2 | 4 | 46 | `docs/map/binary.md:415` (+1 more) | \| 0x70009b29b0 \| 2 \| 4 \| 46 \| `tools/packages/server_msgs.py:162` \| keep_session=0 makes CNetPlayer wipe its cached Account… |
+| 0x70009b2a54 | 1 | 0 | 8 | `docs/map/binary.md:412` (+2 more) | \| 0x70009a6e58 \| 3 \| 5 \| 32 \| `tools/packages/server_msgs.py:246` \| # echo choice: CPluginAuth+0x54 (= CNetSession+0x59, se… |
+| 0x70009e7fb4 | 0 | 38 | 1031 | `docs/map/binary.md:417` (+2 more) | \| 0x70009e7fb4 \| 0 \| 38 \| 1031 \| `tools/packages/server_msgs.py:15` (+1 more) \| # auth connection (CPluginAuth, f_70009e7fb… |
+| 0x70009e8e10 | 1 | 13 | 252 | `docs/map/binary.md:418` (+1 more) | \| 0x70009e8e10 \| 1 \| 13 \| 252 \| `docs/map/binary.md:417` (+1 more) \| \\| 0x70009e8e10 \\| 1 \\| 13 \\| 252 \\| `tools/packa… |
+| 0x70009f100c | 2 | 9 | 174 | `docs/map/binary.md:419` (+3 more) | \| 0x70009f100c \| 2 \| 9 \| 174 \| `tools/packages/server_msgs.py:30` (+1 more) \| # conductor connection (conductor plugin f_70… |
+| 0x70009f1400 | 0 | 0 | 69 | `docs/map/binary.md:419` (+3 more) | \| 0x70009f100c \| 2 \| 9 \| 174 \| `tools/packages/server_msgs.py:30` (+1 more) \| # conductor connection (conductor plugin f_70… |
+| 0x70009f85a0 | 29 | 0 | 14 | `docs/map/binary.md:421` (+1 more) | \| 0x70009f85a0 \| 29 \| 0 \| 14 \| `docs/map/binary.md:420` (+1 more) \| \\| 0x70009f85a0 \\| 29 \\| 0 \\| 14 \\| `tools/package… |
+| 0x70009f85c0 | 6 | 8 | 234 | `docs/map/binary.md:422` (+4 more) | \| 0x70009f85c0 \| 6 \| 8 \| 234 \| `docs/map/source/tools-packages.md:119` (+2 more) \| \\| `pending_key` \\| 185-191 \\| \\| en… |
+| 0x70009f8c4c | 0 | 4 | 46 | `docs/map/binary.md:423` (+1 more) | \| 0x70009f8c4c \| 0 \| 4 \| 46 \| `tools/packages/rpc.py:49` \| 0x7C335915 ServiceConnect C->S, sent once when the plugin attach… |
+| 0x70009f8cf0 | 0 | 6 | 253 | `docs/map/binary.md:424` (+2 more) | \| 0x70009f8cf0 \| 0 \| 6 \| 253 \| `docs/map/binary.md:423` (+2 more) \| \\| 0x70009f8cf0 \\| 0 \\| 6 \\| 253 \\| `tools/package… |
+| 0x70009f9070 | 0 | 13 | 378 | `docs/map/binary.md:422` (+4 more) | \| 0x70009f85c0 \| 6 \| 8 \| 234 \| `docs/map/source/tools-packages.md:119` (+2 more) \| \\| `pending_key` \\| 185-191 \\| \\| en… |
+| 0x7000a12970 | 30 | 33 | 492 | `docs/map/binary.md:426` (+1 more) | \| 0x7000a12970 \| 30 \| 33 \| 492 \| `docs/map/binary.md:425` (+1 more) \| \\| 0x7000a12970 \\| 30 \\| 33 \\| 492 \\| `tools/pac… |
+| 0x7000a13298 | 0 | 16 | 281 | `docs/map/binary.md:427` (+7 more) | \| 0x7000a13298 \| 0 \| 16 \| 281 \| `docs/map/source/tools-packages.md:117` (+6 more) \| \\| `make_response_xml` \\| 152-159 \\|… |
+| 0x7000a15440 | 11 | 13 | 177 | `docs/map/binary.md:428` (+1 more) | \| 0x7000a15440 \| 11 \| 13 \| 177 \| `docs/map/binary.md:427` (+1 more) \| \\| 0x7000a15440 \\| 11 \\| 13 \\| 177 \\| `tools/pac… |
+| 0x7000a32a5c | ? | ? | ? | `docs/map/binary.md:429` (+2 more) | \| 0x7000a32a5c \| ? \| ? \| ? \| `docs/map/binary.md:428` (+2 more) \| \\| 0x7000a32a5c \\| ? \\| ? \\| ? \\| `runtime/mlb/tutor… |
+| 0x7000a32ce0 | ? | ? | ? | `docs/map/binary.md:430` (+1 more) | \| 0x7000a32ce0 \| ? \| ? \| ? \| `docs/map/binary.md:429` (+1 more) \| \\| 0x7000a32ce0 \\| ? \\| ? \\| ? \\| `runtime/mlb/tutor… |
+| 0x7000a49df8 | 3 | 2 | 24 | `docs/map/bodies/batter-up.md:101` | \| `f_7000a49df8` \| called with that profile pointer and a built record in `cf34` \| C \| main_0120.c:54070; meaning H \| |
+| 0x7000a52ee4 | 3 | 0 | 9 | `docs/map/bodies/pre-play-in-play.md:37` (+1 more) | Slot 3 writes -1 and slot 5 writes 1. Slot 7 also handles the value 0: it moves to 1 once `f_7000a52ee4` returns true. How the fi… |
+| 0x7000a62db4 | 32 | 9 | 84 | `docs/map/binary.md:431` (+1 more) | \| 0x7000a62db4 \| 32 \| 9 \| 84 \| `docs/map/binary.md:430` (+1 more) \| \\| 0x7000a62db4 \\| 32 \\| 9 \\| 84 \\| `tools/package… |
+| 0x7000a6d050 | 150 | 9 | 339 | `docs/map/bodies/intro-states.md:92` | \| Slot 5 \| [C] logs "ATT_SCREEN: OptionsOnRamp.", clears `+0x26`, `+0x8`, `+0x3a`, `+0x44`, sets `+0x30`, checks `f_70000a82d0`… |
+| 0x7000a8325c | 15 | 0 | 17 | `docs/map/bodies/play-inning-game-over.md:127` (+1 more) | 5. Sets `[state+0x24]` to 1 (16220) when `f_70000a7360` or `f_7000a8325c` is true; otherwise sets it to 0 and prints WAIT (16228-… |
+| 0x7000bd1da0 | ? | ? | ? | `docs/map/binary.md:433` (+1 more) | \| 0x7000bd3140 \| 0 \| 12 \| 177 \| `runtime/mlb/rtts_autosave.c:14` \| // returns. A trigger upgrade goes through f_7000bd1da0 … |
+| 0x7000bd3140 | 0 | 12 | 177 | `docs/map/binary.md:433` (+1 more) | \| 0x7000bd3140 \| 0 \| 12 \| 177 \| `runtime/mlb/rtts_autosave.c:14` \| // returns. A trigger upgrade goes through f_7000bd1da0 … |
+| 0x7000d197fc | ? | ? | ? | `docs/map/binary.md:434` (+1 more) | \| 0x7000d197fc \| ? \| ? \| ? \| `runtime/mlb/cache_storage.c:7` \| // CUSTOMCAMS_<n>.CAM custom batting cameras (looked up by f… |
+| 0x7000d199bc | ? | ? | ? | `docs/map/binary.md:435` (+1 more) | \| 0x7000d199bc \| ? \| ? \| ? \| `docs/map/binary.md:434` (+1 more) \| \\| 0x7000d199bc \\| ? \\| ? \\| ? \\| `runtime/mlb/cache… |
+| 0x7000d1e7b8 | 268 | 0 | 11 | `docs/map/bodies/intro-states.md:73` | \| Slot 5 \| [C] posts event 0x218, clears `+0x8`, `+0x22`, sets `+0x28` to 8, logs "ATT_SCREEN: Pitcher warmup." (`main_0121.c:2… |
+| 0x7000d1eef4 | 22 | 9 | 294 | `docs/map/bodies/batter-up.md:125` | \| 33 \| `ead0` \| when two virtual queries pass and the sub-state is 0xb or 2, call `f_7000d1eef4(global, 1)`; always set step 3… |
+| 0x7000d438d4 | 11 | 1 | 40 | `docs/map/bodies/pre-play-in-play.md:108` | \| 0x213 \| IN_PLAY (2) or POST_PITCH (3) \| reads flag bytes in the event data (x1): +0x29 set goes to POST_PITCH; +0x21, +0x2b,… |
+| 0x7000d52680 | 7 | 8 | 235 | `docs/map/binary.md:436` (+2 more) | \| 0x7000d52680 \| 7 \| 8 \| 235 \| `docs/map/binary.md:435` (+2 more) \| \\| 0x7000d52680 \\| 7 \\| 8 \\| 235 \\| `docs/walkup-f… |
+| 0x7000d558b0 | 13 | 1 | 7 | `docs/map/bodies/intro-states.md:47` | \| Helper `f_700108ab40` \| [C] gets the singleton at `[0x700227e128]`, sets bit 0x800000 in a flag word at `[obj+0x34]` of `[0x7… |
+| 0x7000d558b8 | 6 | 2 | 21 | `docs/map/bodies/intro-states.md:83` | \| Slot 5 \| [C] sets the input context to 0x11 (`f_7000f2598c`), clears a byte at `[0x7002294220]`, calls `f_7000d558b8` with th… |
+| 0x7000d6d22c | 6 | 18 | 180 | `docs/map/bodies/batter-up.md:78` | \| 0x290 \| if a virtual call on this is true, calls `f_7000d6d22c` on a global, then resets the timer \| C \| |
+| 0x7000d7412c | 16 | 2 | 15 | `docs/map/bodies/play-inning-game-over.md:189` | \| 0 NORMAL \| per-frame call through the object at `0x700227e128` (virtual slot 0x38, with the time step), then phases 0 to 5: w… |
+| 0x7000d81dd8 | 121 | 0 | 9 | `docs/map/bodies/pre-play-in-play.md:19` (+2 more) | \| 3 \| `f_700106cfc4`: sets up the object. Writes -1 to +0x18, fetches an object from `f_7000d81dd8` into +0x20, sets flags at +… |
+| 0x7000d82738 | 1 | 0 | 11 | `docs/map/bodies/batter-up.md:116` | \| 6 \| `dca4` \| exit: clear flags, call `f_7000d82738` and `f_700134df20(0)`, sub-state 0 \| C \| |
+| 0x7000d931e0 | 15 | 0 | 42 | `docs/map/bodies/intro-states.md:104` | \| `f_7000f2598c(obj, id, flag)` \| stores `id` at `[obj+0x28]` and calls `f_7000d931e0` with it when the id is 1 to 0x12 (it sto… |
+| 0x7000d9b008 | 6 | 5 | 74 | `docs/map/bodies/batter-up.md:84` | \| 0x152 \| calls `f_70004d2aac(7)` and `f_7000d9b008` with 4.0 \| C \| |
+| 0x7000daea5c | 5 | 1 | 15 | `docs/map/bodies/batter-up.md:103` | \| `f_7000daea5c` \| logs "ACT_UPDATE"; called by `cd24`, `d340`, `d808` \| C \| strings \| |
+| 0x7000de6728 | ? | ? | ? | `docs/map/binary.md:437` (+1 more) | \| 0x7000de6728 \| ? \| ? \| ? \| `docs/map/binary.md:436` (+1 more) \| \\| 0x7000de6728 \\| ? \\| ? \\| ? \\| `runtime/mlb/rtts_… |
+| 0x7000df2bb0 | 55 | 0 | 8 | `docs/map/bodies/play-inning-game-over.md:66` (+1 more) | 1. Calls `f_70000a7360` and `f_70000a7430` and updates two settings objects through `f_7000df2bb0` and `f_7000df7b28` (3140-3225). |
+| 0x7000df7b28 | 7 | 0 | 7 | `docs/map/bodies/play-inning-game-over.md:66` | 1. Calls `f_70000a7360` and `f_70000a7430` and updates two settings objects through `f_7000df2bb0` and `f_7000df7b28` (3140-3225). |
+| 0x7000e02b98 | 4 | 21 | 811 | `docs/map/bodies/pre-play-in-play.md:121` (+1 more) | \| 3 \| Each update of IN_PITCH, IN_PLAY and POST_PITCH adds the time step to a float at +0x30. If it passes 30.0 and +0x2e is 0,… |
+| 0x7000e03780 | 4 | 19 | 489 | `docs/map/bodies/pre-play-in-play.md:121` (+2 more) | \| 3 \| Each update of IN_PITCH, IN_PLAY and POST_PITCH adds the time step to a float at +0x30. If it passes 30.0 and +0x2e is 0,… |
+| 0x7000e23cec | 56 | 1 | 26 | `docs/map/bodies/batter-up.md:98` (+16 more) | \| `f_7000e23cec(this, sub, flag)` \| posts event 0x13d with the sub-state \| C \| main_0100.c:1538 to 1550 \| |
+| 0x7000e53620 | 1 | 4 | 18 | `docs/map/binary.md:439` (+2 more) | \| 0x7000e53654 \| 2 \| 18 \| 675 \| `docs/walkup-freeze.md:56` (+4 more) \| game-start sequence `f_7000e53620` both call `f_7000… |
+| 0x7000e53654 | 2 | 18 | 675 | `docs/map/binary.md:439` (+5 more) | \| 0x7000e53654 \| 2 \| 18 \| 675 \| `docs/walkup-freeze.md:56` (+4 more) \| game-start sequence `f_7000e53620` both call `f_7000… |
+| 0x7000e54080 | 3 | 0 | 211 | `docs/map/binary.md:442` (+2 more) | \| 0x7000e545f0 \| 3 \| 10 \| 406 \| `docs/walkup-freeze.md:88` \| right after the first build (entry of `f_7000e54080`) and righ… |
+| 0x7000e543a4 | 3 | 4 | 156 | `docs/map/binary.md:441` (+3 more) | \| 0x7000e543a4 \| 3 \| 4 \| 156 \| `docs/map/binary.md:440` (+3 more) \| \\| 0x7000e543a4 \\| 3 \\| 4 \\| 156 \\| `docs/walkup-f… |
+| 0x7000e545f0 | 3 | 10 | 406 | `docs/map/binary.md:442` (+1 more) | \| 0x7000e545f0 \| 3 \| 10 \| 406 \| `docs/walkup-freeze.md:88` \| right after the first build (entry of `f_7000e54080`) and righ… |
+| 0x7000e54c00 | 2 | 11 | 685 | `docs/map/binary.md:443` (+5 more) | \| 0x7000e54c00 \| 2 \| 11 \| 685 \| `docs/walkup-freeze.md:54` (+4 more) \| broadcast "moments" refresh: `f_7000e5640c` (from th… |
+| 0x7000e5640c | 1 | 26 | 694 | `docs/map/binary.md:443` (+2 more) | \| 0x7000e54c00 \| 2 \| 11 \| 685 \| `docs/walkup-freeze.md:54` (+4 more) \| broadcast "moments" refresh: `f_7000e5640c` (from th… |
+| 0x7000eb466c | 10 | 1 | 25 | `docs/map/bodies/play-inning-game-over.md:198` | Slot 6 `f_70010934d8` (7560-7602) clears byte `[state+0x20]` and, through the object at `0x7002296000+0x848`, calls `f_7000eb466c… |
+| 0x7000eb6abc | 1 | 5 | 53 | `docs/map/bodies/intro-states.md:84` | \| Slot 7 \| [C] each frame calls virtual +0x38 on the singleton at `[0x700227e128]`. When phase is 0 and step is 0 it calls `f_7… |
+| 0x7000ecfe38 | 2 | 1 | 15 | `docs/map/bodies/intro-states.md:93` | \| Slot 7 \| [C] ten phases at `+0x18`. It calls `f_7000ecfe38` and `f_7000ecfe80`, two 15-line functions whose strings are "Hide… |
+| 0x7000ecfe80 | 2 | 1 | 15 | `docs/map/bodies/intro-states.md:93` | \| Slot 7 \| [C] ten phases at `+0x18`. It calls `f_7000ecfe38` and `f_7000ecfe80`, two 15-line functions whose strings are "Hide… |
+| 0x7000ed05b8 | 2 | 22 | 299 | `docs/map/bodies/intro-states.md:92` | \| Slot 5 \| [C] logs "ATT_SCREEN: OptionsOnRamp.", clears `+0x26`, `+0x8`, `+0x3a`, `+0x44`, sets `+0x30`, checks `f_70000a82d0`… |
+| 0x7000ed12b8 | 1 | 7 | 88 | `docs/map/bodies/intro-states.md:93` | \| Slot 7 \| [C] ten phases at `+0x18`. It calls `f_7000ecfe38` and `f_7000ecfe80`, two 15-line functions whose strings are "Hide… |
+| 0x7000ed13e8 | 1 | 11 | 144 | `docs/map/bodies/intro-states.md:93` | \| Slot 7 \| [C] ten phases at `+0x18`. It calls `f_7000ecfe38` and `f_7000ecfe80`, two 15-line functions whose strings are "Hide… |
+| 0x7000ed15e8 | 1 | 7 | 102 | `docs/map/bodies/intro-states.md:93` | \| Slot 7 \| [C] ten phases at `+0x18`. It calls `f_7000ecfe38` and `f_7000ecfe80`, two 15-line functions whose strings are "Hide… |
+| 0x7000ed1738 | 1 | 5 | 58 | `docs/map/bodies/intro-states.md:93` | \| Slot 7 \| [C] ten phases at `+0x18`. It calls `f_7000ecfe38` and `f_7000ecfe80`, two 15-line functions whose strings are "Hide… |
+| 0x7000ed1800 | 1 | 8 | 299 | `docs/map/bodies/intro-states.md:93` | \| Slot 7 \| [C] ten phases at `+0x18`. It calls `f_7000ecfe38` and `f_7000ecfe80`, two 15-line functions whose strings are "Hide… |
+| 0x7000ed2780 | 319 | 0 | 9 | `docs/map/bodies/play-inning-game-over.md:193` | \| 3 CHECK_SUB \| reads bytes `[ctx+0x784]`, `[ctx+0x125]` and the value `[ctx+0x12c]` (7173-7180), clears bit 22 of `[global 0x7… |
+| 0x7000ed5528 | 8 | 4 | 79 | `docs/map/bodies/play-inning-game-over.md:90` | \| `[state+0x24]` \| result of `f_7000ed5528` (3227-3229) \| C \| |
+| 0x7000ed562c | 1 | 15 | 148 | `docs/map/bodies/play-inning-game-over.md:193` (+3 more) | \| 3 CHECK_SUB \| reads bytes `[ctx+0x784]`, `[ctx+0x125]` and the value `[ctx+0x12c]` (7173-7180), clears bit 22 of `[global 0x7… |
+| 0x7000f1ec9c | 1 | 1 | 10 | `docs/map/bodies/intro-states.md:63` | \| Slot 5 \| [C] logs "ATT_SCREEN: Lineup intro." (`f_7001c1fb00`, 23 callers), stores a start time at `+0x8`, sets byte `+0x28` … |
+| 0x7000f2598c | 62 | 2 | 33 | `docs/map/bodies/batter-up.md:102` (+5 more) | \| `f_7000f2598c(obj, id, flag)` \| stores the id at `[obj+0x28]` when it is 1 to 0x12 and the byte at `+0xc0` is clear, and 0 ot… |
+| 0x7000f281b0 | 0 | 2 | 47 | `docs/map/bodies/batter-up.md:63` | \| +0x28 \| byte flag; slot 5 stores a call result here, outside code sets it 1 or 0, `e4ec` returns it \| C \| `f_7000f282b4`, `… |
+| 0x7000f282b4 | 0 | 1 | 35 | `docs/map/bodies/batter-up.md:63` | \| +0x28 \| byte flag; slot 5 stores a call result here, outside code sets it 1 or 0, `e4ec` returns it \| C \| `f_7000f282b4`, `… |
+| 0x7000f2868c | 1 | 2 | 22 | `docs/map/bodies/batter-up.md:106` | \| `f_7000f2868c` \| stores 7 at `[obj+0x30]` and logs "Exit" \| C \| main_0109.c:4691 \| |
+| 0x7000f29804 | 2 | 4 | 109 | `docs/map/bodies/batter-up.md:134` | - What the 7.0 second value times, and why a countdown ends in MANAGER_MODE: `e4ec` compares the timer with the float at the poin… |
+| 0x7000f34134 | 1 | 0 | 12 | `docs/map/bodies/intro-states.md:84` | \| Slot 7 \| [C] each frame calls virtual +0x38 on the singleton at `[0x700227e128]`. When phase is 0 and step is 0 it calls `f_7… |
+| 0x7000f622dc | 4 | 10 | 147 | `docs/map/bodies/intro-states.md:65` | \| Slot 7 \| [C] phase machine over phases 1 to 7 and steps 1 to 3. Each phase calls `f_7000e23cec(state, phase)` when it changes… |
+| 0x7001029cd8 | ? | ? | ? | `docs/map/binary.md:393` (+2 more) | \| 0x70003eea50 \| ? \| ? \| ? \| `runtime/mlb/cache_storage.c:10` \| // PXP_SAVE.BIN, PA_SAVE.BIN read back through "ReloadSaveD… |
+| 0x700106cfc4 | 0 | 2 | 42 | `docs/map/bodies/pre-play-in-play.md:19` | \| 3 \| `f_700106cfc4`: sets up the object. Writes -1 to +0x18, fetches an object from `f_7000d81dd8` into +0x20, sets flags at +… |
+| 0x700106d054 | 0 | 1 | 35 | `docs/map/bodies/pre-play-in-play.md:19` (+2 more) | \| 3 \| `f_700106cfc4`: sets up the object. Writes -1 to +0x18, fetches an object from `f_7000d81dd8` into +0x20, sets flags at +… |
+| 0x700106d0c8 | 0 | 2 | 41 | `docs/map/bodies/pre-play-in-play.md:20` | \| 5 \| `f_700106d0c8`: starts the state. Sets sub-state 1, zeroes +0x8, logs the name of sub-state 1. If +0x28 is set it writes … |
+| 0x700106d154 | 0 | 6 | 36 | `docs/map/bodies/pre-play-in-play.md:21` | \| 6 \| `f_700106d154`: ends the state. Clears a byte in the `+0x20` object (+0x25), zeroes a global byte (0x7002ca4061), writes … |
+| 0x700106d1cc | 0 | 1 | 48 | `docs/map/bodies/pre-play-in-play.md:23` | \| 9 \| `f_700106d1cc`: subscribes the object to 7 event ids. Lines 15530 to 15577 \| `f_7001093804`: subscribes to 22 event ids.… |
+| 0x700106d438 | 0 | 1 | 40 | `docs/map/bodies/pre-play-in-play.md:24` | \| 10 \| `f_700106d438`: the same 7 ids with `f_70005e69d0` (unsubscribe, I). Lines 15705 to 15744 \| `f_700109419c`: not read \|… |
+| 0x700106d4c4 | 0 | 54 | 1270 | `docs/map/bodies/pre-play-in-play.md:22` | \| 7 \| `f_700106d4c4`: update with the sub-state machine. Lines 15745 to 17014 \| `f_700109448c`: update with the sub-state mach… |
+| 0x700106e610 | 1 | 14 | 131 | `docs/map/bodies/pre-play-in-play.md:5` (+1 more) | What was read in full: the PRE_PLAY vtable slots 3, 5, 6, 9, 10 and the first 150 lines of slot 7; the handlers `f_700106e610`, `… |
+| 0x700106e7e4 | 1 | 3 | 112 | `docs/map/bodies/pre-play-in-play.md:42` (+1 more) | \| 1 \| ONLINE_SYNC_ENTER \| `f_700106e610` (phase 0, line 15817), `f_700106e7e4` (phase 4, 15810), `f_700106e968` (phase 6, 1582… |
+| 0x700106e968 | 1 | 8 | 71 | `docs/map/bodies/pre-play-in-play.md:5` (+7 more) | What was read in full: the PRE_PLAY vtable slots 3, 5, 6, 9, 10 and the first 150 lines of slot 7; the handlers `f_700106e610`, `… |
+| 0x700106ea54 | 1 | 10 | 88 | `docs/map/bodies/pre-play-in-play.md:54` (+1 more) | \| 13 \| CAREER_INTRO \| `f_700106ea54` at 15890; chosen by `f_700106e968` when `f_70000aaae0` is true \| C \| |
+| 0x700106eb90 | 1 | 6 | 81 | `docs/map/bodies/pre-play-in-play.md:5` (+5 more) | What was read in full: the PRE_PLAY vtable slots 3, 5, 6, 9, 10 and the first 150 lines of slot 7; the handlers `f_700106e610`, `… |
+| 0x700106ecac | 1 | 13 | 257 | `docs/map/bodies/pre-play-in-play.md:5` (+6 more) | What was read in full: the PRE_PLAY vtable slots 3, 5, 6, 9, 10 and the first 150 lines of slot 7; the handlers `f_700106e610`, `… |
+| 0x700106f044 | 1 | 6 | 41 | `docs/map/bodies/pre-play-in-play.md:154` | \| PRE_PLAY handlers `f_700106e7e4`, `f_700106ea54`, `f_700106f044`, `f_700106f250`, `f_700106f340`, `f_700106f480`, `f_700106f59… |
+| 0x700106f0d0 | 1 | 12 | 106 | `docs/map/bodies/pre-play-in-play.md:5` (+4 more) | What was read in full: the PRE_PLAY vtable slots 3, 5, 6, 9, 10 and the first 150 lines of slot 7; the handlers `f_700106e610`, `… |
+| 0x700106f250 | 1 | 11 | 70 | `docs/map/bodies/pre-play-in-play.md:154` | \| PRE_PLAY handlers `f_700106e7e4`, `f_700106ea54`, `f_700106f044`, `f_700106f250`, `f_700106f340`, `f_700106f480`, `f_700106f59… |
+| 0x700106f340 | 1 | 8 | 92 | `docs/map/bodies/pre-play-in-play.md:154` | \| PRE_PLAY handlers `f_700106e7e4`, `f_700106ea54`, `f_700106f044`, `f_700106f250`, `f_700106f340`, `f_700106f480`, `f_700106f59… |
+| 0x700106f480 | 1 | 4 | 81 | `docs/map/bodies/pre-play-in-play.md:154` | \| PRE_PLAY handlers `f_700106e7e4`, `f_700106ea54`, `f_700106f044`, `f_700106f250`, `f_700106f340`, `f_700106f480`, `f_700106f59… |
+| 0x700106f598 | 1 | 5 | 65 | `docs/map/bodies/pre-play-in-play.md:154` | \| PRE_PLAY handlers `f_700106e7e4`, `f_700106ea54`, `f_700106f044`, `f_700106f250`, `f_700106f340`, `f_700106f480`, `f_700106f59… |
+| 0x700106f670 | 1 | 6 | 94 | `docs/map/bodies/pre-play-in-play.md:46` (+1 more) | \| 5 \| AUTO_FAST_FORWARD \| `f_700106f670` at 16394 \| I \| |
+| 0x700106f7b0 | 1 | 24 | 207 | `docs/map/bodies/pre-play-in-play.md:47` (+1 more) | \| 6 \| AUTO_SUB \| set by `f_700106eb90` and `f_700106f0d0`; `f_700106f7b0` at 16489 \| C \| |
+| 0x700106faac | 1 | 17 | 194 | `docs/map/bodies/pre-play-in-play.md:154` | \| PRE_PLAY handlers `f_700106e7e4`, `f_700106ea54`, `f_700106f044`, `f_700106f250`, `f_700106f340`, `f_700106f480`, `f_700106f59… |
+| 0x700106fd4c | 1 | 4 | 70 | `docs/map/bodies/pre-play-in-play.md:154` | \| PRE_PLAY handlers `f_700106e7e4`, `f_700106ea54`, `f_700106f044`, `f_700106f250`, `f_700106f340`, `f_700106f480`, `f_700106f59… |
+| 0x700106fe40 | 1 | 4 | 68 | `docs/map/bodies/pre-play-in-play.md:154` | \| PRE_PLAY handlers `f_700106e7e4`, `f_700106ea54`, `f_700106f044`, `f_700106f250`, `f_700106f340`, `f_700106f480`, `f_700106f59… |
+| 0x700106ff28 | 1 | 12 | 110 | `docs/map/bodies/pre-play-in-play.md:154` | \| PRE_PLAY handlers `f_700106e7e4`, `f_700106ea54`, `f_700106f044`, `f_700106f250`, `f_700106f340`, `f_700106f480`, `f_700106f59… |
+| 0x70010700a8 | 1 | 4 | 93 | `docs/map/bodies/pre-play-in-play.md:154` | \| PRE_PLAY handlers `f_700106e7e4`, `f_700106ea54`, `f_700106f044`, `f_700106f250`, `f_700106f340`, `f_700106f480`, `f_700106f59… |
+| 0x7001070de0 | 1 | 11 | 172 | `docs/map/bodies/pre-play-in-play.md:154` | \| PRE_PLAY handlers `f_700106e7e4`, `f_700106ea54`, `f_700106f044`, `f_700106f250`, `f_700106f340`, `f_700106f480`, `f_700106f59… |
+| 0x7001071230 | 4 | 16 | 101 | `docs/map/bodies/pre-play-in-play.md:154` | \| PRE_PLAY handlers `f_700106e7e4`, `f_700106ea54`, `f_700106f044`, `f_700106f250`, `f_700106f340`, `f_700106f480`, `f_700106f59… |
+| 0x700107e208 | 2 | 11 | 447 | `docs/map/bodies/play-inning-game-over.md:148` (+1 more) | The EXIT handler `f_700109cf7c` (19034-19330, 292 lines) sets sub-state 10 and prints EXIT (19314-19315). It calls `f_700107e208`… |
+| 0x7001087120 | 3 | 0 | 11 | `docs/map/bodies/intro-states.md:84` | \| Slot 7 \| [C] each frame calls virtual +0x38 on the singleton at `[0x700227e128]`. When phase is 0 and step is 0 it calls `f_7… |
+| 0x700108ab40 | 1 | 11 | 90 | `docs/map/bodies/intro-states.md:45` (+1 more) | \| Slot 7 \| [C] phase 1 sets phase 2 and runs helper `f_700108ab40`. Phase 4 has three steps: step 0 calls `f_70012f3f38(0x78, .… |
+| 0x700108adb0 | 0 | 0 | 12 | `docs/map/bodies/intro-states.md:46` | \| Phase change \| [C] event 0x7e arrives at `f_700108adb0`, which stores 4 into `[state+0xc]` when the event id is 0x7e (`main_0… |
+| 0x700108b628 | 0 | 73 | 587 | `docs/map/bodies/play-inning-game-over.md:214` (+4 more) | \| BATTER_UP to IN_PLAY to PLAY_OVER \| the earlier handler read (`f_700108b628`); PLAY_OVER slot 5 is entered after a play and s… |
+| 0x700108f7c4 | 0 | 5 | 53 | `docs/map/bodies/play-inning-game-over.md:32` | \| GAME_OVER \| `f_700108f904`, 414 lines: enter, picks the first sub-state \| `f_700108ff50`, 549 lines: per-frame jump table \|… |
+| 0x700108f87c | 4 | 2 | 39 | `docs/map/bodies/play-inning-game-over.md:34` | GAME_OVER has two more per-frame pieces. Slot 33 (`f_70010920f4`, main_0121.c:6080) is a second jump table for sub-states 4 to 13… |
+| 0x700108f904 | 0 | 51 | 414 | `docs/map/bodies/play-inning-game-over.md:32` | \| GAME_OVER \| `f_700108f904`, 414 lines: enter, picks the first sub-state \| `f_700108ff50`, 549 lines: per-frame jump table \|… |
+| 0x700108ff50 | 0 | 34 | 549 | `docs/map/bodies/play-inning-game-over.md:32` (+1 more) | \| GAME_OVER \| `f_700108f904`, 414 lines: enter, picks the first sub-state \| `f_700108ff50`, 549 lines: per-frame jump table \|… |
+| 0x70010906bc | 1 | 8 | 91 | `docs/map/bodies/play-inning-game-over.md:80` (+2 more) | MERCY_RULE (value 1) is entered by `f_70010906bc` (main_0121.c:4137-4227). It calls `f_7000e23cec` with the current sub-state, se… |
+| 0x70010907f8 | 1 | 4 | 68 | `docs/map/bodies/play-inning-game-over.md:44` (+1 more) | \| 2 \| WAIT_FOR_MESSAGE \| `f_70010907f8` (4288) \| |
+| 0x7001090a58 | 1 | 2 | 117 | `docs/map/bodies/play-inning-game-over.md:95` | Almost every presentation sub-state in GAME_OVER ends by setting sub-state 10, POST_GAME_MENU: `f_700108ff50` (3864), `f_7001090a… |
+| 0x7001090d88 | 1 | 12 | 173 | `docs/map/bodies/play-inning-game-over.md:95` | Almost every presentation sub-state in GAME_OVER ends by setting sub-state 10, POST_GAME_MENU: `f_700108ff50` (3864), `f_7001090a… |
+| 0x7001090fec | 1 | 7 | 143 | `docs/map/bodies/play-inning-game-over.md:48` (+1 more) | \| 6 \| PRES_GROUP_B \| `f_7001090fec` (4946) \| |
+| 0x70010911d8 | 1 | 4 | 97 | `docs/map/bodies/play-inning-game-over.md:49` (+2 more) | \| 7 \| PRES_COPYRIGHT \| `f_70010911d8` (5022) \| |
+| 0x7001091330 | 1 | 17 | 173 | `docs/map/bodies/play-inning-game-over.md:95` | Almost every presentation sub-state in GAME_OVER ends by setting sub-state 10, POST_GAME_MENU: `f_700108ff50` (3864), `f_7001090a… |
+| 0x70010915a0 | 1 | 8 | 97 | `docs/map/bodies/play-inning-game-over.md:95` | Almost every presentation sub-state in GAME_OVER ends by setting sub-state 10, POST_GAME_MENU: `f_700108ff50` (3864), `f_7001090a… |
+| 0x70010918e8 | 1 | 6 | 48 | `docs/map/bodies/play-inning-game-over.md:95` | Almost every presentation sub-state in GAME_OVER ends by setting sub-state 10, POST_GAME_MENU: `f_700108ff50` (3864), `f_7001090a… |
+| 0x7001091e78 | 1 | 4 | 52 | `docs/map/bodies/play-inning-game-over.md:53` | \| 11 \| REPLAY_VAULT \| `f_7001091e78` (5903) \| |
+| 0x7001091fb4 | 1 | 3 | 33 | `docs/map/bodies/play-inning-game-over.md:50` | \| 8 \| PRES_REEL \| `f_7001091fb4` (5992) \| |
+| 0x70010920f4 | 1 | 11 | 260 | `docs/map/bodies/play-inning-game-over.md:34` (+1 more) | GAME_OVER has two more per-frame pieces. Slot 33 (`f_70010920f4`, main_0121.c:6080) is a second jump table for sub-states 4 to 13… |
+| 0x7001092518 | 0 | 15 | 163 | `docs/map/bodies/play-inning-game-over.md:31` (+1 more) | \| INNING_OVER \| `f_7001092518`, 163 lines: enter \| `f_700109276c`, 789 lines: per-frame switch \| no handler of its own among … |
+| 0x700109276c | 0 | 34 | 789 | `docs/map/bodies/play-inning-game-over.md:31` (+2 more) | \| INNING_OVER \| `f_7001092518`, 163 lines: enter \| `f_700109276c`, 789 lines: per-frame switch \| no handler of its own among … |
+| 0x7001093278 | 1 | 11 | 76 | `docs/map/bodies/play-inning-game-over.md:191` | \| 4 \| begin posts event 0x121 again and calls `f_7001093390` (7469) and `f_7001093278` (7393); update waits on the presentation… |
+| 0x7001093390 | 1 | 9 | 91 | `docs/map/bodies/play-inning-game-over.md:191` | \| 4 \| begin posts event 0x121 again and calls `f_7001093390` (7469) and `f_7001093278` (7393); update waits on the presentation… |
+| 0x70010934d8 | 0 | 3 | 43 | `docs/map/bodies/play-inning-game-over.md:198` | Slot 6 `f_70010934d8` (7560-7602) clears byte `[state+0x20]` and, through the object at `0x7002296000+0x848`, calls `f_7000eb466c… |
+| 0x7001093558 | 1 | 4 | 101 | `docs/map/bodies/play-inning-game-over.md:198` | Slot 6 `f_70010934d8` (7560-7602) clears byte `[state+0x20]` and, through the object at `0x7002296000+0x848`, calls `f_7000eb466c… |
+| 0x70010936ec | 0 | 1 | 23 | `docs/map/bodies/pre-play-in-play.md:19` | \| 3 \| `f_700106cfc4`: sets up the object. Writes -1 to +0x18, fetches an object from `f_7000d81dd8` into +0x20, sets flags at +… |
+| 0x7001093730 | 0 | 5 | 36 | `docs/map/bodies/pre-play-in-play.md:20` | \| 5 \| `f_700106d0c8`: starts the state. Sets sub-state 1, zeroes +0x8, logs the name of sub-state 1. If +0x28 is set it writes … |
+| 0x70010937a0 | 0 | 3 | 32 | `docs/map/bodies/pre-play-in-play.md:21` | \| 6 \| `f_700106d154`: ends the state. Clears a byte in the `+0x20` object (+0x25), zeroes a global byte (0x7002ca4061), writes … |
+| 0x7001093804 | 0 | 1 | 123 | `docs/map/bodies/pre-play-in-play.md:23` | \| 9 \| `f_700106d1cc`: subscribes the object to 7 event ids. Lines 15530 to 15577 \| `f_7001093804`: subscribes to 22 event ids.… |
+| 0x70010939dc | 0 | 27 | 558 | `docs/map/bodies/pre-play-in-play.md:5` (+2 more) | What was read in full: the PRE_PLAY vtable slots 3, 5, 6, 9, 10 and the first 150 lines of slot 7; the handlers `f_700106e610`, `… |
+| 0x700109419c | 0 | 1 | 102 | `docs/map/bodies/pre-play-in-play.md:24` | \| 10 \| `f_700106d438`: the same 7 ids with `f_70005e69d0` (unsubscribe, I). Lines 15705 to 15744 \| `f_700109419c`: not read \|… |
+| 0x700109448c | 0 | 11 | 176 | `docs/map/bodies/pre-play-in-play.md:11` (+1 more) | The earlier note that the 558-line `f_70010939dc` is an IN_PLAY vtable slot was wrong. It is not in the vtable. It is the event h… |
+| 0x70010946dc | 1 | 6 | 71 | `docs/map/bodies/pre-play-in-play.md:5` (+2 more) | What was read in full: the PRE_PLAY vtable slots 3, 5, 6, 9, 10 and the first 150 lines of slot 7; the handlers `f_700106e610`, `… |
+| 0x70010947cc | 1 | 6 | 83 | `docs/map/bodies/pre-play-in-play.md:5` (+2 more) | What was read in full: the PRE_PLAY vtable slots 3, 5, 6, 9, 10 and the first 150 lines of slot 7; the handlers `f_700106e610`, `… |
+| 0x70010948ec | 1 | 8 | 71 | `docs/map/bodies/pre-play-in-play.md:5` (+2 more) | What was read in full: the PRE_PLAY vtable slots 3, 5, 6, 9, 10 and the first 150 lines of slot 7; the handlers `f_700106e610`, `… |
+| 0x70010949d8 | 1 | 6 | 83 | `docs/map/bodies/pre-play-in-play.md:97` (+1 more) | \| 3 \| POST_PITCH \| `f_70010949d8` (8813; body 9136 to 9218, not read) \| `f_7001094afc` (8793; body 9219 to 9334) \| C for cal… |
+| 0x7001094afc | 1 | 11 | 116 | `docs/map/bodies/pre-play-in-play.md:5` (+2 more) | What was read in full: the PRE_PLAY vtable slots 3, 5, 6, 9, 10 and the first 150 lines of slot 7; the handlers `f_700106e610`, `… |
+| 0x7001094c88 | 1 | 46 | 865 | `docs/map/bodies/pre-play-in-play.md:123` (+1 more) | \| 5 \| While in IN_PLAY the update calls `f_7001094c88(dt)`, an 865-line function. When it returns true, the state goes to PLAY_… |
+| 0x7001095b00 | 1 | 31 | 459 | `docs/map/bodies/pre-play-in-play.md:124` (+1 more) | \| 6 \| Event 0x5b or 0x21a arrives: sub-state 3, POST_PITCH. The run function `f_7001094afc` checks the options object from `f_7… |
+| 0x7001097118 | 1 | 6 | 67 | `docs/map/bodies/intro-states.md:65` | \| Slot 7 \| [C] phase machine over phases 1 to 7 and steps 1 to 3. Each phase calls `f_7000e23cec(state, phase)` when it changes… |
+| 0x7001097210 | 1 | 9 | 119 | `docs/map/bodies/intro-states.md:65` | \| Slot 7 \| [C] phase machine over phases 1 to 7 and steps 1 to 3. Each phase calls `f_7000e23cec(state, phase)` when it changes… |
+| 0x70010973c0 | 1 | 9 | 79 | `docs/map/bodies/intro-states.md:65` | \| Slot 7 \| [C] phase machine over phases 1 to 7 and steps 1 to 3. Each phase calls `f_7000e23cec(state, phase)` when it changes… |
+| 0x700109a680 | 0 | 1 | 15 | `docs/map/bodies/play-inning-game-over.md:30` | \| PLAY_OVER \| `f_700109a6a8`, 197 lines: enter \| `f_700109af70`, 1,255 lines: per-frame switch \| `f_700109a680`: set sub-stat… |
+| 0x700109a6a8 | 0 | 26 | 197 | `docs/map/bodies/play-inning-game-over.md:30` (+3 more) | \| PLAY_OVER \| `f_700109a6a8`, 197 lines: enter \| `f_700109af70`, 1,255 lines: per-frame switch \| `f_700109a680`: set sub-stat… |
+| 0x700109aa1c | 1 | 4 | 90 | `docs/map/bodies/play-inning-game-over.md:126` (+3 more) | 4. Calls `f_700109aa1c` (below) and then loops over a few checks on `f_70002e2348` (play data) that end in `f_700109ab58` when a … |
+| 0x700109ab58 | 4 | 7 | 63 | `docs/map/bodies/play-inning-game-over.md:126` | 4. Calls `f_700109aa1c` (below) and then loops over a few checks on `f_70002e2348` (play data) that end in `f_700109ab58` when a … |
+| 0x700109ade4 | 1 | 9 | 115 | `docs/map/bodies/play-inning-game-over.md:146` | The WAIT sub-state decides how long to hold. Phase 0 computes `[state+0x2c]`, a number of seconds, from the play-result values `[… |
+| 0x700109af70 | 0 | 70 | 1255 | `docs/map/bodies/play-inning-game-over.md:30` (+1 more) | \| PLAY_OVER \| `f_700109a6a8`, 197 lines: enter \| `f_700109af70`, 1,255 lines: per-frame switch \| `f_700109a680`: set sub-stat… |
+| 0x700109c0b8 | 1 | 6 | 75 | `docs/map/bodies/play-inning-game-over.md:106` (+1 more) | \| 1 \| no name \| stored by slot 5 at 16220; its update handler `f_700109c0b8` hands over to 0 \| |
+| 0x700109c1b4 | 1 | 12 | 170 | `docs/map/bodies/play-inning-game-over.md:137` (+2 more) | \| 3 PRES_LOAD \| `f_700109c1b4` (18030) \| `f_700109c414` (18200) \| by `[state+0x20]`: 0xb gives 5, 0xa gives 10, else 4 or 2 (… |
+| 0x700109c414 | 1 | 6 | 83 | `docs/map/bodies/play-inning-game-over.md:137` | \| 3 PRES_LOAD \| `f_700109c1b4` (18030) \| `f_700109c414` (18200) \| by `[state+0x20]`: 0xb gives 5, 0xa gives 10, else 4 or 2 (… |
+| 0x700109c534 | 1 | 5 | 62 | `docs/map/bodies/play-inning-game-over.md:138` | \| 4 PRES_ENDOFPLAY \| `f_700109c534` (18283) \| `f_700109c608` (18345) \| 10 EXIT (16932); `f_700109c608` can also set 3 (18450,… |
+| 0x700109c608 | 1 | 7 | 143 | `docs/map/bodies/play-inning-game-over.md:138` (+1 more) | \| 4 PRES_ENDOFPLAY \| `f_700109c534` (18283) \| `f_700109c608` (18345) \| 10 EXIT (16932); `f_700109c608` can also set 3 (18450,… |
+| 0x700109c800 | 1 | 4 | 54 | `docs/map/bodies/play-inning-game-over.md:139` | \| 5 PRES_GAMEOVER \| `f_700109c800` (18488) \| virtual calls on the presentation controller \| 10 EXIT (16977) \| |
+| 0x700109c8bc | 1 | 17 | 231 | `docs/map/bodies/play-inning-game-over.md:141` | \| 2 POST_PLAY \| `f_7000e23cec(this,2)`, event 0x11b once \| `f_700109c8bc` (18542) \| 10 EXIT (17061) \| |
+| 0x700109cbe8 | 1 | 3 | 91 | `docs/map/bodies/play-inning-game-over.md:142` | \| 7 \| `f_700109cbe8` (18773) \| virtual calls \| 10 EXIT (17584) \| |
+| 0x700109cd28 | 1 | 8 | 73 | `docs/map/bodies/play-inning-game-over.md:143` | \| 8 CHALLENGE_PLAY_PROMPT \| `f_700109cd28` (18864) \| `f_700109ce30` (18937) \| 9 (19028) \| |
+| 0x700109ce30 | 1 | 4 | 97 | `docs/map/bodies/play-inning-game-over.md:143` | \| 8 CHALLENGE_PLAY_PROMPT \| `f_700109cd28` (18864) \| `f_700109ce30` (18937) \| 9 (19028) \| |
+| 0x700109cf7c | 1 | 19 | 292 | `docs/map/bodies/play-inning-game-over.md:148` | The EXIT handler `f_700109cf7c` (19034-19330, 292 lines) sets sub-state 10 and prints EXIT (19314-19315). It calls `f_700107e208`… |
+| 0x700109d498 | 0 | 1 | 38 | `docs/map/bodies/play-inning-game-over.md:144` | \| 9 CHALLENGE_PLAY \| inline at 17626-17700 \| `f_700109d498` (19394) \| not read \| |
+| 0x70010a301c | 2 | 11 | 107 | `docs/map/bodies/intro-states.md:73` (+1 more) | \| Slot 5 \| [C] posts event 0x218, clears `+0x8`, `+0x22`, sets `+0x28` to 8, logs "ATT_SCREEN: Pitcher warmup." (`main_0121.c:2… |
+| 0x70010a3814 | 1 | 7 | 73 | `docs/map/bodies/intro-states.md:75` | \| Slot 7 \| [C] eight phases at `+0x18`. Every phase change is `st64[x19+0x18] = value` followed by `f_7000574c40` (the logger, … |
+| 0x70010a3908 | 1 | 10 | 159 | `docs/map/bodies/intro-states.md:75` | \| Slot 7 \| [C] eight phases at `+0x18`. Every phase change is `st64[x19+0x18] = value` followed by `f_7000574c40` (the logger, … |
+| 0x70010a5544 | 16 | 0 | 18 | `docs/map/bodies/batter-up.md:104` | \| `f_70010a5544(out)` \| writes the pointer at `0x7003b22000+0xad0` to `*out`, true if non-null \| C \| main_0121.c:29545 \| |
+| 0x70010c3298 | ? | ? | ? | `docs/map/binary.md:448` (+1 more) | \| 0x70010c3298 \| ? \| ? \| ? \| `runtime/gfx/vk_exec_xfer.c:17` \| // TOTK resets and reports it 3 to 8 times a frame in the fi… |
+| 0x70010e62c4 | 13 | 2 | 27 | `docs/map/bodies/play-inning-game-over.md:129` (+1 more) | `f_700109aa1c` (16299-16388) decides how this play will be presented. It starts `[state+0x20]` at 6 (16308), then asks the presen… |
+| 0x70010e6318 | 6 | 2 | 27 | `docs/map/bodies/intro-states.md:55` | \| Slot 7 \| [C] drives a presentation object at `[0x7003b22ad0]` through three steps. Step 0 starts it (virtual call at +0x80 on… |
+| 0x70010e672c | 4 | 2 | 27 | `docs/map/bodies/play-inning-game-over.md:129` (+1 more) | `f_700109aa1c` (16299-16388) decides how this play will be presented. It starts `[state+0x20]` at 6 (16308), then asks the presen… |
 | 0x7001267d20 | ? | ? | ? | `docs/graphics-plan.md:134` (+1 more) | title screen; **200 % crashes** at about frame 1400 with a null write in f_7001267d20 (a game allocation that failed, |
-| 0x700128d2a0 | 1 | 8 | 270 | `docs/walkup-freeze.md:37` (+1 more) | (`main+0x12e0db4..0x12e0e24`). The counter's only reader, the indirect-light probes (`f_700128d2a0`), refresh only |
-| 0x70012c54ec | 173 | 4 | 57 | `docs/map/binary.md:450` (+3 more) | \| 0x70012c54ec \| 173 \| 4 \| 57 \| `docs/walkup-freeze.md:12` (+1 more) \| (`f_70012c54ec`, an object of 0x101e40 bytes) keeps … |
-| 0x70012d0fcc | 9 | 3 | 91 | `docs/map/binary.md:451` (+4 more) | \| 0x70012d0fcc \| 9 \| 3 \| 91 \| `docs/map/binary.md:452` (+2 more) \| \\| 0x70012d1e04 \\| 10 \\| 4 \\| 187 \\| `docs/walkup-f… |
-| 0x70012d1e04 | 10 | 4 | 187 | `docs/walkup-freeze.md:20` (+6 more) | `f_70012d0fcc(manager, 1)` at `main+0x108bbb8`. The `1` means "force": `f_70012d1e04` then ignores the spare buffer |
-| 0x70012d20a0 | 1 | 2 | 61 | `docs/walkup-freeze.md:16` (+2 more) | 1. **After every play** the game bakes the new time into the spare buffer in the background: `f_70012d20a0` (from |
-| 0x70012e0150 | 1 | 54 | 1653 | `docs/map/binary.md:386` (+8 more) | \| 0x700000b140 \| 0 \| 12 \| 84 \| `docs/walkup-freeze.md:14` \| `f_70012e0150` runs (once a frame, from `f_700000b140`). \| |
-| 0x7001340720 | ? | ? | ? | `docs/map/binary.md:455` (+2 more) | \| 0x7001340720 \| ? \| ? \| ? \| `runtime/mlb/hid.c:676` \| // MLB's pad update (1.0.20 f_7001341c20, 1.0.15 f_7001340720; read … |
-| 0x7001341c20 | 2 | 4 | 238 | `docs/map/binary.md:455` (+2 more) | \| 0x7001340720 \| ? \| ? \| ? \| `runtime/mlb/hid.c:676` \| // MLB's pad update (1.0.20 f_7001341c20, 1.0.15 f_7001340720; read … |
-| 0x70014bdc08 | 26 | 3 | 109 | `docs/map/binary.md:458` (+4 more) | \| 0x70014bde34 \| 26 \| 5 \| 193 \| `tools/packages/server_msgs.py:88` \| """AccountSession (f_70014bdc08 ser / f_70014bde34 des… |
-| 0x70014bde34 | 26 | 5 | 193 | `docs/map/binary.md:458` (+1 more) | \| 0x70014bde34 \| 26 \| 5 \| 193 \| `tools/packages/server_msgs.py:88` \| """AccountSession (f_70014bdc08 ser / f_70014bde34 des… |
+| 0x700128d2a0 | 1 | 8 | 270 | `docs/map/binary.md:450` (+2 more) | \| 0x700128d2a0 \| 1 \| 8 \| 270 \| `docs/walkup-freeze.md:37` (+1 more) \| (`main+0x12e0db4..0x12e0e24`). The counter's only rea… |
+| 0x70012c54ec | 173 | 4 | 57 | `docs/map/bodies/batter-up.md:105` (+7 more) | \| `f_70012c54ec` then `f_70012d0fcc` \| the lighting manager request, in slot 5, with the walk-up patch inline \| C \| main_0120… |
+| 0x70012d0fcc | 9 | 3 | 91 | `docs/map/bodies/batter-up.md:105` (+5 more) | \| `f_70012c54ec` then `f_70012d0fcc` \| the lighting manager request, in slot 5, with the walk-up patch inline \| C \| main_0120… |
+| 0x70012d1e04 | 10 | 4 | 187 | `docs/map/binary.md:453` (+7 more) | \| 0x70012d1e04 \| 10 \| 4 \| 187 \| `docs/walkup-freeze.md:20` (+6 more) \| `f_70012d0fcc(manager, 1)` at `main+0x108bbb8`. The … |
+| 0x70012d20a0 | 1 | 2 | 61 | `docs/map/bodies/play-inning-game-over.md:125` (+6 more) | 3. Calls `f_70012c54ec` (the lighting manager) and then `f_70012d20a0` (16110): this starts the background lighting bake after ea… |
+| 0x70012e0150 | 1 | 54 | 1653 | `docs/map/binary.md:386` (+8 more) | \| 0x700000b140 \| 0 \| 12 \| 84 \| `docs/map/binary.md:386` (+2 more) \| \\| 0x700000b140 \\| 0 \\| 12 \\| 84 \\| `docs/walkup-f… |
+| 0x70012f3f38 | 9 | 1 | 28 | `docs/map/bodies/intro-states.md:45` | \| Slot 7 \| [C] phase 1 sets phase 2 and runs helper `f_700108ab40`. Phase 4 has three steps: step 0 calls `f_70012f3f38(0x78, .… |
+| 0x70012f3f8c | 5 | 3 | 139 | `docs/map/bodies/intro-states.md:66` | \| Slot 6 \| [C] clears `+0x20` and `+0x29`, and when `[[0x700227e6b8]+0x20]` is 0, a global byte is 0 and two values match, star… |
+| 0x700133fcc0 | 95 | 1 | 60 | `docs/map/bodies/batter-up.md:126` (+2 more) | \| 34, 35 \| `ebd8`, `ec30` \| thunks calling `f_700133fcc0` with fixed arguments \| C \| |
+| 0x70013400e0 | 45 | 1 | 40 | `docs/map/bodies/intro-states.md:84` (+1 more) | \| Slot 7 \| [C] each frame calls virtual +0x38 on the singleton at `[0x700227e128]`. When phase is 0 and step is 0 it calls `f_7… |
+| 0x7001340720 | ? | ? | ? | `docs/map/binary.md:456` (+2 more) | \| 0x7001340720 \| ? \| ? \| ? \| `docs/map/binary.md:455` (+2 more) \| \\| 0x7001340720 \\| ? \\| ? \\| ? \\| `runtime/mlb/hid.c… |
+| 0x7001341c20 | 2 | 4 | 238 | `docs/map/binary.md:456` (+2 more) | \| 0x7001340720 \| ? \| ? \| ? \| `docs/map/binary.md:455` (+2 more) \| \\| 0x7001340720 \\| ? \\| ? \\| ? \\| `runtime/mlb/hid.c… |
+| 0x700134df20 | 4 | 0 | 5 | `docs/map/bodies/batter-up.md:116` (+3 more) | \| 6 \| `dca4` \| exit: clear flags, call `f_7000d82738` and `f_700134df20(0)`, sub-state 0 \| C \| |
+| 0x70014aea4c | 11 | 3 | 27 | `docs/map/bodies/play-inning-game-over.md:182` | 4. Calls `f_7000574c40` and the newline helper, and if the counter equals 7 calls `f_70014aea4c(1)` and `f_70014af940` (6570-6579… |
+| 0x70014af940 | 2 | 0 | 21 | `docs/map/bodies/play-inning-game-over.md:182` | 4. Calls `f_7000574c40` and the newline helper, and if the counter equals 7 calls `f_70014aea4c(1)` and `f_70014af940` (6570-6579… |
+| 0x70014bdc08 | 26 | 3 | 109 | `docs/map/binary.md:458` (+6 more) | \| 0x70014bdc08 \| 26 \| 3 \| 109 \| `docs/map/binary.md:458` (+4 more) \| \\| 0x70014bde34 \\| 26 \\| 5 \\| 193 \\| `tools/packa… |
+| 0x70014bde34 | 26 | 5 | 193 | `docs/map/binary.md:458` (+2 more) | \| 0x70014bdc08 \| 26 \| 3 \| 109 \| `docs/map/binary.md:458` (+4 more) \| \\| 0x70014bde34 \\| 26 \\| 5 \\| 193 \\| `tools/packa… |
 | 0x70014be240 | 0 | 1 | 34 | `docs/map/source/tools-packages.md:181` (+1 more) | \| `parse_token_echo` \| 189-199 \| \| Reader, _done, get, read, u8, u64, hex, string (+1) \| 0xde3ac304 / 0x0ca403f1 / 0x66baea3… |
 | 0x70014be374 | 0 | 1 | 55 | `docs/map/source/tools-packages.md:181` (+1 more) | \| `parse_token_echo` \| 189-199 \| \| Reader, _done, get, read, u8, u64, hex, string (+1) \| 0xde3ac304 / 0x0ca403f1 / 0x66baea3… |
 | 0x70014be5a4 | 0 | 2 | 39 | `docs/map/source/tools-packages.md:181` (+1 more) | \| `parse_token_echo` \| 189-199 \| \| Reader, _done, get, read, u8, u64, hex, string (+1) \| 0xde3ac304 / 0x0ca403f1 / 0x66baea3… |
-| 0x70014be6f8 | 0 | 1 | 22 | `docs/map/binary.md:462` (+2 more) | \| 0x70014be6f8 \| 0 \| 1 \| 22 \| `tools/packages/server_msgs.py:248` \| # - SessionResponse deser f_70014be6f8 / f_70014be818 (… |
-| 0x70014be818 | 0 | 1 | 58 | `docs/map/binary.md:462` (+2 more) | \| 0x70014be6f8 \| 0 \| 1 \| 22 \| `tools/packages/server_msgs.py:248` \| # - SessionResponse deser f_70014be6f8 / f_70014be818 (… |
-| 0x70014c2930 | 8 | 2 | 137 | `docs/map/binary.md:407` (+6 more) | \| 0x700092ae20 \| 147 \| 1 \| 140 \| `tools/packages/codec.py:22` (+1 more) \| f_70015351a4 raw bytes, f_700092ce50/f_700092ae20… |
-| 0x70014c2b00 | 7 | 4 | 175 | `docs/map/binary.md:465` (+1 more) | \| 0x70014c2b00 \| 7 \| 4 \| 175 \| `tools/packages/server_msgs.py:76` \| """Token (f_70014c2930 ser / f_70014c2b00 deser): strin… |
-| 0x70014c3c40 | 0 | 1 | 25 | `docs/map/binary.md:466` (+1 more) | \| 0x70014c3c40 \| 0 \| 1 \| 25 \| `tools/packages/server_msgs.py:244` \| # - LoginResponse deser f_70014c3c40: u8 ok @+8, Token … |
-| 0x70014c8a18 | 0 | 0 | 9 | `tools/packages/codec.py:37` | MSG_AUTH_TOKEN = 0x1397A1DF # client->server, body: string (NSA id token). getter f_70014c8a18 |
-| 0x70014dd530 | 0 | 2 | 16 | `docs/map/binary.md:468` (+1 more) | \| 0x70014dd530 \| 0 \| 2 \| 16 \| `tools/packages/rpc.py:55` \| 0xE54920EB S->C (no vtable found; factory f_70014dd530) OnMessag… |
-| 0x70014e2b00 | 7 | 2 | 199 | `tools/packages/codec.py:21` | Body primitives (see f_7001502e74 u8, f_7001502b4c u32, f_70014bdc08 u64, f_70014e2b00 u16, |
-| 0x7001502b4c | 2 | 0 | 44 | `docs/map/binary.md:457` (+7 more) | \| 0x70014bdc08 \| 26 \| 3 \| 109 \| `docs/map/binary.md:469` (+4 more) \| \\| 0x70014e2b00 \\| 7 \\| 2 \\| 199 \\| `tools/packag… |
-| 0x7001502bd4 | 2 | 0 | 64 | `docs/map/binary.md:471` (+2 more) | \| 0x7001502bd4 \| 2 \| 0 \| 64 \| `docs/map/binary.md:471` (+1 more) \| \\| 0x7001502bd4 \\| 2 \\| 0 \\| 64 \\| `tools/packages/… |
-| 0x7001502d14 | 1 | 0 | 51 | `docs/map/binary.md:472` (+2 more) | \| 0x7001502d14 \| 1 \| 0 \| 51 \| `tools/packages/codec.py:8` \| u8 magic = 0xA5 (f_7001502d14 writes, f_7001502db4 checks) \| |
-| 0x7001502db4 | 1 | 0 | 58 | `docs/map/binary.md:472` (+2 more) | \| 0x7001502d14 \| 1 \| 0 \| 51 \| `tools/packages/codec.py:8` \| u8 magic = 0xA5 (f_7001502d14 writes, f_7001502db4 checks) \| |
-| 0x7001502e74 | 0 | 0 | 24 | `docs/map/binary.md:457` (+4 more) | \| 0x70014bdc08 \| 26 \| 3 \| 109 \| `docs/map/binary.md:469` (+4 more) \| \\| 0x70014e2b00 \\| 7 \\| 2 \\| 199 \\| `tools/packag… |
-| 0x70015032d8 | 0 | 0 | 9 | `tools/packages/codec.py:39` | MSG_PING = 0x9A77845F # server->client: makes the client send a heartbeat now. getter f_70015032d8 |
-| 0x700150330c | 0 | 0 | 10 | `tools/packages/codec.py:38` | MSG_HEARTBEAT = 0xD4D9E1AD # client->server every 15 s idle, body: u8 (unused). getter f_700150330c |
-| 0x7001503a1c | 0 | 0 | 31 | `docs/map/binary.md:477` (+1 more) | \| 0x7001503a1c \| 0 \| 0 \| 31 \| `tools/packages/rpc.py:52` \| 0xC031F812 C->S? body: u64 (Serialize f_7001503a1c) - sender not… |
-| 0x7001503b2c | 0 | 1 | 7 | `docs/map/binary.md:478` (+1 more) | \| 0x7001503b2c \| 0 \| 1 \| 7 \| `tools/packages/rpc.py:51` \| 0x94E26BC1 C->S? body: AccountSession (Serialize f_7001503b2c) - … |
-| 0x7001503bd0 | 0 | 3 | 191 | `docs/map/binary.md:479` (+2 more) | \| 0x7001503bd0 \| 0 \| 3 \| 191 \| `docs/map/binary.md:480` (+1 more) \| \\| 0x7001503f50 \\| 0 \\| 4 \\| 172 \\| `tools/package… |
-| 0x7001503f50 | 0 | 4 | 172 | `tools/packages/rpc.py:12` | message 0x801FB56C ServiceRequest (Serialize f_7001503bd0, Deserialize f_7001503f50) |
-| 0x70015041b0 | 0 | 1 | 39 | `docs/map/binary.md:481` (+2 more) | \| 0x70015041b0 \| 0 \| 1 \| 39 \| `docs/map/binary.md:482` (+1 more) \| \\| 0x700150422c \\| 0 \\| 1 \\| 49 \\| `tools/packages/… |
-| 0x700150422c | 0 | 1 | 49 | `tools/packages/rpc.py:15` | message 0x30D39658 ServiceResponse (Serialize f_70015041b0, Deserialize f_700150422c) |
-| 0x70015042d4 | 0 | 1 | 28 | `docs/map/binary.md:483` (+1 more) | \| 0x70015042d4 \| 0 \| 1 \| 28 \| `tools/packages/rpc.py:53` \| 0xDF31986F ? body: u32, string (Serialize f_70015042d4) - not ha… |
-| 0x70015043a0 | 1 | 1 | 66 | `docs/map/binary.md:484` (+1 more) | \| 0x70015043a0 \| 1 \| 1 \| 66 \| `tools/packages/rpc.py:48` \| Other messages registered by the Service plugin (f_70015043a0 gr… |
-| 0x7001505770 | 1 | 1 | 38 | `docs/map/binary.md:485` (+1 more) | \| 0x7001505770 \| 1 \| 1 \| 38 \| `tools/packages/rpc.py:56` \| 0xF63439D4 / 0x23BF9620 (group f_7001505770) S->C: OnMessage loo… |
-| 0x7001505f6c | 0 | 1 | 7 | `docs/map/source/tools-packages.md:182` (+1 more) | \| `parse_conductor_query` \| 202-204 \| \| Reader, read, _done \| 0x63174f11 / 0x78919356 (ser f_7001505f6c / f_70015061bc -> Ac… |
-| 0x70015061bc | 0 | 1 | 7 | `docs/map/source/tools-packages.md:182` (+1 more) | \| `parse_conductor_query` \| 202-204 \| \| Reader, read, _done \| 0x63174f11 / 0x78919356 (ser f_7001505f6c / f_70015061bc -> Ac… |
-| 0x700151a26c | 6 | 4 | 172 | `docs/map/binary.md:488` (+2 more) | \| 0x700151a26c \| 6 \| 4 \| 172 \| `tools/packages/rpc.py:37` \| params_json format (f_700151a26c begin '{', f_700151aa40 key '"… |
-| 0x700151a4d4 | 8 | 3 | 104 | `docs/map/binary.md:489` (+1 more) | \| 0x700151a4d4 \| 8 \| 3 \| 104 \| `tools/packages/rpc.py:38` \| 0x7002206578 ["", ","], f_700151a4d4 end '}'), values by param … |
-| 0x700151aa40 | 9 | 4 | 71 | `docs/map/binary.md:488` (+2 more) | \| 0x700151a26c \| 6 \| 4 \| 172 \| `tools/packages/rpc.py:37` \| params_json format (f_700151a26c begin '{', f_700151aa40 key '"… |
-| 0x700151ab30 | 27 | 5 | 130 | `docs/map/binary.md:491` (+1 more) | \| 0x700151ab30 \| 27 \| 5 \| 130 \| `tools/packages/rpc.py:40` \| 2 int -> %d (f_700151ab30) \| |
-| 0x700151ad00 | 1 | 5 | 130 | `docs/map/binary.md:492` (+1 more) | \| 0x700151ad00 \| 1 \| 5 \| 130 \| `tools/packages/rpc.py:42` \| 4 int64 -> %ld (f_700151ad00) \| |
-| 0x700151aed0 | 11 | 5 | 130 | `docs/map/binary.md:493` (+1 more) | \| 0x700151aed0 \| 11 \| 5 \| 130 \| `tools/packages/rpc.py:41` \| 3 uint -> %u (f_700151aed0) \| |
-| 0x700151b0a0 | 3 | 5 | 130 | `docs/map/binary.md:494` (+1 more) | \| 0x700151b0a0 \| 3 \| 5 \| 130 \| `tools/packages/rpc.py:43` \| 5 uint64 -> %lu (f_700151b0a0) \| |
-| 0x700151b7b0 | 7 | 5 | 263 | `docs/map/binary.md:495` (+1 more) | \| 0x700151b7b0 \| 7 \| 5 \| 263 \| `tools/packages/rpc.py:45` \| 8 string -> "raw text" (f_700151b7b0 called with escape=0: NOT … |
-| 0x700151bb48 | 2 | 5 | 134 | `docs/map/binary.md:496` (+1 more) | \| 0x700151bb48 \| 2 \| 5 \| 134 \| `tools/packages/rpc.py:39` \| 1 bool -> true / false (f_700151bb48, table @0x7001da9f88) \| |
-| 0x700151bd28 | 5 | 5 | 132 | `docs/map/binary.md:497` (+1 more) | \| 0x700151bd28 \| 5 \| 5 \| 132 \| `tools/packages/rpc.py:44` \| 6 float, 7 double -> %f (f_700151bd28) \| |
-| 0x700151c1dc | 3 | 20 | 358 | `tools/packages/server_msgs.py:253` | # - Service connect f_70009a7454: inet_ntop(Endpoint addr) + ntohs(port) -> f_7001535e00 -> f_700151c1dc -> |
-| 0x700151c884 | 10 | 5 | 137 | `tools/packages/rpc.py:11` | pending_key(request_id, service) then f_7001530fb0 -> f_700151c884 (olClient send) |
-| 0x700151cd40 | 1 | 10 | 156 | `docs/map/binary.md:500` (+4 more) | \| 0x700151cd40 \| 1 \| 10 \| 156 \| `docs/map/binary.md:501` (+3 more) \| \\| 0x700151d2a0 \\| 1 \\| 12 \\| 170 \\| `tools/packa… |
-| 0x700151d2a0 | 1 | 12 | 170 | `tools/packages/codec.py:7` | 1. Stream blocks (olClient transport, f_700151cd40 send / f_700151d2a0 recv) |
-| 0x700151d520 | 1 | 12 | 190 | `docs/map/binary.md:471` (+2 more) | \| 0x7001502bd4 \| 2 \| 0 \| 64 \| `docs/map/binary.md:471` (+1 more) \| \\| 0x7001502bd4 \\| 2 \\| 0 \\| 64 \\| `tools/packages/… |
-| 0x7001530fb0 | 42 | 1 | 10 | `docs/map/binary.md:499` (+2 more) | \| 0x700151c884 \| 10 \| 5 \| 137 \| `docs/map/binary.md:499` (+1 more) \| \\| 0x700151c884 \\| 10 \\| 5 \\| 137 \\| `tools/packa… |
-| 0x70015310d0 | 2 | 2 | 118 | `docs/map/source/tools-packages.md:157` (+2 more) | \| `expires_epoch` \| 62-72 \| \| timegm, isinstance, encode, len, int \| Mirror of f_70015310d0: returns the UTC epoch the clien… |
+| 0x70014be6f8 | 0 | 1 | 22 | `docs/map/binary.md:463` (+2 more) | \| 0x70014be6f8 \| 0 \| 1 \| 22 \| `docs/map/binary.md:462` (+2 more) \| \\| 0x70014be6f8 \\| 0 \\| 1 \\| 22 \\| `tools/packages/… |
+| 0x70014be818 | 0 | 1 | 58 | `docs/map/binary.md:463` (+2 more) | \| 0x70014be6f8 \| 0 \| 1 \| 22 \| `docs/map/binary.md:462` (+2 more) \| \\| 0x70014be6f8 \\| 0 \\| 1 \\| 22 \\| `tools/packages/… |
+| 0x70014c2930 | 8 | 2 | 137 | `docs/map/binary.md:466` (+2 more) | \| 0x70014c2b00 \| 7 \| 4 \| 175 \| `docs/map/binary.md:465` (+1 more) \| \\| 0x70014c2b00 \\| 7 \\| 4 \\| 175 \\| `tools/package… |
+| 0x70014c2b00 | 7 | 4 | 175 | `docs/map/binary.md:466` (+1 more) | \| 0x70014c2b00 \| 7 \| 4 \| 175 \| `docs/map/binary.md:465` (+1 more) \| \\| 0x70014c2b00 \\| 7 \\| 4 \\| 175 \\| `tools/package… |
+| 0x70014c3c40 | 0 | 1 | 25 | `docs/map/binary.md:467` (+1 more) | \| 0x70014c3c40 \| 0 \| 1 \| 25 \| `docs/map/binary.md:466` (+1 more) \| \\| 0x70014c3c40 \\| 0 \\| 1 \\| 25 \\| `tools/packages/… |
+| 0x70014c8a18 | 0 | 0 | 9 | `docs/map/binary.md:468` (+1 more) | \| 0x70014c8a18 \| 0 \| 0 \| 9 \| `tools/packages/codec.py:37` \| MSG_AUTH_TOKEN = 0x1397A1DF # client->server, body: string (NSA… |
+| 0x70014dd530 | 0 | 2 | 16 | `docs/map/binary.md:469` (+1 more) | \| 0x70014dd530 \| 0 \| 2 \| 16 \| `docs/map/binary.md:468` (+1 more) \| \\| 0x70014dd530 \\| 0 \\| 2 \\| 16 \\| `tools/packages/… |
+| 0x70014e2b00 | 7 | 2 | 199 | `docs/map/binary.md:470` (+1 more) | \| 0x70014e2b00 \| 7 \| 2 \| 199 \| `tools/packages/codec.py:21` \| Body primitives (see f_7001502e74 u8, f_7001502b4c u32, f_700… |
+| 0x7001502b4c | 2 | 0 | 44 | `docs/map/binary.md:470` (+2 more) | \| 0x70014e2b00 \| 7 \| 2 \| 199 \| `tools/packages/codec.py:21` \| Body primitives (see f_7001502e74 u8, f_7001502b4c u32, f_700… |
+| 0x7001502bd4 | 2 | 0 | 64 | `tools/packages/codec.py:16` | 2. Messages (f_700151d520 parse, f_7001502b4c/f_7001502bd4 header ser/deser) |
+| 0x7001502d14 | 1 | 0 | 51 | `docs/map/binary.md:473` (+2 more) | \| 0x7001502d14 \| 1 \| 0 \| 51 \| `docs/map/binary.md:472` (+2 more) \| \\| 0x7001502d14 \\| 1 \\| 0 \\| 51 \\| `tools/packages/… |
+| 0x7001502db4 | 1 | 0 | 58 | `docs/map/binary.md:473` (+2 more) | \| 0x7001502d14 \| 1 \| 0 \| 51 \| `docs/map/binary.md:472` (+2 more) \| \\| 0x7001502d14 \\| 1 \\| 0 \\| 51 \\| `tools/packages/… |
+| 0x7001502e74 | 0 | 0 | 24 | `docs/map/binary.md:470` (+1 more) | \| 0x70014e2b00 \| 7 \| 2 \| 199 \| `tools/packages/codec.py:21` \| Body primitives (see f_7001502e74 u8, f_7001502b4c u32, f_700… |
+| 0x70015032d8 | 0 | 0 | 9 | `docs/map/binary.md:476` (+1 more) | \| 0x70015032d8 \| 0 \| 0 \| 9 \| `tools/packages/codec.py:39` \| MSG_PING = 0x9A77845F # server->client: makes the client send a… |
+| 0x700150330c | 0 | 0 | 10 | `docs/map/binary.md:477` (+1 more) | \| 0x700150330c \| 0 \| 0 \| 10 \| `tools/packages/codec.py:38` \| MSG_HEARTBEAT = 0xD4D9E1AD # client->server every 15 s idle, b… |
+| 0x7001503a1c | 0 | 0 | 31 | `docs/map/binary.md:478` (+1 more) | \| 0x7001503a1c \| 0 \| 0 \| 31 \| `docs/map/binary.md:477` (+1 more) \| \\| 0x7001503a1c \\| 0 \\| 0 \\| 31 \\| `tools/packages/… |
+| 0x7001503b2c | 0 | 1 | 7 | `docs/map/binary.md:479` (+1 more) | \| 0x7001503b2c \| 0 \| 1 \| 7 \| `docs/map/binary.md:478` (+1 more) \| \\| 0x7001503b2c \\| 0 \\| 1 \\| 7 \\| `tools/packages/rp… |
+| 0x7001503bd0 | 0 | 3 | 191 | `docs/map/binary.md:481` (+1 more) | \| 0x7001503f50 \| 0 \| 4 \| 172 \| `tools/packages/rpc.py:12` \| message 0x801FB56C ServiceRequest (Serialize f_7001503bd0, Dese… |
+| 0x7001503f50 | 0 | 4 | 172 | `docs/map/binary.md:481` (+1 more) | \| 0x7001503f50 \| 0 \| 4 \| 172 \| `tools/packages/rpc.py:12` \| message 0x801FB56C ServiceRequest (Serialize f_7001503bd0, Dese… |
+| 0x70015041b0 | 0 | 1 | 39 | `docs/map/binary.md:483` (+1 more) | \| 0x700150422c \| 0 \| 1 \| 49 \| `tools/packages/rpc.py:15` \| message 0x30D39658 ServiceResponse (Serialize f_70015041b0, Dese… |
+| 0x700150422c | 0 | 1 | 49 | `docs/map/binary.md:483` (+1 more) | \| 0x700150422c \| 0 \| 1 \| 49 \| `tools/packages/rpc.py:15` \| message 0x30D39658 ServiceResponse (Serialize f_70015041b0, Dese… |
+| 0x70015042d4 | 0 | 1 | 28 | `docs/map/binary.md:484` (+1 more) | \| 0x70015042d4 \| 0 \| 1 \| 28 \| `docs/map/binary.md:483` (+1 more) \| \\| 0x70015042d4 \\| 0 \\| 1 \\| 28 \\| `tools/packages/… |
+| 0x70015043a0 | 1 | 1 | 66 | `docs/map/binary.md:485` (+1 more) | \| 0x70015043a0 \| 1 \| 1 \| 66 \| `docs/map/binary.md:484` (+1 more) \| \\| 0x70015043a0 \\| 1 \\| 1 \\| 66 \\| `tools/packages/… |
+| 0x7001505770 | 1 | 1 | 38 | `docs/map/binary.md:486` (+1 more) | \| 0x7001505770 \| 1 \| 1 \| 38 \| `docs/map/binary.md:485` (+1 more) \| \\| 0x7001505770 \\| 1 \\| 1 \\| 38 \\| `tools/packages/… |
+| 0x7001505f6c | 0 | 1 | 7 | `docs/map/binary.md:487` (+3 more) | \| 0x7001505f6c \| 0 \| 1 \| 7 \| `docs/map/source/tools-packages.md:182` (+1 more) \| \\| `parse_conductor_query` \\| 202-204 \\… |
+| 0x70015061bc | 0 | 1 | 7 | `docs/map/binary.md:487` (+3 more) | \| 0x7001505f6c \| 0 \| 1 \| 7 \| `docs/map/source/tools-packages.md:182` (+1 more) \| \\| `parse_conductor_query` \\| 202-204 \\… |
+| 0x700151a26c | 6 | 4 | 172 | `docs/map/binary.md:489` (+2 more) | \| 0x700151a26c \| 6 \| 4 \| 172 \| `docs/map/binary.md:488` (+2 more) \| \\| 0x700151a26c \\| 6 \\| 4 \\| 172 \\| `tools/package… |
+| 0x700151a4d4 | 8 | 3 | 104 | `docs/map/binary.md:490` (+1 more) | \| 0x700151a4d4 \| 8 \| 3 \| 104 \| `docs/map/binary.md:489` (+1 more) \| \\| 0x700151a4d4 \\| 8 \\| 3 \\| 104 \\| `tools/package… |
+| 0x700151aa40 | 9 | 4 | 71 | `docs/map/binary.md:489` (+2 more) | \| 0x700151a26c \| 6 \| 4 \| 172 \| `docs/map/binary.md:488` (+2 more) \| \\| 0x700151a26c \\| 6 \\| 4 \\| 172 \\| `tools/package… |
+| 0x700151ab30 | 27 | 5 | 130 | `docs/map/binary.md:492` (+1 more) | \| 0x700151ab30 \| 27 \| 5 \| 130 \| `docs/map/binary.md:491` (+1 more) \| \\| 0x700151ab30 \\| 27 \\| 5 \\| 130 \\| `tools/packa… |
+| 0x700151ad00 | 1 | 5 | 130 | `docs/map/binary.md:493` (+1 more) | \| 0x700151ad00 \| 1 \| 5 \| 130 \| `docs/map/binary.md:492` (+1 more) \| \\| 0x700151ad00 \\| 1 \\| 5 \\| 130 \\| `tools/package… |
+| 0x700151aed0 | 11 | 5 | 130 | `docs/map/binary.md:494` (+1 more) | \| 0x700151aed0 \| 11 \| 5 \| 130 \| `docs/map/binary.md:493` (+1 more) \| \\| 0x700151aed0 \\| 11 \\| 5 \\| 130 \\| `tools/packa… |
+| 0x700151b0a0 | 3 | 5 | 130 | `docs/map/binary.md:495` (+1 more) | \| 0x700151b0a0 \| 3 \| 5 \| 130 \| `docs/map/binary.md:494` (+1 more) \| \\| 0x700151b0a0 \\| 3 \\| 5 \\| 130 \\| `tools/package… |
+| 0x700151b7b0 | 7 | 5 | 263 | `docs/map/binary.md:496` (+1 more) | \| 0x700151b7b0 \| 7 \| 5 \| 263 \| `docs/map/binary.md:495` (+1 more) \| \\| 0x700151b7b0 \\| 7 \\| 5 \\| 263 \\| `tools/package… |
+| 0x700151bb48 | 2 | 5 | 134 | `docs/map/binary.md:497` (+1 more) | \| 0x700151bb48 \| 2 \| 5 \| 134 \| `docs/map/binary.md:496` (+1 more) \| \\| 0x700151bb48 \\| 2 \\| 5 \\| 134 \\| `tools/package… |
+| 0x700151bd28 | 5 | 5 | 132 | `docs/map/binary.md:498` (+1 more) | \| 0x700151bd28 \| 5 \| 5 \| 132 \| `docs/map/binary.md:497` (+1 more) \| \\| 0x700151bd28 \\| 5 \\| 5 \\| 132 \\| `tools/package… |
+| 0x700151c1dc | 3 | 20 | 358 | `docs/map/binary.md:499` (+2 more) | \| 0x700151c1dc \| 3 \| 20 \| 358 \| `tools/packages/server_msgs.py:253` \| # - Service connect f_70009a7454: inet_ntop(Endpoint … |
+| 0x700151c884 | 10 | 5 | 137 | `docs/map/binary.md:500` (+1 more) | \| 0x700151c884 \| 10 \| 5 \| 137 \| `tools/packages/rpc.py:11` \| pending_key(request_id, service) then f_7001530fb0 -> f_700151… |
+| 0x700151cd40 | 1 | 10 | 156 | `docs/map/binary.md:502` (+3 more) | \| 0x700151d2a0 \| 1 \| 12 \| 170 \| `tools/packages/codec.py:7` \| 1. Stream blocks (olClient transport, f_700151cd40 send / f_7… |
+| 0x700151d2a0 | 1 | 12 | 170 | `docs/map/binary.md:502` (+1 more) | \| 0x700151d2a0 \| 1 \| 12 \| 170 \| `tools/packages/codec.py:7` \| 1. Stream blocks (olClient transport, f_700151cd40 send / f_7… |
+| 0x700151d520 | 1 | 12 | 190 | `tools/packages/codec.py:16` | 2. Messages (f_700151d520 parse, f_7001502b4c/f_7001502bd4 header ser/deser) |
+| 0x7001530fb0 | 42 | 1 | 10 | `docs/map/binary.md:500` (+1 more) | \| 0x700151c884 \| 10 \| 5 \| 137 \| `tools/packages/rpc.py:11` \| pending_key(request_id, service) then f_7001530fb0 -> f_700151… |
+| 0x70015310d0 | 2 | 2 | 118 | `docs/map/binary.md:505` (+3 more) | \| 0x70015310d0 \| 2 \| 2 \| 118 \| `docs/map/source/tools-packages.md:157` (+2 more) \| \\| `expires_epoch` \\| 62-72 \\| \\| ti… |
 | 0x7001531280 | 9 | 1 | 22 | `docs/map/source/tools-packages.md:156` (+2 more) | \| `expires_str` \| 55-59 \| \| strftime, gmtime, time \| 'YYYY-MM-DDTHH:MM:SS' (UTC). Must be > now + 30 s on the client clock (… |
-| 0x70015351a4 | 47 | 1 | 35 | `docs/map/binary.md:407` (+4 more) | \| 0x700092ae20 \| 147 \| 1 \| 140 \| `tools/packages/codec.py:22` (+1 more) \| f_70015351a4 raw bytes, f_700092ce50/f_700092ae20… |
-| 0x7001535e00 | 10 | 7 | 161 | `tools/packages/server_msgs.py:253` | # - Service connect f_70009a7454: inet_ntop(Endpoint addr) + ntohs(port) -> f_7001535e00 -> f_700151c1dc -> |
-| 0x7001538ed0 | 5 | 1 | 7 | `tools/packages/server_msgs.py:114` | (client does ntohs() on it before connecting, f_7001538ed0 -> ntohs) |
-| 0x70015391b4 | 1 | 0 | 100 | `tools/packages/server_msgs.py:112` | (client types it IPv4 iff hi==0 and lo>>32 == 0xffff, f_70015391b4) |
-| 0x70015395cc | 9 | 0 | 57 | `docs/map/source/tools-packages.md:169` (+1 more) | \| `endpoint` \| 108-118 \| \| bytes, len, pack, int, split \| Endpoint (f_70015395cc ser / f_7001539684 deser), 18 bytes: \| |
-| 0x7001539684 | 9 | 1 | 44 | `docs/map/source/tools-packages.md:169` (+1 more) | \| `endpoint` \| 108-118 \| \| bytes, len, pack, int, split \| Endpoint (f_70015395cc ser / f_7001539684 deser), 18 bytes: \| |
-| 0x70016527d8 | 1 | 7 | 142 | `tools/packages/rpc.py:54` | 0x9FD30956 S->C body: string, string (OnMessage branch: clears online-manager strings, f_70016527d8) |
-| 0x70017c19d0 | 1 | 1 | 217 | `docs/map/binary.md:513` (+1 more) | \| 0x70017c19d0 \| 1 \| 1 \| 217 \| `docs/map/regions/E-0x7001400000-0x70017fffff.md:107` (+1 more) \| - The meaning of "s9Amp" a… |
-| 0x70017c1d20 | 1 | 5 | 127 | `docs/map/binary.md:514` (+2 more) | \| 0x70017c1d20 \| 1 \| 5 \| 127 \| `docs/map/regions/E-0x7001400000-0x70017fffff.md:60` (+2 more) \| - A table walker: f_70017c1… |
+| 0x70015351a4 | 47 | 1 | 35 | `docs/map/binary.md:408` (+4 more) | \| 0x700092ae20 \| 147 \| 1 \| 140 \| `docs/map/binary.md:407` (+5 more) \| \\| 0x700092ae20 \\| 147 \\| 1 \\| 140 \\| `tools/pac… |
+| 0x7001535e00 | 10 | 7 | 161 | `docs/map/binary.md:499` (+2 more) | \| 0x700151c1dc \| 3 \| 20 \| 358 \| `tools/packages/server_msgs.py:253` \| # - Service connect f_70009a7454: inet_ntop(Endpoint … |
+| 0x7001538ed0 | 5 | 1 | 7 | `docs/map/binary.md:509` (+1 more) | \| 0x7001538ed0 \| 5 \| 1 \| 7 \| `tools/packages/server_msgs.py:114` \| (client does ntohs() on it before connecting, f_7001538e… |
+| 0x70015391b4 | 1 | 0 | 100 | `docs/map/binary.md:510` (+1 more) | \| 0x70015391b4 \| 1 \| 0 \| 100 \| `tools/packages/server_msgs.py:112` \| (client types it IPv4 iff hi==0 and lo>>32 == 0xffff, … |
+| 0x70015395cc | 9 | 0 | 57 | `docs/map/binary.md:511` (+3 more) | \| 0x70015395cc \| 9 \| 0 \| 57 \| `docs/map/source/tools-packages.md:169` (+1 more) \| \\| `endpoint` \\| 108-118 \\| \\| bytes,… |
+| 0x7001539684 | 9 | 1 | 44 | `docs/map/binary.md:511` (+3 more) | \| 0x70015395cc \| 9 \| 0 \| 57 \| `docs/map/source/tools-packages.md:169` (+1 more) \| \\| `endpoint` \\| 108-118 \\| \\| bytes,… |
+| 0x70016527d8 | 1 | 7 | 142 | `docs/map/binary.md:513` (+1 more) | \| 0x70016527d8 \| 1 \| 7 \| 142 \| `tools/packages/rpc.py:54` \| 0x9FD30956 S->C body: string, string (OnMessage branch: clears … |
+| 0x70016703f0 | 773 | 0 | 9 | `docs/map/bodies/play-inning-game-over.md:146` (+2 more) | The WAIT sub-state decides how long to hold. Phase 0 computes `[state+0x2c]`, a number of seconds, from the play-result values `[… |
+| 0x70017c19d0 | 1 | 1 | 217 | `docs/map/regions/E-0x7001400000-0x70017fffff.md:109` | - The meaning of "s9Amp" and "S_CONTACT_HUM" / "S_CONTACT_CPU" (f_70017c19d0) is unknown [H]. |
+| 0x70017c1d20 | 1 | 5 | 127 | `docs/map/regions/E-0x7001400000-0x70017fffff.md:60` (+1 more) | - A table walker: f_70017c1d20 (127 lines) loops over a table of 32-byte records, reading 16-bit and 32-bit fields, and calls two… |
 | 0x70017c6740 | 1 | 8 | 133 | `docs/map/regions/E-0x7001400000-0x70017fffff.md:58` | - Player profile and appearance: "D_PLAYER_ACC", "D_PLR_PROFILE", "PACKED_U32", "ACCESSORY_COLORS", "FACE_HAIR_STYLE", "NAME_STYL… |
 | 0x70017c690c | 1 | 30 | 5057 | `docs/map/regions/E-0x7001400000-0x70017fffff.md:58` | - Player profile and appearance: "D_PLAYER_ACC", "D_PLR_PROFILE", "PACKED_U32", "ACCESSORY_COLORS", "FACE_HAIR_STYLE", "NAME_STYL… |
-| 0x70017d71ac | 0 | 1 | 5 | `docs/map/binary.md:517` (+2 more) | \| 0x70017d71ac \| 0 \| 1 \| 5 \| `docs/map/regions/E-0x7001400000-0x70017fffff.md:52` (+2 more) \| - f_70017d71ac (5 lines): tai… |
-| 0x70017d71b0 | 0 | 0 | 9 | `docs/map/binary.md:518` (+2 more) | \| 0x70017d71b0 \| 0 \| 0 \| 9 \| `docs/map/regions/E-0x7001400000-0x70017fffff.md:50` (+2 more) \| - f_70017d71b0 (9 lines): rea… |
-| 0x70017d71c4 | 0 | 1 | 18 | `docs/map/binary.md:519` (+2 more) | \| 0x70017d71c4 \| 0 \| 1 \| 18 \| `docs/map/regions/E-0x7001400000-0x70017fffff.md:51` (+2 more) \| - f_70017d71c4 (about 20 lin… |
-| 0x70017da880 | 1 | 1 | 85 | `docs/map/binary.md:520` (+1 more) | \| 0x70017da880 \| 1 \| 1 \| 85 \| `docs/map/regions/E-0x7001400000-0x70017fffff.md:61` (+1 more) \| - Scouting and interest: "IN… |
-| 0x70019fb800 | 1 | 2 | 43 | `docs/map/binary.md:521` (+3 more) | \| 0x70019fb800 \| 1 \| 2 \| 43 \| `docs/walkup-freeze.md:40` (+2 more) \| tail-calling `f_70019fb800` with the time (`main+0x12d… |
-| 0x70019fb880 | 1 | 8 | 239 | `tools/data/patches-1.0.20.txt:34` | # that turns a set of stadium props off or on (f_70019fb880 / f_70019fbbb0). The quick switch returns before it, so |
-| 0x70019fbbb0 | 1 | 12 | 337 | `tools/data/patches-1.0.20.txt:34` | # that turns a set of stadium props off or on (f_70019fb880 / f_70019fbbb0). The quick switch returns before it, so |
-| 0x70051242a8 | ? | ? | ? | `runtime/core/kernel.c:343` | // - Horizon's preemption disable: the SDK's spin locks (1.2.1 sdk f_70051242a8, f_7005124360 and siblings) count |
-| 0x7005124360 | ? | ? | ? | `runtime/core/kernel.c:343` | // - Horizon's preemption disable: the SDK's spin locks (1.2.1 sdk f_70051242a8, f_7005124360 and siblings) count |
+| 0x70017d71ac | 0 | 1 | 5 | `docs/map/binary.md:518` (+2 more) | \| 0x70017d71ac \| 0 \| 1 \| 5 \| `docs/map/binary.md:517` (+2 more) \| \\| 0x70017d71ac \\| 0 \\| 1 \\| 5 \\| `docs/map/regions/… |
+| 0x70017d71b0 | 0 | 0 | 9 | `docs/map/binary.md:519` (+2 more) | \| 0x70017d71b0 \| 0 \| 0 \| 9 \| `docs/map/binary.md:518` (+2 more) \| \\| 0x70017d71b0 \\| 0 \\| 0 \\| 9 \\| `docs/map/regions/… |
+| 0x70017d71c4 | 0 | 1 | 18 | `docs/map/binary.md:520` (+2 more) | \| 0x70017d71c4 \| 0 \| 1 \| 18 \| `docs/map/binary.md:519` (+2 more) \| \\| 0x70017d71c4 \\| 0 \\| 1 \\| 18 \\| `docs/map/region… |
+| 0x70017da880 | 1 | 1 | 85 | `docs/map/regions/E-0x7001400000-0x70017fffff.md:61` | - Scouting and interest: "INTEREST_LEVEL", "SCOUTED_VALUE" in f_70017da880 [C strings, [I] scouting logic]. |
+| 0x700181a6bc | 1154 | 0 | 22 | `docs/map/bodies/play-inning-game-over.md:89` | \| `[state+0x20]` \| 16-bit value read at offset 0x130 of the result of `f_700181a6bc` (3245-3249) \| C \| |
+| 0x700181c784 | 59 | 1 | 19 | `docs/map/bodies/intro-states.md:73` | \| Slot 5 \| [C] posts event 0x218, clears `+0x8`, `+0x22`, sets `+0x28` to 8, logs "ATT_SCREEN: Pitcher warmup." (`main_0121.c:2… |
+| 0x7001824b74 | 2265 | 0 | 60 | `docs/map/bodies/play-inning-game-over.md:146` (+2 more) | The WAIT sub-state decides how long to hold. Phase 0 computes `[state+0x2c]`, a number of seconds, from the play-result values `[… |
+| 0x700183eafc | 487 | 1 | 12 | `docs/map/bodies/intro-states.md:73` | \| Slot 5 \| [C] posts event 0x218, clears `+0x8`, `+0x22`, sets `+0x28` to 8, logs "ATT_SCREEN: Pitcher warmup." (`main_0121.c:2… |
+| 0x700184abb4 | 268 | 0 | 35 | `docs/map/bodies/play-inning-game-over.md:181` | 3. Otherwise reads the half-inning counter `[global 0x700227e6b8 + 0x20]`. It rotates it right by 1 to get a count, takes bit 0 a… |
+| 0x70019fb800 | 1 | 2 | 43 | `docs/map/binary.md:522` (+3 more) | \| 0x70019fb800 \| 1 \| 2 \| 43 \| `docs/map/binary.md:521` (+3 more) \| \\| 0x70019fb800 \\| 1 \\| 2 \\| 43 \\| `docs/walkup-fre… |
+| 0x70019fb880 | 1 | 8 | 239 | `docs/map/binary.md:523` (+2 more) | \| 0x70019fb880 \| 1 \| 8 \| 239 \| `tools/data/patches-1.0.20.txt:34` \| # that turns a set of stadium props off or on (f_70019f… |
+| 0x70019fbbb0 | 1 | 12 | 337 | `docs/map/binary.md:523` (+2 more) | \| 0x70019fb880 \| 1 \| 8 \| 239 \| `tools/data/patches-1.0.20.txt:34` \| # that turns a set of stadium props off or on (f_70019f… |
+| 0x7001c1fb00 | 23 | 0 | 9 | `docs/map/bodies/intro-states.md:63` | \| Slot 5 \| [C] logs "ATT_SCREEN: Lineup intro." (`f_7001c1fb00`, 23 callers), stores a start time at `+0x8`, sets byte `+0x28` … |
+| 0x7001c1fb40 | 455 | 0 | 9 | `docs/map/bodies/play-inning-game-over.md:5` (+3 more) | The generated C was read with the shell filter in the Tracing playbook. Two helper roles are my reading [I]: `f_7001c1fb40` takes… |
+| 0x7001c1fc90 | 55 | 0 | 9 | `docs/map/bodies/batter-up.md:32` (+2 more) | The names come from a jump table in the setter `0x700108b500`. It stores the new value at `[this+0x18]`, its second argument at `… |
+| 0x70051242a8 | ? | ? | ? | `docs/map/binary.md:525` (+2 more) | \| 0x70051242a8 \| ? \| ? \| ? \| `runtime/core/kernel.c:343` \| // - Horizon's preemption disable: the SDK's spin locks (1.2.1 s… |
+| 0x7005124360 | ? | ? | ? | `docs/map/binary.md:525` (+2 more) | \| 0x70051242a8 \| ? \| ? \| ? \| `runtime/core/kernel.c:343` \| // - Horizon's preemption disable: the SDK's spin locks (1.2.1 s… |

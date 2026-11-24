@@ -42,7 +42,7 @@ Total: 11330 source functions. C/C++ come from a libclang parse (a real compiler
 
 See [binary.md](binary.md): 135,060 recompiled functions in the `main` and `sdk` modules, address ranges, SDK namespaces and the functions the repo already names.
 
-[regions/](regions/) holds one note per address range of `main` (A to F, with the `sdk` module in F): subsystem per 256 KB window and key functions, every claim tagged confirmed, inferred or guess. The `.claude/skills/mlbts-game-code` skill is the entry point for future sessions.
+[regions/](regions/) holds one note per address range of `main` (A to F, with the `sdk` module in F): subsystem per 256 KB window and key functions, every claim tagged confirmed, inferred or guess. The `.claude/skills/mlbts-game-code` skill is the entry point for future sessions. [bodies/](bodies/) holds notes from reading function bodies (the 12 game-state classes), each report spot-checked against the generated C.
 
 ## Subsystem guide
 

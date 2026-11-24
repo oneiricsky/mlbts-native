@@ -32,9 +32,7 @@ Tags: [C] confirmed by a doc measurement, code, symbol or string; [I] inferred. 
 ## Game flow
 
 The game's top-level state machine is 12 state classes with the same interface [C, vtables]: each a 32-36 slot vtable overriding a shared base
-(default stubs from `0x7000eb72c0`). Slots (consistent across all 12): 0,1 destructor thunks (5 lines); 2 returns the state name (8 lines);
-3 logs the sub-state; 5 and 7 are the two large handlers (slot 7 up to 1,270 lines); 6, 9, 10, 24, 32, 33 mid-size hooks. Which of slots 5 and 7 is
-"per-frame update" and which is "enter/transition" is not settled [H]. The BATTER_UP strings sit in slot 5.
+(default stubs from `0x7000eb72c0`). Slots, read from the bodies and spot-checked (see Game-state-machine on the wiki and `docs/map/bodies/`): 0 and 1 destructor thunks; 2 returns the state name; 3 resets the state's fields; 5 enter (runs once: logs, stores a start time, requests lighting in BATTER_UP, starts the lighting bake in PLAY_OVER); 6 exit; 7 update every frame (adds the frame time into `[this+0x8]`, then a phase machine); 9 and 10 subscribe and unsubscribe to events on the bus at `[0x7002298000+0x428]`. Nothing calls slots 5 to 7 directly, so enter, exit and update are readings of the bodies [I]. Every phase change posts event 0x13d through `f_7000e23cec`.
 
 | State | Vtable | Handlers |
 |---|---|---|
@@ -65,7 +63,7 @@ PRES_COPYRIGHT, REPLAY_VAULT, WAIT_FOR_MESSAGE. Home Run Derby has its own `HRDE
 | `main+0xd4f6e0` | copies the averaging byte right before the frame timer runs | C | framerate.c |
 | `0x700000b140` | per-frame call that runs the lighting bake step (`0x70012e0150`) | C | walkup-freeze.md |
 
-### Verified by reading the body of `0x700108b628` (the only game function body read in full so far) [C]
+### Verified by reading the body of `0x700108b628` (BATTER_UP slot 5) [C]
 
 `x19` = the BATTER_UP state object. `[x19+0x18]` holds the sub-state number: the handler compares it with 3 (then sets 4 and runs a small call) and with 1 (then calls
 `0x700108c030`, the WALK_UP_PRES handler); otherwise it calls `0x700108cd24` (PLAYERS_SETUP); an earlier path calls `0x700108b500` (WALK_UP). So slot 5 dispatches to the

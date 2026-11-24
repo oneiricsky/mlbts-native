@@ -177,7 +177,8 @@ def main():
             "`sdk` modules, address ranges, SDK namespaces and the functions the repo already names.", "",
             "[regions/](regions/) holds one note per address range of `main` (A to F, with the `sdk` module in F): "
             "subsystem per 256 KB window and key functions, every claim tagged confirmed, inferred or guess. The "
-            "`.claude/skills/mlbts-game-code` skill is the entry point for future sessions.", "",
+            "`.claude/skills/mlbts-game-code` skill is the entry point for future sessions. [bodies/](bodies/) holds notes from reading function bodies "
+            "(the 12 game-state classes), each report spot-checked against the generated C.", "",
             "## Subsystem guide", "", "| Area | What it is |", "|---|---|",
             "| `runtime/core` | Generic Switch-OS host: CPU state, memory, kernel services, audio, filesystem |",
             "| `runtime/gfx` | NVN-to-Vulkan graphics layer, shader handling, textures, upscalers, UI |",
