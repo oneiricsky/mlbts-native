@@ -11,11 +11,48 @@ AIvAI
 GameOnly
 ```
 
-Other options seen: `FastPlay`, `NoCrowd`, `NoWarmUp`, `NoDOF`, `NoTips`, `CatcherView`, `hrderbyOnly` (Home Run Derby only), `StartupMovies`, `ForcePlayGo`. Several options named in `CONFIG_MAIN.TXT` (the `DoPlayInit` scenario with inning, outs, balls and scores) are compiled out of the retail game and do nothing. Descriptions other than for `GameOnly` and `AIvAI` are readings of the names, not verified behaviour. Short common words collide with the hash, so a plausible name is not proof.
+Options seen:
+
+| Option | Effect | Status |
+|---|---|---|
+| `GameOnly` | boots straight into a game | confirmed |
+| `AIvAI` | AI controls both teams | confirmed |
+| `FastPlay` | faster pacing | name only |
+| `NoCrowd` | no crowd rendering or audio | name only |
+| `NoWarmUp` | skips warm-up | name only |
+| `NoDOF` | depth of field off | name only |
+| `NoTips` | no loading-screen tips | name only |
+| `CatcherView` | catcher camera | name only |
+| `hrderbyOnly` | Home Run Derby only | name only |
+| `StartupMovies` | gates the boot intro movies | name only |
+| `ForcePlayGo` | straight to gameplay | name only |
+| `FastLoad` | sets a boot flag; no measurable change in boot-to-gameplay time | tested |
+
+Several options named in `CONFIG_MAIN.TXT` (the `DoPlayInit` scenario with inning, outs, balls and scores) are compiled out of the retail game and do nothing. "Name only" means the effect is a reading of the option's name, not verified behaviour. Short common words collide with the hash, so a plausible name is not proof.
 
 ## Team ids
 
-Team and stadium are set together: the game keeps the home and away team in several copies inside one match-settings struct (pointer at `main+0x4651350` in 1.0.20), filled about 3.5 s after boot. Writing only one copy gave Dodger Stadium with the wrong uniforms. The working override writes home at +0x3f, +0x47 and +0x59 and away at +0x40, +0x52, +0x54 and +0x56. Ids: 0 BAL, 1 BOS, 2 NYY, 3 TB, 4 TOR, 5 CWS, 6 CLE, 7 DET, 8 KC, 9 MIN, 10 HOU, 11 LAA, 12 ATH (not confirmed), 13 SEA, 14 TEX, 15 ATL, 16 MIA, 17 NYM, 18 PHI, 19 WSH, 20 CHC, 21 CIN, 22 MIL, 23 PIT, 24 STL, 25 AZ, 26 COL, 27 LAD, 28 SD, 29 SF. Home 0 and away 1 loads Baltimore and a different field texture (byte sum 127082744), which proves the override took effect.
+Team and stadium are set together: the game keeps the home and away team in several copies inside one match-settings struct (pointer at `main+0x4651350` in 1.0.20), filled about 3.5 s after boot. Writing only one copy gave Dodger Stadium with the wrong uniforms. The working override writes every copy:
+
+| Side | Offsets |
+|---|---|
+| Home | +0x3f, +0x47, +0x59 |
+| Away | +0x40, +0x52, +0x54, +0x56 |
+
+| ID | Team | ID | Team | ID | Team |
+|---|---|---|---|---|---|
+| 0 | BAL | 10 | HOU | 20 | CHC |
+| 1 | BOS | 11 | LAA | 21 | CIN |
+| 2 | NYY | 12 | ATH (unconfirmed) | 22 | MIL |
+| 3 | TB | 13 | SEA | 23 | PIT |
+| 4 | TOR | 14 | TEX | 24 | STL |
+| 5 | CWS | 15 | ATL | 25 | AZ |
+| 6 | CLE | 16 | MIA | 26 | COL |
+| 7 | DET | 17 | NYM | 27 | LAD |
+| 8 | KC | 18 | PHI | 28 | SD |
+| 9 | MIN | 19 | WSH | 29 | SF |
+
+Home 0 and away 1 loads Baltimore and a different field texture (byte sum 127082744), which proves the override took effect.
 
 ## Run slots
 
@@ -39,11 +76,13 @@ A game run needs an audio output. With none, the log says `audout: no output dev
 
 ## Other rules learned the hard way
 
-- Run a deliberately broken control before trusting a new metric (the known-yellow face proved the blown-pixel count could see the bug).
-- Run each configuration fixed from frame 0. Switching a setting mid-run misled us, because head-show results are baked once.
-- Never compare frame numbers between runs. They drift by hundreds of frames. Compare matched game events or fixed configurations.
-- Diagnostics cost nothing in normal play: off by default, and never a `getenv` or config lookup in a per-draw or per-call path.
-- Copy `mlb.log` before launching anything if it holds evidence; it is replaced at each start.
+| Rule | Why |
+|---|---|
+| Run a deliberately broken control before trusting a new metric | the known-yellow face proved the blown-pixel count could see the bug |
+| Run each configuration fixed from frame 0 | switching a setting mid-run misled us, because head-show results are baked once |
+| Never compare frame numbers between runs | they drift by hundreds of frames; compare matched game events or fixed configurations |
+| Diagnostics cost nothing in normal play | off by default, and never a `getenv` or config lookup in a per-draw or per-call path |
+| Copy `mlb.log` before launching anything if it holds evidence | it is replaced at each start |
 
 ## Harness scenarios
 

@@ -12,13 +12,31 @@ The game does not take a texture's size from the `.TEX` file's header. It create
 
 ## The PS5 file format
 
-Found by decoding the files; none of it is documented. Same TX12 container as the Switch files (magic `TX12PS5`), raw instead of LZ4. Header size is the file size minus the data size at 0x0c. Width and height at 0x84, mip count at 0x8c, format in the low 16 bits of the dword at 0x15c (13 is BC1, 22 is BC7). One 32-byte row per level from 0x1a0. Levels 0 and 1 come first, then the smaller levels in reverse order. Blocks sit in 64-byte units along strips four block rows high. Only BC1 and BC7 are handled.
+Found by decoding the files; none of it is documented. Same TX12 container as the Switch files (magic `TX12PS5`), raw instead of LZ4. Only BC1 and BC7 are handled.
+
+| Field | Where |
+|---|---|
+| Header size | file size minus the data size at 0x0c |
+| Width, height | 0x84 |
+| Mip count | 0x8c |
+| Format | low 16 bits of the dword at 0x15c (13 is BC1, 22 is BC7) |
+| Level table | one 32-byte row per level from 0x1a0 |
+| Level order | levels 0 and 1 first, then the smaller levels in reverse order |
+| Blocks | 64-byte units along strips four block rows high |
 
 ## Normal maps: done
 
 The PS5 normal map is a visible gain up close (stubble on Ohtani). A match swaps about 58 heads with no errors in the log and VRAM unchanged at about 2,593 MiB. Cold reads went from 31 ms to 12 ms per file after the loader was changed to read the header plus one block holding only the levels it keeps.
 
-Performance: three configurations on the harness match, two runs of 400 s each (about 21,000 frames). All three ran at about 59 fps once boot stalls are set aside. The 1 percent low is about 1 to 2 fps lower with PS5 textures (44.8 off, 44.6 normal maps, 43.3 normal plus colour), about the size of the spread between repeats. Frames over 100 ms: 21 and 23 off, 30 and 26 with normal maps, 29 and 24 with colour added. That may be noise or about one more hitch a minute. RAM and GPU memory did not grow. Two of four PS5 runs had an 8.4 s or 10.1 s frame at frame 14; six start-up-only runs did not, and the cause was not found.
+Performance: three configurations on the harness match, two runs of 400 s each (about 21,000 frames). Each cell gives run 1 and run 2.
+
+| Config | Fps | Low | Slow |
+|---|---|---|---|
+| Off | 59.2, 59.1 | 45.5, 44.0 | 21, 23 |
+| Normal maps | 57.5, 59.0 | 45.5, 43.7 | 30, 26 |
+| Normal and colour | 58.9, 57.4 | 44.2, 42.4 | 29, 24 |
+
+Low is the 1 percent low in fps (median of six one-minute windows); Slow counts frames over 100 ms. Once boot stalls are set aside all three run at about 59 fps. The 1 percent low is about 1 to 2 fps lower with PS5 textures, about the spread between repeats. The extra slow frames may be noise or about one more hitch a minute. RAM and GPU memory did not grow. Two of four PS5 runs had an 8.4 s or 10.1 s frame at frame 14; six start-up-only runs did not, and the cause was not found.
 
 ## The yellow face (fixed)
 
@@ -28,7 +46,13 @@ The cause: a compute shader that runs when a head is shown measures the skin ton
 
 The fix is in `get_view` (`runtime/gfx/vk_exec_draw.c`). While a compute dispatch is recorded, a PS5 image is bound from the level that has the Switch texture's size (`hd_shift`). Fragment shaders still sample by normalised coordinates and keep the large level.
 
-How it was counted: each configuration fixed from frame 0, one shot every 10 frames from frame 2850 (101 shots), and a count of blown-yellow skin pixels outside the stat panel (more than 1,500 flags a blown face), checked against a face-to-jersey brightness ratio (natural 0.45 to 0.58, blown 0.86 to 0.94). Colour map off: 0 of 101 flagged. No fix: 50 to 52 of 101. With the fix: 0 of 101, peak 101 pixels against 4,565 unfixed.
+How it was counted: each configuration fixed from frame 0, one shot every 10 frames from frame 2850 (101 shots), and a count of blown-yellow skin pixels outside the stat panel (more than 1,500 flags a blown face), checked against a face-to-jersey brightness ratio (natural 0.45 to 0.58, blown 0.86 to 0.94).
+
+| Config | Blown |
+|---|---|
+| Colour map off | 0 of 101 |
+| No fix | 50 to 52 of 101 |
+| Fix | 0 of 101 (peak 101 pixels, against 4,565 unfixed) |
 
 An earlier conclusion in the investigation, that every reader group needs the small level, was wrong. It came from comparing runs whose readers were shifted in combination, and only the compute group needs it.
 

@@ -40,15 +40,15 @@ of the state handlers (`docs/map/regions/D-*.md`), the game-mode table (`0x7000e
    `python -I -m pip install libclang --target work/pylib` once; ~2 min).
 2. Look the thing up instead of grepping 10 million lines:
 
-   ```
-   python -I tools/map_find.py fn 0x700108b628     # size, callers, callees, strings, vtable slot, string-bearing neighbours
-   python -I tools/map_find.py str "MSDF took"     # which function uses a message/asset/UI string
-   python -I tools/map_find.py near 0x7000e54c00   # nearest functions that mention strings (linker order = source order)
-   python -I tools/map_find.py region 0x7001000000 # what the 256 KB around an address is about
-   python -I tools/map_find.py callers 0x70005a1a90
-   python -I tools/map_find.py name nvnQueue       # SDK/libc symbols
-   python -I tools/map_find.py src hd_apply        # a function of this repo's own source
-   ```
+   | Command | Use |
+   |---|---|
+   | `python -I tools/map_find.py fn 0x700108b628` | size, callers, callees, strings, vtable slot, string-bearing neighbours |
+   | `python -I tools/map_find.py str "MSDF took"` | which function uses a message, asset or UI string |
+   | `python -I tools/map_find.py near 0x7000e54c00` | nearest functions that mention strings (linker order is source order) |
+   | `python -I tools/map_find.py region 0x7001000000` | what the 256 KB around an address is about |
+   | `python -I tools/map_find.py callers 0x70005a1a90` | direct callers |
+   | `python -I tools/map_find.py name nvnQueue` | SDK and libc symbols |
+   | `python -I tools/map_find.py src hd_apply` | a function of this repo's own source |
 3. Read the generated C at the file:line `fn` prints, or `python -I tools/disasm.py work/build/game/exefs/main <addr> <len>`.
 4. To see it run: `MLB_FNTRACE`, `MLB_FNDUMP`, the harness (reference: tracing-playbook.md).
 5. Before changing anything: the repo rules in `CLAUDE.md` (diagnose first, numbers before and after, commit style,
@@ -56,7 +56,7 @@ of the state handlers (`docs/map/regions/D-*.md`), the game-mode table (`0x7000e
 
 ## Reference files (open only what the task needs)
 
-| File | Open it when |
+| File | When |
 |---|---|
 | `references/port-architecture.md` | touching `runtime/`, `recomp/`, boot, services, graphics replay, settings, versions |
 | `references/game-binary.md` | asking "where/what is this in the game": layout of `main`, game-state machine, engine, data, strings |
@@ -68,19 +68,16 @@ of the state handlers (`docs/map/regions/D-*.md`), the game-mode table (`0x7000e
 
 ## Rules that bit people before
 
-- **Diagnose before fixing; numbers before and after with run counts.** The pitch hitch was first written off as
-  "inherent GPU waits" and was in fact one redundant lighting bake (fixed by a code patch: 6 sites for the lighting plus 1 for the league-leader lists). Never call a game
-  behaviour inherent until you have asked *why the game does that work*.
-- **1.0.15 and 1.0.20 differ.** Code addresses moved by +0x20..+0x1500, data by about +0x1000. Comments in `runtime/`
-  are 1.0.15's unless they say otherwise. `tools/addrmap.py` maps an address between versions; every patch and every
-  game-address hook picks its address per version. All addresses in this skill are **1.0.20** unless marked.
-- **The game steps by measured frame time**, so frame-rate work does not need game patches (see port-architecture).
-- **No env/config lookup in a per-draw or per-call path**, even in diagnostics: it cost 12 ms a frame once.
-- **Dev harness drifts**: compare fixed-from-frame-0 configurations or matched game events, never frame numbers.
-- **One game instance per slot**; start runs through `tools/game.py`, and never run long game runs unasked.
-- **A code patch is a unit**: patch lines in `tools/data/patches-<ver>.txt`, a settings row in `runtime/mlb/cfg.c`
-  (default on), a menu toggle, a doc with Cause / fix / what else changes / how it was checked.
-- **Do not trust an address in an older comment** without checking it in the index for the right version.
+| Rule | Why |
+|---|---|
+| Diagnose before fixing; numbers before and after, with run counts | The pitch hitch was first written off as "inherent GPU waits" and was one redundant lighting bake (fixed by a code patch: 6 sites for the lighting plus 1 for the league-leader lists). Never call a game behaviour inherent until you have asked why the game does that work |
+| 1.0.15 and 1.0.20 differ | Code addresses moved by +0x20 to +0x1500, data by about +0x1000. Comments in `runtime/` are 1.0.15's unless they say otherwise. `tools/addrmap.py` maps an address between versions, and every patch and game-address hook picks its address per version. All addresses in this skill are 1.0.20 unless marked |
+| The game steps by measured frame time | Frame-rate work does not need game patches (see port-architecture) |
+| No env or config lookup in a per-draw or per-call path | Even in diagnostics: it cost 12 ms a frame once |
+| The dev harness drifts | Compare fixed-from-frame-0 configurations or matched game events, never frame numbers |
+| One game instance per slot | Start runs through `tools/game.py`, and never run long game runs unasked |
+| A code patch is a unit | Patch lines in `tools/data/patches-<ver>.txt`, a settings row in `runtime/mlb/cfg.c` (default on), a menu toggle, and a doc with Cause, fix, what else changes and how it was checked |
+| Do not trust an address in an older comment | Check it in the index for the right version |
 
 ## The wiki
 

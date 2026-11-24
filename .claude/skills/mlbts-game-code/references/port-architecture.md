@@ -25,17 +25,27 @@ The port also wraps game functions/globals at known per-version addresses (`rtts
 
 ## Boot [C]
 
-Loader maps `main`@`0x7000000000`, `sdk`@`0x7004c00000`, applies 122,737 + 33,849 relocations, binds 765 imports. Main thread (priority 44, core 0, 1 MiB stack) runs `nn::init::Start`; SDK init opens `lm`, `apm`, `appletOE`, `aoc:u`, `ectx:aw`, `pctl`, `time:u`; module constructors run (main 1,025 init_array entries, sdk 87); `nnMain` mounts RomFS as `FS_Rom`, temporary storage `FS_Temp`, cache storage 0 `FS_GameData` (only with `MLB_CACHE_STORAGE`), reads `FS_Rom:/BOOT/CONFIG_MAIN_USER.TXT` or `CONFIG_MAIN.TXT`; graphics bring-up; Bink intro movies (decoded by the game itself); menus. Console is docked, 1920x1080.
+| Step | What happens |
+|---|---|
+| 1 | The loader maps `main` at `0x7000000000` and `sdk` at `0x7004c00000`, applies 122,737 + 33,849 relocations and binds 765 imports |
+| 2 | The main thread (priority 44, core 0, 1 MiB stack) runs `nn::init::Start` |
+| 3 | SDK init opens `lm`, `apm`, `appletOE`, `aoc:u`, `ectx:aw`, `pctl` and `time:u` |
+| 4 | Module constructors run (`main` 1,025 init_array entries, `sdk` 87) |
+| 5 | `nnMain` mounts the RomFS as `FS_Rom`, temporary storage as `FS_Temp` and cache storage 0 as `FS_GameData` (only with `MLB_CACHE_STORAGE`), and reads `FS_Rom:/BOOT/CONFIG_MAIN_USER.TXT` or `CONFIG_MAIN.TXT` |
+| 6 | Graphics bring-up |
+| 7 | Bink intro movies (decoded by the game itself), then menus; the console is docked, 1920x1080 |
 
 ## Graphics [C unless marked]
 
-- The game records NVN command buffers and calls `nvnQueueSubmitCommands`; the front end builds an op stream; an async replay thread (`MLB_REPLAY_ASYNC`, default on) walks it (`vk_exec.c`, draws in `vk_exec_draw.c`); a recorder thread (`vk_rec.c`) makes the Vulkan calls.
-- **The frame is a sum, not an overlap.** After submit the game polls an event word (`f_70005a1a90`) until the GPU signals, then runs its own code. Heavy frame = game code 5-7 ms + replay 7-10 ms + GPU tail ~2 ms. Replay time: 48% `prepare_draw`, 20% `bind_resources`, 10% `vk_usnap_begin`, 8% mirror check, 8% feedback checks (`docs/frame-rate.md`).
-- Textures live in guest memory (Tegra block-linear). `vk_texture.c` keeps a VkImage cache keyed by the full descriptor plus a per-address list. Several images at one address is **aliasing** (on console an image is its memory); it causes most "image from another menu" bugs: `alias_copy`, `alias_overwritten`, `slot_resolve`. GPU-compressed textures (BC7 via an R32G32B32A32_UINT render) are caught by `cpu_rewrite_refresh`.
-- Shaders: precompiled Maxwell binaries in the RomFS (456 `.FXBNVN` banks, ~4,505 unique graphics stages) go through the Ryujinx translator (`tools/xlate`) to SPIR-V; caches in `work/build/`.
-- The 3D scene is one HDR image 1440x810 (B10G11R11) stretched to 1080p in the game's last pass; `resolution.c` changes the table the game reads; DLAA/FSR work on that image.
-- A compute dispatch binds PS5 images at the Switch-size mip (`get_view`, `hd_shift`); a new PS5 asset category must check compute consumers first.
-- Diagnostics: F12 own capture (`MLB_CAPTURE_KEY=1`), `MLB_DRAWLOG`, `MLB_SHOT`, `MLB_DRAWTEX`, `MLB_WATCH`; RenderDoc via `tools/renderdoc.cmd` (own capture moves to F9).
+| Topic | Detail |
+|---|---|
+| Pipeline | the game records NVN command buffers and calls `nvnQueueSubmitCommands`; the front end builds an op stream; an async replay thread (`MLB_REPLAY_ASYNC`, default on) walks it (`vk_exec.c`, draws in `vk_exec_draw.c`); a recorder thread (`vk_rec.c`) makes the Vulkan calls |
+| Frame cost | a sum, not an overlap: after the submit the game polls an event word (`f_70005a1a90`) until the GPU signals, then runs its own code; a heavy frame is game code 5 to 7 ms + replay 7 to 10 ms + GPU tail about 2 ms (see Frame rate and GPU waits) |
+| Textures | live in guest memory (Tegra block-linear); `vk_texture.c` keeps a VkImage cache keyed by the full descriptor plus a per-address list; several images at one address is aliasing (on console an image is its memory) and causes most "image from another menu" bugs: `alias_copy`, `alias_overwritten`, `slot_resolve`; GPU-compressed textures (BC7 via an R32G32B32A32_UINT render) are caught by `cpu_rewrite_refresh` |
+| Shaders | precompiled Maxwell binaries in the RomFS (456 `.FXBNVN` banks, about 4,505 unique graphics stages) go through the Ryujinx translator (`tools/xlate`) to SPIR-V; caches in `work/build/` |
+| Scene image | one HDR image 1440x810 (B10G11R11) stretched to 1080p in the game's last pass; `resolution.c` changes the table the game reads; DLAA and FSR work on that image |
+| PS5 images | a compute dispatch binds them at the Switch-size mip (`get_view`, `hd_shift`); a new PS5 category needs its compute consumers checked first |
+| Diagnostics | F12 own capture (`MLB_CAPTURE_KEY=1`), `MLB_DRAWLOG`, `MLB_SHOT`, `MLB_DRAWTEX`, `MLB_WATCH`; RenderDoc through `tools/renderdoc.cmd` (the own capture moves to F9) |
 
 ## Frame rate [C]
 
@@ -43,9 +53,11 @@ The game does not count frames. Its timer (1.0.20 `main+0x58a9f0`) sleeps to a v
 
 ## Settings, versions, patches
 
-- Settings: env `MLB_<KEY>` (or `TOTK_<KEY>`), then `work/build/mlb.cfg`, then the `cfg.c` default.
-- Game version = SHA-256 of `main`; `tools/data/expected-<ver>.json`; `tools/addrmap.py` maps 1.0.15 addresses to 1.0.20.
-- Patch sets live in `tools/data/patches-1.0.20.txt` and `-1.0.15.txt` (format in `recomp/patches.py`, passed to `recomp/gen.py --patches`). Sets: `walkup_light`, `walkup_leaders`, `msdf_skip` (research branch). The generator lifts original and replacement; a runtime switch picks one.
+| Topic | Detail |
+|---|---|
+| Settings | env `MLB_<KEY>` (or `TOTK_<KEY>`), then `work/build/mlb.cfg`, then the `cfg.c` default |
+| Game version | SHA-256 of `main`; `tools/data/expected-<ver>.json`; `tools/addrmap.py` maps 1.0.15 addresses to 1.0.20 |
+| Patch sets | `tools/data/patches-1.0.20.txt` and `-1.0.15.txt` (format in `recomp/patches.py`, passed to `recomp/gen.py --patches`): `walkup_light` (6 sites), `walkup_leaders` (1), `msdf_skip` (research branch); the generator lifts the original and the replacement and a runtime switch picks one |
 
 ## Saves, input, audio, misc [C]
 

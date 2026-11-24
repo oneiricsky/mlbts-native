@@ -36,7 +36,7 @@ The game's top-level state machine is **12 state classes with the same interface
 3 logs the sub-state; 5 and 7 are the two large handlers (slot 7 up to 1,270 lines); 6, 9, 10, 24, 32, 33 mid-size hooks. Which of slots 5 and 7 is
 "per-frame update" and which is "enter/transition" is not settled [H]. The BATTER_UP strings sit in slot 5.
 
-| State | Vtable | Handler address span |
+| State | Vtable | Handlers |
 |---|---|---|
 | STADIUM_CREATOR | `0x70021d7400` | `0x7000eb72b4` |
 | OPTIONS_ON_RAMP | `0x70021dbed0` | `0x7000ed20d0` |

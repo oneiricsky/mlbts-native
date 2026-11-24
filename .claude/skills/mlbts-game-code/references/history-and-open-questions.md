@@ -17,17 +17,19 @@ Read before reopening something. Sources: `docs/reports/*.md`, `docs/walkup-free
 
 ## Open
 
-- **Match-start CPU work** (1.4-1.6 s frame): grass tiles ~172 ms + MSDF ~700 ms; MSDF fixed on the research branch, grass untouched. Other start frames: a 52-wait GPU burst at Pitch History/Meter init (245 ms), shader-loading frames, a UI node event wait.
-- **Lineup card stall** (555 ms, now ~64 ms): believed to be the same lighting bake, inferred from shape, never traced with the manager's fields.
-- **msdf_skip equality** proven for 2 stadiums only; other stadiums/times/weather, a whole match, and 1.0.15 address (needs the 1.0.15 exefs) are open. `research/float-fixup` needs re-measuring after the NaNs are gone.
-- **PS5 colour maps** still opt-in: verified on ~2 heads; need ~two dozen from both teams with the known-bad control and one full match. Compute consumers of other PS5 categories unchecked.
-- **Issue 10** (confirm button flips to circle on `PresSkip`, dynamic challenge popup): add those screens to the menu list in `hid_game_log`; needs the challenge screen's real name.
-- **Issue 18** (no ball in one batting-cage mode above 60 fps): cause unknown; step guard from 0.2.0 unconfirmed.
-- **Issues 21/26** (local 2-player): design limit (all pads merged into Player 1); needs how the game asks for Npad No2.
-- **Which game screens use whole-vsync timing**; MLB's lowest safe frame step.
-- **The game state machine**: which of slots 5 and 7 is update vs transition; who calls them; the base class.
-- **Time of day / weather storage** for the harness; scenario code (Situation, Moment, Storyline) callability.
-- **About 95,000 anonymous `main` functions**: see `docs/map/regions/` for the region notes; roughly 12,800 reference a string, the rest are named only by neighbours, vtables and callers.
+| Problem | State | Settles it |
+|---|---|---|
+| Match-start CPU work (1.4 to 1.6 s frame) | grass tiles about 172 ms plus MSDF about 700 ms; MSDF fixed on a research branch, grass untouched; other start frames: a 52-wait GPU burst at Pitch History and Meter init (245 ms), shader-loading frames, a UI node event wait | profile the grass step; trace the 52-wait burst |
+| Lineup card stall (555 ms, now about 64 ms) | believed to be the same lighting bake, inferred from the shape, never traced with the manager's fields | log the manager's fields at the lineup card |
+| `msdf_skip` equality | proven for two stadiums only | more stadiums, times of day and weather, a whole match, the 1.0.15 address (needs the 1.0.15 exefs); re-measure `research/float-fixup` |
+| PS5 colour maps | opt-in; verified on about two heads | about two dozen heads from both teams with the known-bad control and one full match; compute consumers of other PS5 categories |
+| Issue 10 | confirm flips to circle on `PresSkip` and the dynamic challenge popup | add those screens to the menu list in `hid_game_log`; needs the challenge screen's real name |
+| Issue 18 | no ball in one batting-cage mode above 60 fps; cause unknown; the 0.2.0 step guard is unconfirmed | same mode at 60, 144 and 240; `frame rate:` log lines; an F12 capture |
+| Issues 21 and 26 | local 2-player is a design limit (all pads merged into Player 1) | how the game asks for pad 2 |
+| Frame timing | which screens use whole-vsync timing; MLB's lowest safe frame step | log the mode per screen |
+| Game state machine | which of slots 5 and 7 is update and which is transition; who calls them; the base class | read the handlers' bodies |
+| Harness | where time of day and weather are stored; whether scenario code (Situation, Moment, Storyline) is callable | `MLB_WATCH` and state diffs |
+| Anonymous functions | about 95,000 `main` functions, about 12,800 with a string | the region notes list what is unexamined |
 
 ## Out of scope
 Online play, Diamond Dynasty, DLC, other game versions.

@@ -11,13 +11,28 @@ There are four separate stalls, not one, and only one is caused by the fork.
 
 ## Stall 2: cold reads on the replay thread
 
-Reading the 58 colour-map files of a match (the part of each file the loader keeps, 0.67 MiB) took 998 ms cold and 15 ms warm, a median of 15.2 ms against 0.25 ms per file. `hd_apply` read the file on the replay thread at the texture's first upload, so a batch of new heads cost their cold reads in one frame.
+Reading the 58 colour-map files of a match (the part of each file the loader keeps, 0.67 MiB):
 
-The game opens each head's Switch files long before the texture is first uploaded: 1.7 s at minimum, 23 s median, 122 s at most. That is about 100 times a cold read, so a read started at the open is done long before it is needed.
+| Read | Median | Total |
+|---|---|---|
+| Cold (never read since boot) | 15.2 ms | 998 ms |
+| Warm (in the system cache) | 0.25 ms | 15 ms |
+
+`hd_apply` read the file on the replay thread at the texture's first upload, so a batch of new heads cost their cold reads in one frame. The game opens each head's Switch files long before the texture is first uploaded:
+
+| Gap | Seconds |
+|---|---|
+| minimum | 1.7 |
+| median | 23 |
+| maximum | 122 |
+
+That is about 100 times a cold read, so a read started at the open is done long before it is needed.
 
 The fix: when the game opens `NSW/CHARACTERS/HEADS/<NAME>/<NAME>-COLOR.TEX` or `-NORMAL.TEX`, a hook hands the matching PS5 file to one low-priority background thread, which runs the normal loader and throws the result away. That pulls the file into the system cache. Setting `MLB_HD_PREFETCH`, default on.
 
-| Run | Prefetch | Demand loads max / total | Frames with 50 ms or more of texture upload |
+Loads is the slowest single demand load and the total for the first 64. Upload lists the frames with 50 ms or more of texture upload.
+
+| Run | Prefetch | Loads | Upload |
 |---|---|---|---|
 | c1 | off | 28.5 ms / 841 ms | 668 (631 upload), 292, 251, 196 ms |
 | d2 | off | 27.1 ms / 670 ms | 447 (415), 305, 239 ms |

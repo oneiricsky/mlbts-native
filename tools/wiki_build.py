@@ -108,6 +108,18 @@ def main():
             if m.group(1) not in names:
                 bad.append((p, m.group(1)))
     print("broken wiki links:", bad[:10] or "none")
+    # house rule: table column headers are one to three words, one preferred
+    long_hdr = []
+    for p in pages:
+        L = read(f"{a.out}/{p}.md").split("\n")
+        for i, line in enumerate(L[:-1]):
+            if line.startswith("|") and re.match(r"^\|[\s:|-]+\|?\s*$", L[i + 1]) and "---" in L[i + 1]:
+                for c in [c.strip() for c in line.strip().strip("|").split("|")]:
+                    if len(c.replace("`", "").split()) > 3 or not c:
+                        long_hdr.append((p, c))
+    print("table headers over three words or empty:", long_hdr[:10] or "none")
+    if bad or long_hdr:
+        raise SystemExit(1)
 
 
 if __name__ == "__main__":

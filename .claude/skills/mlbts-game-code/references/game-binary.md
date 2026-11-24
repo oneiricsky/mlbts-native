@@ -5,19 +5,23 @@ string/symbol/measurement, [I] inferred, [H] guess. Addresses are `main` virtual
 
 ## Facts about the program [C]
 
-- Title `0100AA7024094000`; 1.0.15 = update v983040, 1.0.20 = v1310720. Two recompiled modules: `main` (28.1 MiB text, 94,991 functions) and `sdk` (6.3 MiB text, 40,069); no `subsdk`.
-- Studio code: Sony San Diego's in-house engine descended from the PS3 era (build paths `c:/Jenkins/workspace/MLB26PATCH/BRANCHES/MLB26_PATCH/MLBPS3/SRC/...`), native NVN renderer. Not Nintendo's sead.
-- Libraries compiled into `main`: libc++ (nnmusl libc), OpenSSL, libcurl, libwebp, nlohmann JSON, mini-XML, Opus, zlib, stb_image, EXR, Dear ImGui (debug), Lua 5.3, RAD Bink/Bink 2 (decoded by the game, no host decoder), Sony SCREAM audio + `wws_gattaca` DSP graph, libfvad voice detection.
-- SDK 19.3.11 (NVN 19.3.11); `main` makes no SVCs, everything OS goes through `sdk` (58 `svc` sites); 765 imports from `sdk`; 124 exported dynamic symbols in `main`, of which 39 are code (nnMain, new/delete, malloc family, a few libc++ methods).
-- ARMv8.0-A only (no LSE atomics, no SVE); heavy `thread_local` (2,543 TPIDR_EL0 reads); scalar FP 499,842 and FMA ~30k instructions (fused rounding must be exact); `blr` 38,320 and `br` 8,104 in `main` (indirect calls and jump tables).
-- Generated: 3,659 jump tables in `main`, 4,345 `br` through `rt_dispatch`, 1,370 materialised targets; the whole `main` lifts to ~540 MB of C in 198 chunks.
-- Game data: RomFS 86,235 files / 37.9 GB (1.0.20): `NSW/` (Switch assets, textures `.TEX`, models `.MOD`, shaders `NSW/SHADERS/*.FXBNVN`, audio `.SKX`), `PS4/` (shared animation `.xbn`), `PS5/`, `CROSS/` (movies, stadium audio), `FRONTEND/`, `BOOT/CONFIG_MAIN.TXT`. Textures are `TX12NSW` containers (LZ4 blocks of block-linear data); PS5 files `TX12PS5` (raw). UI screens are movies (`.webp` art), engine logs `uiEngine: Entering screen: [...]`.
+| Topic | Fact |
+|---|---|
+| Title | `0100AA7024094000`; 1.0.15 is update v983040, 1.0.20 is v1310720 |
+| Modules | `main` (28.1 MiB text, 94,991 functions) and `sdk` (6.3 MiB text, 40,069); no `subsdk` |
+| Engine | Sony San Diego's in-house engine descended from the PS3 era (build paths `c:/Jenkins/workspace/MLB26PATCH/BRANCHES/MLB26_PATCH/MLBPS3/SRC/...`), native NVN renderer; not Nintendo's sead |
+| Libraries in `main` | libc++ (nnmusl libc), OpenSSL, libcurl, libwebp, nlohmann JSON, mini-XML, Opus, zlib, stb_image, EXR, Dear ImGui (debug), Lua 5.3, RAD Bink/Bink 2 (decoded by the game, no host decoder), Sony SCREAM audio with a `wws_gattaca` DSP graph, libfvad |
+| SDK | 19.3.11 (NVN 19.3.11); `main` makes no SVCs, every OS call goes through `sdk` (58 `svc` sites); 765 imports from `sdk`; 124 exported symbols in `main`, 39 of them code (nnMain, new/delete, malloc family, a few libc++ methods) |
+| CPU | ARMv8.0-A only (no LSE atomics, no SVE); heavy `thread_local` (2,543 TPIDR_EL0 reads); 499,842 scalar FP instructions and about 30k FMA (fused rounding must be exact); `blr` 38,320 and `br` 8,104 in `main` |
+| Generated code | `main`: 3,659 jump tables, 4,345 `br` through `rt_dispatch`, 1,370 materialised targets; about 540 MB of C in 198 chunks |
+| RomFS (1.0.20) | 86,235 files, 37.9 GB: `NSW/` (Switch assets: textures `.TEX`, models `.MOD`, shaders `NSW/SHADERS/*.FXBNVN`, audio `.SKX`), `PS4/` (shared animation `.xbn`), `PS5/`, `CROSS/` (movies, stadium audio), `FRONTEND/`, `BOOT/CONFIG_MAIN.TXT` |
+| Formats | textures are `TX12NSW` containers (LZ4 blocks of block-linear data), PS5 files `TX12PS5` (raw); UI screens are movies (`.webp` art), logged as `uiEngine: Entering screen: [...]` |
 
 ## Address map of `main` (windows of 256 KB = 0x40000)
 
 Where the linker placed things. Boundaries are approximate (to the window) unless a specific address is given. Functions per region and detail are in the region notes.
 
-| Range | What lives there | Tag | Region note |
+| Range | Contents | Tag | Note |
 |---|---|---|---|
 | `0x7000000000`-`0x70000fffff` | `_init`/`_fini`, `nnMain` (`0x7000000880`), then third-party/utility code: ASTC codec (~`0x700001e2e0`), nlohmann JSON, stb_image, tinyexr (`0x70001ecb90`), scene/mesh loading with mesh repair (`0x7000096960`, "smesh is not manifold") and the MSDF generator (`0x7000095390`, correction pass `0x7000030ec0`) | C | A |
 | `0x7000100000`-`0x70003fffff` | core match simulation and AI: fielding, throwing, catching, baserunning, batting reaction (strings STANDING, WATCH, Catcher, Swing reaction, Leadoff, BounceAnalyzer); a family of 47 AI class vtables of 119 slots each with role strings such as "ONLINE AI BATTER" (`0x70000c6f20`) and "ONLINE RUNNER DECISION" | I (names C) | A |
@@ -54,17 +58,21 @@ nn::audio 1,427; nn::fs / file system 1,300; input (nn::hid and related) 1,351; 
 named entry points around `0x70050b0000`-`0x70050f0bb0`; the rest are unnamed, so which game code calls which NVN function is not mapped. `main` looks procs up by name through
 `nvnBootstrapLoader` (the table of 536 proc names is in `main`; 534 match TotK's list), so the port's `nvn_procs.c` hands out host functions by name. `0x700059a690` holds NVN entry-point names [I].
 
-## How the game is organised (what the strings and vtables prove)
+## How the game is organised
 
-- **Game flow** is a state machine of 12 classes sharing one interface (see known-functions.md). Sub-states are ASCII names logged as `GAME_STATE_<X>: state = <Y>`.
-- **UI** is a movie/scene engine (`uiEngine: Entering screen: [<movie>-><screen>]`); front-end screens are driven by data tables and string-keyed fields (`CURRENT_ROW`, `CELL_INDEX`, `uiElementDataTable`).
-- **Reflection ("Flux")**: `FluxClassBroker_T<X>` registry, `DEFINE_CLASSLABEL`, `Method_Broadcaster` (204 uses) - the studio's tool-facing class system; it is why there is no RTTI. `YourClassName` is placeholder text from a code-comment template, not a class.
-- **Data**: player/team/league data lives in named tables (`D_PLR_PROFILE`, `D_PLYR_CONTRACT`, `LG_STATS_DATA`, `D_SINGLE_G_DATA`), serialized through Flux archives and JSON.
-- **Commentary**: play-by-play `PXP` events choose phrases per play; audio banks `PXP.SKX` (3.9 GB) on disk; text generators for records/awards; Sony SCREAM mixes everything in software and sends one 5.1 stream.
-- **Online**: `ol*`/`CNet*`/`CPlugin*` classes over libcurl/OpenSSL/nifm; offline play follows the "no network" paths; only a few online-profile behaviours leak into offline play (tutorials list, hub upgrade autosave, cache storage).
-- **Config**: `BOOT/CONFIG_MAIN(_USER).TXT` bare lines turn options on, matched by 32-bit hash (`AIvAI` 0xAA21F9C5 and `GameOnly` 0xC6F7ECA5 start an AI match with no input; 27 of 109 queried hashes have names). Three config-query functions (319 call sites).
-- **Time of day** advances per pitch; stadium lighting is re-baked per new time into one of two buffers; stadium props flip at 19.5 h.
-- **Coverage**: ~12,800 of 94,991 `main` functions reference a string; the rest are known by neighbours, vtable slots, callers and size only.
+What the strings and vtables prove:
+
+| Part | Evidence |
+|---|---|
+| Game flow | a state machine of 12 classes sharing one interface (see Known game functions); sub-states logged as `GAME_STATE_<X>: state = <Y>` |
+| UI | a movie and scene engine; front-end screens run on data tables and string-keyed fields (`CURRENT_ROW`, `CELL_INDEX`, `uiElementDataTable`) |
+| Reflection | "Flux": the `FluxClassBroker_T<X>` registry, `DEFINE_CLASSLABEL`, `Method_Broadcaster` (204 uses), the studio's tool-facing class system and the reason there is no RTTI; `YourClassName` is placeholder text from a code-comment template, not a class |
+| Data | player, team and league data in named tables (`D_PLR_PROFILE`, `D_PLYR_CONTRACT`, `LG_STATS_DATA`, `D_SINGLE_G_DATA`), serialized through Flux archives and JSON |
+| Commentary | play-by-play `PXP` events pick phrases per play; audio banks `PXP.SKX` (3.9 GB) on disk; text generators for records and awards; Sony SCREAM mixes in software and sends one 5.1 stream |
+| Online | `ol*`, `CNet*` and `CPlugin*` classes over libcurl, OpenSSL and nifm; offline play follows the "no network" paths; a few online-profile behaviours leak into offline play (tutorials list, hub upgrade autosave, cache storage) |
+| Config | `BOOT/CONFIG_MAIN(_USER).TXT` bare lines turn options on, matched by 32-bit hash (`AIvAI` 0xAA21F9C5 with `GameOnly` 0xC6F7ECA5 starts an AI match with no input; 27 of 109 queried hashes are named); three config-query functions, 319 call sites |
+| Time of day | advances per pitch; stadium lighting is re-baked per new time into one of two buffers; stadium props flip at 19.5 h |
+| Coverage | about 12,800 of 94,991 `main` functions reference a string; the rest are known by neighbours, vtable slots, callers and size |
 
 ## What is not mapped
 Contents of the import table `0x70022ab000` (which libc/SDK function each thunk reaches); NVN call sites; the 1,025-slot vtable at `0x700215c000`; meaning of `s9Amp`; the gameplay physics/AI internals (no strings);

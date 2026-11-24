@@ -1,6 +1,6 @@
 A reading of four open issues in the upstream project, done on 2026-11-22 from the merged code (upstream 0.2.0 plus our changes) and from the logs two reporters attached. Nothing was run and the game was not started, so every cause below is a reading of code and logs.
 
-| Rank | Issue | What it is | Cause | Confidence | Effort |
+| Rank | Issue | Problem | Cause | Confidence | Effort |
 |---|---|---|---|---|---|
 | 1 | 10: buttons switch to circle during play | By design: the face-button map flips by screen and some overlay screens are not on its lists | Two screens missing from the menu list | About 85 percent | Hours |
 | 2 | 18: no ball in one batting-cage mode | Only seen above 60 fps | Unknown | About 25 percent for any one guess | Small to reproduce, medium to fix |
@@ -19,11 +19,26 @@ Fix: add `PresSkip` and the challenge screen's name to the menu list. The challe
 
 A reporter said one of two Road to the Show batting-cage modes does not show the ball coming in from the sides. At the default limit of 60 nothing in `framerate.c` runs. At another limit it writes 0 into the game's vsync count at every present, so the game's step is the average of the last 15 frame times, and fills the timer's carry with 1/60 s as a guard (upstream commit `0c6fe91`, not confirmed as the cause).
 
-Three candidates, none confirmed: the side-feed mode uses whole-vsync stepping and one frame still steps wrongly; the mode's ball code divides by the step or compares it with a threshold, and a step near 1/144 s breaks it; or the cause is the present mode on a high-refresh monitor. About 60 percent that the bug only exists with a limit other than 60. To settle it: the same mode and save at 60, 144 and 240, noting whether the ball shows, then the `frame rate:` log lines and an F12 capture.
+Three candidates, none confirmed:
+
+| Candidate | Idea |
+|---|---|
+| Whole-vsync stepping | the side-feed mode steps by whole vsyncs and one frame still steps wrongly |
+| Step arithmetic | the ball code divides by the step or compares it with a threshold, and a step near 1/144 s breaks it |
+| Present mode | the monitor's present mode, not the step |
+
+About 60 percent that the bug only exists with a limit other than 60. To settle it: the same mode and save at 60, 144 and 240, noting whether the ball shows, then the `frame rate:` log lines and an F12 capture.
 
 ## Issues 21 and 26: local multiplayer
 
-Two reporters with two controllers see both pads controlling player 1. That is the design: `connected()` answers true only for the first pad id, `pad_read` ORs the buttons of every SDL pad and takes the stick pushed furthest, and the controller-support applet is answered with one player. The game's own pad records are an array of up to 8 (7 were seen), so the game itself is built for several pads.
+Two reporters with two controllers see both pads controlling player 1. That is the design:
+
+| Code | Behaviour |
+|---|---|
+| `connected()` | true only for the first pad id |
+| `pad_read` | ORs the buttons of every SDL pad and takes the stick pushed furthest |
+| controller-support applet | answered with one player |
+| the game's pad records | an array of up to 8 (7 were seen), so the game itself is built for several pads |
 
 Not known: how the game starts a 2-player game (whether it asks for pad 2's style set, calls the controller applet with a player count, or has its own join screen). A default-off log of the ids it asks for would settle that.
 

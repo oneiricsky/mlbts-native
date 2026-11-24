@@ -8,17 +8,26 @@ After every play the game quietly bakes the next time into a spare lighting buff
 
 ## The code involved (1.0.20 addresses)
 
-- `f_7000d52680` moves the game clock.
-- `f_70012c54ec` returns the lighting manager, an object of 0x101e40 bytes. It holds two lighting buffers and, at +0xd3c, a flag word that steers a bake.
-- `f_70012d20a0` starts the background bake after a play (flags 0xec01).
-- `f_700108b628` is the batter-up handler. At main+0x108bbb4 it calls `f_70012d0fcc` with force = 1.
-- `f_70012e0150` runs bake steps once a frame. Bit 9 of the flag word makes one call loop through all ~50 steps.
+| Function | Role |
+|---|---|
+| `f_7000d52680` | moves the game clock |
+| `f_70012c54ec` | returns the lighting manager, an object of 0x101e40 bytes holding two lighting buffers and, at +0xd3c, a flag word that steers a bake |
+| `f_70012d20a0` | starts the background bake after a play (flags 0xec01) |
+| `f_700108b628` | the batter-up handler; at main+0x108bbb4 it calls `f_70012d0fcc` with force = 1 |
+| `f_70012e0150` | runs bake steps once a frame; bit 9 of the flag word makes one call loop through all ~50 steps |
 
 Logging the manager's fields while they change showed it before every pitch: the spare buffer already held 19.1882 h from the background bake, and the blocking bake made 19.1882 h again.
 
 ## The patches
 
-Set `walkup_light` has six sites. The main one asks without force, the way the game's other callers do. The others keep the indirect-light probes refreshing (without that, screenshots came out 10 to 15 percent off in brightness), keep the stadium props switching at 19.5 h, and make a bake that is needed after an inning change run in the background instead of in one frame.
+Set `walkup_light` has six sites:
+
+| Site | Change | Why |
+|---|---|---|
+| `main+0x108bbb4` | the batter-up handler asks without force, the way the game's other callers do | removes the second bake |
+| `main+0x12d1f74` | the quick switch also bumps the lighting-version counter | without it the indirect-light probes keep an older bake's lighting (screenshots 10 to 15 percent off in brightness) |
+| `main+0x12d1f7c`, `0x12d1f84`, `0x12d1f98` | the quick switch's three exits go through the same stadium check as a fresh bake | stadium props keep switching at 19.5 h (17.0 h in months 0 and 12) |
+| `main+0x108bbc0` | clears bit 9 of the flag word right after the request | a bake needed after an inning change runs one step a frame in the background instead of in one frame |
 
 Set `walkup_leaders` has one site. At an inning change the game builds its broadcast league-leader lists twice in a row (92 lists, each a pass over up to 1,350 players and a sort), about 90 ms of work. The patch drops the first build; nothing reads the lists in between.
 
@@ -28,7 +37,9 @@ Both are on by default with a settings row each (`MLB_WALKUP_LIGHT`, `MLB_WALKUP
 
 Road to the Show, Double-A starting pitcher, 1280x720, 60 fps limit, driven unattended, same exe with the switches off and on.
 
-| Game | Switches | Pitches | Frames over 100 ms |
+Slow counts frames over 100 ms.
+
+| Game | Switches | Pitches | Slow |
 |---|---|---|---|
 | 1.0.20 | off | 30 | 27 (median 260 ms, max 334 ms) |
 | 1.0.20 | on | 30, one inning change | 0 |

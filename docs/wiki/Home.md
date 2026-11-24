@@ -4,7 +4,7 @@ Everything here was measured on one PC (an i5-12400F with an RX 6700 XT), game v
 
 ## What has been found
 
-| Problem | Cause in one line | State |
+| Problem | Cause | State |
 |---|---|---|
 | [Freeze before every pitch](Walk-up-freeze) | The game baked its stadium lighting twice in a row | Fixed upstream in 0.2.0; our write-up and patch measurements |
 | [Freeze at match start](Match-start-freeze) | The game spends 0.7 s proving empty space has no edges | Fixed on a research branch, not merged |
@@ -15,11 +15,15 @@ Everything here was measured on one PC (an i5-12400F with an RX 6700 XT), game v
 
 ## How it is built and measured
 
-- [How the port works](How-the-port-works): the layers, how the game's code becomes C, how graphics and frame timing work.
-- [The game binary](The-game-binary): what the game's code is made of and where things sit in it.
-- [Dev harness and measuring](Dev-harness-and-measuring): how a run is set up, and the rules for comparing two builds.
-- [Tools and the code map](Tools-and-the-code-map): the scripts that index the code and how to rebuild them. The pages under "Game binary regions" and the game-code pages are generated from the repo skill `mlbts-game-code`; [Start here](Start-here) is the entry point for a new session.
-- [History and open questions](History-and-open-questions): what is not settled.
+| Page | Covers |
+|---|---|
+| [How the port works](How-the-port-works) | the layers, how the game's code becomes C, how graphics and frame timing work |
+| [The game binary](The-game-binary) | what the game's code is made of and where things sit in it |
+| [Region A](Region-A) to [Region F](Region-F) | the game's `main` code in six address ranges, with key functions |
+| [Dev harness and measuring](Dev-harness-and-measuring) | how a run is set up, and the rules for comparing two builds |
+| [Tools and the code map](Tools-and-the-code-map) | the scripts that index the code and how to rebuild them |
+| [History and open questions](History-and-open-questions) | what is not settled |
+| [Start here](Start-here) | the entry point for a new session; the game-code and region pages are generated from the repo skill `mlbts-game-code` |
 
 ## Rules the work follows
 
