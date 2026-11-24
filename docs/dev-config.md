@@ -361,3 +361,10 @@ away 27 / home 4 (LAD at TOR, the reverse of the default: Ohtani batting, Gausma
 home 0 (BOS at BAL: Roman Anthony batting, Trevor Rogers pitching). Each logged RESULT PASS and the scorebug matched.
 The field that picks the players is the settings block's home byte (+0x3f) and away byte (+0x40), read as the menus
 leave team select; the lineups follow a change of those bytes made then, and ignore one made later.
+
+Traced 2026-11-24 (first-call trace of all of `main` on a cold exhibition run, block at 0x1c71dab80 that run): the
+match settings block is a keyed option object. `f_7001824fa0(block, key, value)` stores option `key` at block+0x3e+key
+(key 4 also forces +0x42 = 9; keys up to 0x53 are plain bytes), so HOMETEAM (key 1) is +0x3f and AWAYTEAM (key 2) is
++0x40. `f_7001824f08` reads +0x3e (game mode, 3 = a mode test) through the pointer at main+0x4651350. The code that
+copies the team bytes into the rosters was not located: it is not among the functions that take the block as x0
+in the team-select to stadium-select window. Still open.
