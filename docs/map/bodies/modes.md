@@ -31,8 +31,8 @@ and emit "EndOfGameSummary" / "EndPlateAppearanceSummary". The leader object at 
   string construction/destruction, the global-setting getter (0x7001824b74), and a handful of 14-line predicates.
   There is no call through a mode id and no array of function pointers.
 - The two indirect branches are enum-to-label switches: `switch (c->x[10]) { case 0x7000e13234ull … }`
-  (main_0099.c:3810) on a value at `sp+0x2d0` with four cases — "Directional" (3814), "Timing" (3864), "Zone" (3868),
-  "CPU" (3872) and default "None" (3818) — for the `batter_interface` key, and main_0099.c:3923 for
+  (main_0099.c:3810) on a value at `sp+0x2d0` with four cases, "Directional" (3814), "Timing" (3864), "Zone" (3868),
+  "CPU" (3872) and default "None" (3818), for the `batter_interface` key, and main_0099.c:3923 for
   `pitcher_interface` (six cases "Classic"/"None"/"Meter"/"Pinpoint"/"Pulse"/"Analog", default "CPU"). These are
   setting labels, not modes.
 - The strings that suggested "game-mode table" are the 19 mode display names in the opening ladder. They are values
@@ -171,7 +171,7 @@ sentence building here; the prose lives in the records/awards functions (0x7000e
 shipped build uses the non-Mbl name.
 
 [C] Fields include `play_mode`, `half_inning`, `event_type`, `batter_interface` (enum→label switch; the scan finds
-"Directional", "Timing", "Zone", "Fixed Zone", "Big Zone", "CPU" and "None" in this function — more cases than in
+"Directional", "Timing", "Zone", "Fixed Zone", "Big Zone", "CPU" and "None" in this function, more cases than in
 0x7000e0fb10), `checksum_plateappearance_also_pitch` / `_swing` / `_intentionalwalk`, `checksum_plateappearance_inning`,
 `at_bat_scored`, `runs_awarded`, `plate_appearance_id`, `bases_occupied_pre`/`_post`, `bear_down_pitching`,
 `used_guess_type_pitch` / `used_guess_zone_pitch`, `guess_type_pitch_result` / `guess_zone_pitch_result`,
@@ -207,7 +207,7 @@ broadcast layer shows (the game keeps a "moments" top-10 list per stat per group
 **already patched in the generated code**: `if (rt_patch_on[1]) { /* hint */ } else { … f_7000e54c00(c); … }`
 (main_0101.c:4013). [C] `f_7000e543a4` (main_0101.c:4781) also calls f_7000e54c00. [C] `f_7000e5640c` (the
 inning-change refresh, called only by the PXP driver 0x7000e59c50) calls f_7000e53654 at main_0101.c:7091 and
-f_7000e543a4 at 7095 — i.e. it builds the lists twice.
+f_7000e543a4 at 7095, i.e. it builds the lists twice.
 
 [C] That double build is why 0.2.0 patches one call out. `tools/data/patches-1.0.20.txt`, set `walkup_leaders`:
 "The broadcast 'moments' system keeps top-10 lists for 23 stats in 4 groups (f_7000e54c00: 92 lists, each a pass over

@@ -1,4 +1,4 @@
-# Stadium lighting and animation — MLB The Show 26 (Switch) 1.0.20, `main` base 0x7000000000
+# Stadium lighting and animation, MLB The Show 26 (Switch) 1.0.20, `main` base 0x7000000000
 
 Read-only analysis. Addresses are 1.0.20 (`f_<addr>` in `work/gen`), generated C at the quoted `file:line`.
 Tags: **C** = string, symbol or code read; **I** = strong pattern; **H** = guess. Where a row's string is [C] but
@@ -36,23 +36,23 @@ turning, idling, catching), which hands clip choices to the game's skeleton syst
 
 ## Bake lifecycle (what one step is)
 
-1. **Request** — `0x70012d0fcc`: if the game state says "same scenario" and nothing is dirty/forced, return;
+1. Request, `0x70012d0fcc`: if the game state says "same scenario" and nothing is dirty/forced, return;
    else tick the clock when needed, clear `+0xc2d`, and call `0x70012d1e04(manager, force, s0, s1)`.
-2. **Decide** — `0x70012d1e04`: `s9` = wanted hour (`[manager+0x670]`, or the `s1` argument when >= 0), clamped
+2. Decide, `0x70012d1e04`: `s9` = wanted hour (`[manager+0x670]`, or the `s1` argument when >= 0), clamped
    to 14.5 h when the current view object's type is 48; `s8` = that, or 13.0 h if the (always-true) predicate
    fails. Compare with the two `+0x101400` slots: current -> nothing; spare -> flip `+0xd38` and `+0xd3c` = 0;
    neither -> **bake**: write `[+0x674+4*spare]` = requested, `[+0x101400+4*spare]` = wanted, `+0xd3c` = `0xef01`,
    reset `+0x10` = 0, and tail-call `0x70019fb800` (light-rig event) unless a bake was already running.
-3. **Step** — `0x70012e0150` (only caller `0x700000b140`, a MainSystem render-job vtable slot): stages 1..28 from
+3. Step, `0x70012e0150` (only caller `0x700000b140`, a MainSystem render-job vtable slot): stages 1..28 from
    the jump table; each stage renders into named scratch targets (`ScratchZBuffer`, `CloudCastShadows2018`,
    `StadiumShadowmapEnergy`, `CRadialInwardBlurX`, `phgrassshadow`, ...), then `+0x10` advances
    (`counter >= 25 -> 29`, else `counter+1`).
-4. **GPU wait** — flag bit 9: `f_70005a1300(2)` then `f_70005a1a90()` (a spin-wait whose log string is
+4. GPU wait, flag bit 9: `f_70005a1300(2)` then `f_70005a1a90()` (a spin-wait whose log string is
    `hang in kick %u`). The kick is bracketed by a command buffer: `0x700054aab8`, `0x70005f6190`, `0x700054b114`.
-5. **Finish** — counter == 29: `+0x288` = 1, `[manager+0x10]` = 0, `[x25+0x7c0]` = 1. If flags bit 8 or 9 is set
+5. Finish, counter == 29: `+0x288` = 1, `[manager+0x10]` = 0, `[x25+0x7c0]` = 1. If flags bit 8 or 9 is set
    it flips `+0xd38`, sets `[0x700229fdb80]` = 1.0f, bumps `[0x700229d620]` and `[0x7002284890]`, toggles the
    scene object's `+0x1320` bool and clears `+0xd3c`; otherwise `+0xd3c` = **2** ("baked, not shown yet").
-6. **Show later** — with `+0xd3c` = 2 the next unforced request finds the spare holding the wanted hour and
+6. Show later, with `+0xd3c` = 2 the next unforced request finds the spare holding the wanted hour and
    takes the instant-flip path from step 2.
 
 ## Functions
@@ -122,36 +122,36 @@ turning, idling, catching), which hands clip choices to the game's skeleton syst
 
 ## What is not mapped
 
-- **Stage contents.** The jump table gives the stage order and the callee names give the passes, but no stage was
+- Stage contents. The jump table gives the stage order and the callee names give the passes, but no stage was
   traced to its render targets, textures or shaders. `MLB_DRAWLOG`/RenderDoc on a bake frame would settle it.
-- **The buffer objects.** `+0x1011c0`/`+0x1011c8` are the two buffer slots (`x25` plus `(1-2*buffer) ? 8 : 0`), and
+- The buffer objects. `+0x1011c0`/`+0x1011c8` are the two buffer slots (`x25` plus `(1-2*buffer) ? 8 : 0`), and
   `+0x1011c0+0x6d8/0x6e0/0x7c0/0x254` are touched, but nothing here says what a buffer *contains* (render-target
   set, irradiance cube, shadow atlas) or how big it is. Only the two time arrays are proven.
-- **Per-frame bake granularity.** The 29-slot counter predicts 29 calls; `docs/walkup-freeze.md` measured about
+- Per-frame bake granularity. The 29-slot counter predicts 29 calls; `docs/walkup-freeze.md` measured about
   50 frames (0.9-1.2 s) for a background bake. The counter update (`csinc`, `0x12e09f8`) and the two bit-9 gates
   (`0x12e0668 tbz w8,#1 -> 0x12e141c`, `0x12e0a30 tbz w8,#9 -> 0x12e0ca4`) are read, but which frames run which
   stage was not traced. Do not treat "one step a frame" as proven.
-- **Flag bits.** Bit 0 = bake active, bit 1 = "baked, not shown" (`+0xd3c` = 2), bit 8 = flip on finish, bit 9 =
+- Flag bits. Bit 0 = bake active, bit 1 = "baked, not shown" (`+0xd3c` = 2), bit 8 = flip on finish, bit 9 =
   blocking; bit 2 (`|= 4`, `0x70012e0c70`) and the bytes `+0xc3c/-c3d/-c3e` are only located, not explained.
-- **Other manager fields.** `+0x288` (bake-complete), `+0x10` (stage), `+0x14`, `+0x464`, `+0x101408` (last wanted
+- Other manager fields. `+0x288` (bake-complete), `+0x10` (stage), `+0x14`, `+0x464`, `+0x101408` (last wanted
   hour), `+0x101d30` (int fed to `0x700076ce78`), `+0xb60/+0xb64` are seen used, but their full meaning is not.
-- **Clock ABI.** `0x7000d52680` reads a rate at `0x700227e470` and the clock at `0x700227e460`, and
+- Clock ABI. `0x7000d52680` reads a rate at `0x700227e470` and the clock at `0x700227e460`, and
   `0x7000d529c0` writes a *different* pointer `0x700227e468`; the relation between the two floats is unproven.
   The 1264.0f branch in `0x7000d529c0` is unexplained.
-- **Predicates are stubs here.** `0x7001a3c270` returns constant 1 in 1.0.20, so the 13.0 h default and the
+- Predicates are stubs here. `0x7001a3c270` returns constant 1 in 1.0.20, so the 13.0 h default and the
   14.5 h clamp in `0x70012d1e04` are unreachable; what they were for (and whether a build variant changes it)
   is unknown.
-- **LocoManager layout.** The objects these functions drive have `+0xc0` (pointer array), `+0x104` (count),
+- LocoManager layout. The objects these functions drive have `+0xc0` (pointer array), `+0x104` (count),
   `+0x30`, `+0x9c` (type 6 checks), `+0x190/+0x198` (2-D position), `+0x574` flags, but which of those is the
   manager and which is the player/actor was not separated. The manager's constructor and vtable were not found.
-- **Clip/blend math.** `KineCore::CoreAnimationState::SetupNewAnimation` (0x70013af7fc) and
+- Clip/blend math. `KineCore::CoreAnimationState::SetupNewAnimation` (0x70013af7fc) and
   `AnimWrap::InitByMem` (0x70013a8250) are the entry points; the actual clip sampling/blend graph
   (`BlendGraphDb::Unpack`, 0x70003cc110; `AnimBlock report`, 0x700134af00; `KineCore_MT`, 0x70013ad320) was
   not read.
-- **Probe cluster.** Only `0x700128d2a0` is listed; its neighbours 0x700128c16c ("AtlasIrradiance"),
+- Probe cluster. Only `0x700128d2a0` is listed; its neighbours 0x700128c16c ("AtlasIrradiance"),
   0x700128df40 ("IRTSample: ...") and 0x700128e7b8 ("DrawInstancedProbes") were matched by string only, not by
   reading their bodies.
-- **Range correction.** 0x7001500000-0x7001548000 is Ollsc/socket/OpenSSL code ("olClient", "Socket",
+- Range correction. 0x7001500000-0x7001548000 is Ollsc/socket/OpenSSL code ("olClient", "Socket",
   "ShopServiceAccessor", "OpenSSL"), not animation; 0x7001440000+ is the engine object/stream layer. The
   animation and lighting work in this task's ranges is the 0x70012c0000-0x7001300000 lighting block and the
   `LocoManager` cluster 0x700140e900-0x7001437e00, plus `KineCore` just below at 0x7001340000-0x70013b0000.

@@ -27,7 +27,7 @@ the role wording ("decides", "pumps", "owns") is [I].
 **Step 1, where the ball will be: interval selection (0x7000100000 block).**
 Ball-flight prediction is expressed as *intervals* over time. The functions name themselves: 0x700010b5c0 prints
 `"Selecting flyball intervals for %d"` (`main_0008.c:42315`) and its first act is `f_70000f3750` followed by reading
-a velocity-like triple (`ldr w9,[x8,#0x114]`, `[x8,#0x104]`) — a per-fielder selection pass. 0x7000117700 prints
+a velocity-like triple (`ldr w9,[x8,#0x114]`, `[x8,#0x104]`), a per-fielder selection pass. 0x7000117700 prints
 `"Rejecting interval: %d [%.2f-%.2f]"` and so removes candidates as unreachable. 0x7000101090 carries
 `"Player=%d Sorting: nIntervals = %d"`, `"No intervals to sort"` and `"bFoundBetter = %d"`, i.e. it ranks them, and
 0x70001065e8 is the clear, `"ClearIntervals() %s"` (15 callers). So the spot a fielder runs to is chosen as "which
@@ -35,8 +35,8 @@ time window can I reach the ball in", ranked, not as a raw point [I]; the interv
 
 **Step 2, target and avoidance: 0x7000271448 "Get ball in ring" (2,370 lines, 81 callees).**
 This is the function that turns a ball into a fielder's rings. It reads two bools and returns early when both are
-clear — `{ uint64_t ea = x0 + 0x8ull; ... }` then `{ ... x0 + 0xaull ... }`, then
-`if (fc_nz(&F, CC_EQ)) { goto L_7000272998; }` (`main_0020.c:1865-1869`) — compares the actor's mode at `+0x40`
+clear, `{ uint64_t ea = x0 + 0x8ull; ... }` then `{ ... x0 + 0xaull ... }`, then
+`if (fc_nz(&F, CC_EQ)) { goto L_7000272998; }` (`main_0020.c:1865-1869`), compares the actor's mode at `+0x40`
 against 4 and 2 (`main_0020.c:1883-1888`), and calls, in order: `f_7000172590` (the shared avoidance ring, strings
 `"Working Ring"`, `"Moving avoid"`, 19 callers), `f_70001810cc` (strings `"Throw Ring"`, `"Catch Ring"`) and
 `f_7000178ca0` (string `"Working ring"`, 9 callers). Its only two callers are the unnamed ring-update drivers
@@ -45,7 +45,7 @@ against 4 and 2 (`main_0020.c:1883-1888`), and calls, in order: `f_7000172590` (
 
 **Step 3, the catch decision: 0x70003915c8 is the dispatcher.**
 Its 116-line body (`main_0029.c:4460-4507`) is a try-chain [C]:
-- `f_7000379ea0(c)` — "Canned catch" — then `if (((x0 >> 0) & 1) == 0) { goto L_700039166c; }` returns false.
+- `f_7000379ea0(c)`, "Canned catch", then `if (((x0 >> 0) & 1) == 0) { goto L_700039166c; }` returns false.
 - if a flag at `+0xe0` is set, `f_7000391000(c)` (predictive catch + throw, below) is tried next.
 - otherwise `f_700037cf68` is asked for a sub-target; when it returns one, 0xa0 bytes are copied, `f_7000378c64` is
   called and then `f_70003915c8(c)` recurses on the copy (line 4501).
@@ -63,7 +63,7 @@ set: 0x700037db00 `"predictive catch"` / `"fielder-to-ready trans"` / `"Breakdow
 0x700039fb90 and 0x70003a2360 in one body; 0x7000391000 is the hub that calls 0x700037db00 and 0x7000384a60.
 
 **Step 4, the throw.** 0x7000384a60 is named by its string `"Throw"` and called only by two unnamed selectors,
-0x70003908f0 and 0x7000391000 — the same decision point that picks predictive catch also picks throw [C]. Its ring
+0x70003908f0 and 0x7000391000: the same decision point that picks predictive catch also picks throw [C]. Its ring
 states are named in the neighbours: 0x7000387ca8 `"Pre-throw idle"` / `"Throw"`, 0x7000387fd0
 `"Post-throw trans to idle"`, and 0x7000392fbc `"throw re-direct throw ring"` / `"throw re-direct catch ring"`
 (2 callers, calls 0x70003915c8). Two functions print the same line,
@@ -92,9 +92,9 @@ hub 0x700031d438 (`"working ring"`). That hub's direct callees are the ring upda
 ## 2. The state machines (anchors)
 
 Mechanism: the per-state function names its own state strings, then calls 0x70002696a0 ("ARB Working ring"), the
-shared base every "Working ring" state uses — 22 callers, all of them such state functions [C by caller list].
+shared base every "Working ring" state uses; 22 callers, all of them such state functions [C by caller list].
 
-**0x700026b5e0 — catch / "working" ring update for a fielder going for the ball** (5,520 lines, 126 callees,
+0x700026b5e0, catch / "working" ring update for a fielder going for the ball (5,520 lines, 126 callees,
 66 indirect branches). Strings: `"Working"`, `"moving catch as transition"`, `"temp loco ring"`,
 `"placeholder loco ring"`, `"to catch-ready"`, `"working ring"`, `"inkerflyball"`, `"working"`, `"hold"`.
 Code: a state at `[x0,#0x170]` and a second at `[x27,#0x174]` are each compared with 5 and the result short-circuits
@@ -106,14 +106,14 @@ catch"), 0x7000377230 ("Pre-catch"), 0x7000377f70, 0x70002b6704 and four generic
 (`"Working Ring"`), 0x7000271448 (`"Get ball in ring"`). The strings name ring/transition slots (loco, catch, hold)
 and the dispatch itself is 66 indirect branches, so this is a ring pump, not an enumerated switch [I].
 
-**0x70002af6c0 — fielder reaction / role ring for cover and tag plays** (4,787 lines, 102 callees, 30 indirect).
+0x70002af6c0, fielder reaction / role ring for cover and tag plays (4,787 lines, 102 callees, 30 indirect).
 Strings: `"Working"`, `"Hit reaction"`, `"offset-to-cover 3B"`, `"catch-ready-to-stand"`, `"Working Ring"`.
 Sub-handlers: 0x70002a8920 (`"Working ring"`, `"Temp"`, `"catcher-to-stand"`, 3,548 lines, 4 callers), 0x70002b8260
 (the catcher ring, below), 0x70002ad01c, 0x70002bb430, 0x70002b7470, 0x70002b78b0, 0x70002bbd30. Callers:
 0x70002ad324 (`"RoleCover working ring"`), 0x70002aef88 (`"hold runner shuffle to tag setup"`), 0x70002aed50. So it
 is the "cover the base / back up" behaviour of a non-catcher fielder [I].
 
-**0x70002b8260 — catcher ring** (3,339 lines, 48 callees, 22 indirect). Its strings are state names:
+0x70002b8260, catcher ring (3,339 lines, 48 callees, 22 indirect). Its strings are state names:
 `"catcher-force-to-stand"`, `"catcher-force-to-tag-setup"`, `"tag setup turn trans"`, `"catch-ready-to-stand"`,
 `"catch-ready to 1B catch-ready"`, `"1B catch-ready to catch-ready"`, `"Hit reaction"`, `"working"`,
 `"Temp ring"`. Sub-handlers are stringless animation helpers (0x70002b7a68, 392 lines; 0x7001473030 and
@@ -121,7 +121,7 @@ is the "cover the base / back up" behaviour of a non-catcher fielder [I].
 0x70002b6c6c (`"Un-duck"`), 0x70002b5560 (`"back away on TIY"`). Callers: 0x70002af6c0 and 0x70002ad9b0
 (`"working"`, `"1_Off"`, `"Working ring"`).
 
-**0x70002dd390 — "watch play" ring** (385 lines, 13 callees, 4 indirect). Strings: `"WATCH PLAY STAND"`,
+0x70002dd390, "watch play" ring (385 lines, 13 callees, 4 indirect). Strings: `"WATCH PLAY STAND"`,
 `"WATCH PLAY TURN"`, `"WATCH PLAY IDLE"`. Code: a three-iteration loop (`x21` starts at 0, compared with 2 at
 `main_0023.c:46976`, incremented at 46979) and, per iteration, a virtual call through `vtable+0xa8` with
 `c->x[1]=ring, c->x[2]=ring+0x190, c->x[3]=0, c->x[4]=0` (`main_0023.c:46983-46990`), so three slots (or three
@@ -146,7 +146,7 @@ The other ballpark rings name their states plainly (no per-function role claimed
 | 0x70002ddd00 | WARMUP, CLEAN PLATE, PRE_SET, WALKUP |
 | 0x70002d9cc4 | BALL STAND, BALL IDLE |
 
-**0x700032fd94 — runner decision "machine"** (8,427 lines, 129 callees, 1 indirect). Not a string-named ring: its
+0x700032fd94, runner decision "machine" (8,427 lines, 129 callees, 1 indirect). Not a string-named ring: its
 strings are the decisions and their tuning prints (`"RUNNER DECIDE %s foul = %s"`, `"RUNNER COMMAND SET TO FOUL
 BALL!!!!"`, `"{PICKOFF-SAFECHANCE} Pickoff + Return: RunnerSafe: %d, RunbackDelay: %.2f, Margin: %d"`, plus
 `"POOPY PANTS"` / `"Prehistoric Flood"`) [C strings]. Main sub-handlers are the small runner predicates in

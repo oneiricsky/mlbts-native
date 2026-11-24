@@ -73,7 +73,7 @@ the read roles in a second pass, or read the 13,800 unnamed `sdk` functions, and
 | `references/tracing-playbook.md` | you must find out what game code does: methods, tools, patch workflow, evidence rules |
 | `references/history-and-open-questions.md` | before reopening a problem already investigated, or choosing what to research next |
 | `docs/map/regions/*.md` (A to F) | you need the per-window subsystem table and ~40 key functions of one address range; written by Haiku agents from the index, all claims tagged, spot-checked (106 of ~120 quoted strings matched, the rest escaping/truncation) but no function body was read |
-| the wiki's Function map (`Function-map`, `Function-census`, `Functions-A` to `Functions-SDK`) | you need every function of a region or window, not just the key ones: the complete census and the per-region register of every function with a symbol, import or string |
+| the wiki's Function map (`Function-map`, `Function-census`, `Functions-A` to `Functions-SDK`) | you need every function of a region or window: the complete census and the per-region register of every function with a symbol, import or string |
 | the wiki's subsystem pages (`Fielding`, `Frontend`, `Audio`, `AI-actor-API`, `Lighting`, `Game-modes`) | you need the on-field rings, the UI/screen layer, the audio path, the 119-slot actor API, the lighting bake or the end-of-game records, read from the bodies and checked against the index |
 | `docs/map/README.md`, `source/*.md`, `binary.md`, `coverage.md` | a function of the port's own source (11,308 listed with callees and purpose), or binary totals and the coverage check |
 

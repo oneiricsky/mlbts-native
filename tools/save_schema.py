@@ -57,6 +57,11 @@ def parse(b, off):
     return classes, off
 
 
+def value_bytes(c):
+    """Predicted value bytes for a class: sum(type x dim1) over its fields (verified on four classes)."""
+    return sum(f["desc"][1] * f["desc"][2] for f in c["fields"])
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--profile", default=ROOT + "/work/build/profile")
@@ -69,6 +74,12 @@ def main():
         start = d.find(b"[DESC]")
         classes, end = parse(d, start + 6) if start >= 0 else ([], 0)
         label = os.path.basename(os.path.dirname(p))
+        for c in classes:
+            c["value_bytes"] = value_bytes(c)
+            off = 0
+            for f in c["fields"]:
+                f["value_offset"] = off
+                off += f["desc"][1] * f["desc"][2]
         out["saves"].append(dict(label=label, path=p.replace("\\", "/"), bytes=len(d),
                                  descriptor_end=end, classes=classes))
     os.makedirs(a.out, exist_ok=True)

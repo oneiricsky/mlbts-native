@@ -29,14 +29,14 @@ See [coverage.md](coverage.md) for the last result.
 | `runtime/mlb` | 378 | [source/runtime-mlb.md](source/runtime-mlb.md) |
 | `runtime/shaders` | 18 | [source/runtime-shaders.md](source/runtime-shaders.md) |
 | `runtime/third_party` | 1859 | [source/runtime-third_party.md](source/runtime-third_party.md) |
-| `tools` | 649 | [source/tools.md](source/tools.md) |
+| `tools` | 655 | [source/tools.md](source/tools.md) |
 | `tools/equipment` | 173 | [source/tools-equipment.md](source/tools-equipment.md) |
 | `tools/linktest` | 7 | [source/tools-linktest.md](source/tools-linktest.md) |
 | `tools/packages` | 195 | [source/tools-packages.md](source/tools-packages.md) |
 | `tools/vendor` | 3421 | [source/tools-vendor.md](source/tools-vendor.md) |
 | `tools/xlate` | 35 | [source/tools-xlate.md](source/tools-xlate.md) |
 
-Total: 11379 source functions. C/C++ come from a libclang parse (a real compiler front end, same defines and include paths as the build), Python from `ast`, vendored C# and GLSL from a regex (lower fidelity).
+Total: 11385 source functions. C/C++ come from a libclang parse (a real compiler front end, same defines and include paths as the build), Python from `ast`, vendored C# and GLSL from a regex (lower fidelity).
 
 ## The game binary
 

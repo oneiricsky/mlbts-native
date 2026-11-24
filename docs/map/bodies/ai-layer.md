@@ -1,4 +1,4 @@
-# AI decision layer — 47×119 method-table family (main 1.0.20)
+# AI decision layer, 47×119 method-table family (main 1.0.20)
 
 Read-only analysis of `work/gen` (generated C) and `work/build/game/exefs/main`. No repo file was modified.
 Tag meaning: **[C]** a string, symbol or code read proves it; **[I]** a strong pattern in the code suggests it;
@@ -19,7 +19,7 @@ Tag meaning: **[C]** a string, symbol or code read proves it; **[I]** a strong p
    None reaches large logic (no callee over 150 generated lines), so this is the **actor/play-control API
    the AI calls**, not the scoring code itself.
 6. The role strings are decision-site **labels passed to a gate function** `0x70001c2384`
-   ("ONLINE AI BATTER" at `main_0007.c:14607-14611`), not class names — the game has no RTTI (the 16 bytes
+   ("ONLINE AI BATTER" at `main_0007.c:14607-14611`), not class names: the game has no RTTI (the 16 bytes
    before each table are zeros).
 7. Slot use clusters name the consumers: 20–25 fielding/catch, 56–60 baserunning/steal, 73–89 batting/pitching,
    0/1/5/13/33/73 locomotion parameters, 2/3/17/19/37/38/78/84–87/95/96/104/110/114 fixed flags.
@@ -70,13 +70,13 @@ Grouping by the set of slots a table overrides (base table excluded) gives these
 | hit / pitch | 1: `0x700216bb48` | I | extras `{10,21,28,74,75,80,81,89}`; slots 74/75/80/81/89 are swing and pitch-type inputs |
 | hit + catch combo | 5: `0x700216bf10`,`c2d8`,`d988`,`e118`,`e4e0` | I | extras include 24/25 (catch) together with 74/75/80/81/89 (bat) |
 | all-round | 2: `0x70021649d8` (45 overrides), `0x7002165530` (47) | C | these two override far more slots than any other class |
-| role strings | — | C | `ONLINE FIELDER DECISION` + `ONLINE %s DECISION` + `SUPPORT`/`PUPPET`/`CUTOFF`/`COVER` (`0x70000acfe8`), `ONLINE RUNNER DECISION` (`0x70000b3154`), `ONLINE AI BATTER` + `GRIFFEY REANALYZE PITCH` (`0x70000c6f20`), `AI Chose #%d (%s)` (`0x70000cd760`) |
+| role strings | yes | C | `ONLINE FIELDER DECISION` + `ONLINE %s DECISION` + `SUPPORT`/`PUPPET`/`CUTOFF`/`COVER` (`0x70000acfe8`), `ONLINE RUNNER DECISION` (`0x70000b3154`), `ONLINE AI BATTER` + `GRIFFEY REANALYZE PITCH` (`0x70000c6f20`), `AI Chose #%d (%s)` (`0x70000cd760`) |
 
 The remaining 20 tables own unique override sets: the two all-round classes plus one-off combinations
 (e.g. `0x700216ce30`, `0x700216d1f8`, `0x700216d5c0`, `0x700216ec70`).
 
 What the families are for, in plain words: the 47 implementations are the per-role control sets the
-gameplay/AI code drives — a batter, a runner, a fielder (with SUPPORT/PUPPET/CUTOFF/COVER sub-roles), a
+gameplay/AI code drives: a batter, a runner, a fielder (with SUPPORT/PUPPET/CUTOFF/COVER sub-roles), a
 pitcher and supporting actors. Only the four role strings above and the slot-use clusters prove the
 mapping; no table carries its own name.
 
@@ -137,22 +137,22 @@ mapping; no table carries its own name.
 
 ## What is not mapped
 
-- **No class names.** The build has no RTTI: the 16 bytes just before every table are zero (e.g.
+- No class names. The build has no RTTI: the 16 bytes just before every table are zero (e.g.
   `0x7002164600`/`0x7002164608` ahead of `0x7002164610`), so the 47 implementations cannot be named from
   the binary; the family labels above come from the slots each class overrides and the role strings of the
   code that calls those slots.
-- **No code writes a table address directly.** The four table addresses I scanned (`0x7002164248`,
-  `0x7002167370`, `0x700216c2d8`, `0x700216f038`) each occur exactly once in `.rodata`/`.data` — in the
-  47-slot registry — and the only code that reads the registry is `f_70000b4b4c`; how an object is bound
+- No code writes a table address directly. The four table addresses I scanned (`0x7002164248`,
+  `0x7002167370`, `0x700216c2d8`, `0x700216f038`) each occur exactly once in `.rodata`/`.data`, in the
+  47-slot registry, and the only code that reads the registry is `f_70000b4b4c`; how an object is bound
   to a table (constructor path) is still open.
-- **Most slot semantics.** Slots 4, 6–19, 29–36, 39–55, 62–72 and 100–118 have callers but no read body
+- Most slot semantics. Slots 4, 6–19, 29–36, 39–55, 62–72 and 100–118 have callers but no read body
   that names them; their role labels above are cluster inferences, not confirmed names.
-- **Class ids** `0x2cd8`, `0xbfc`, `0x1d2a`, `0x2611`, `0x2d08`, `0x3068`, `0x3600`, `0x36d2` are compared
+- Class ids `0x2cd8`, `0xbfc`, `0x1d2a`, `0x2611`, `0x2d08`, `0x3068`, `0x3600`, `0x36d2` are compared
   in code but not resolved to names (they look like action/animation ids shared with
   `0x70000b8c44`/`f_70000b8090`).
-- **The 16-byte tails** after each table are all zero; their purpose (alignment vs. reserved header) is
+- The 16-byte tails after each table are all zero; their purpose (alignment vs. reserved header) is
   not proven.
-- **Which of the 47 tables is which role** is inferred only for the clusters that touch steal, catch and
+- Which of the 47 tables is which role is inferred only for the clusters that touch steal, catch and
   bat/pitch slots; the 8 one-method classes and the 2 all-round classes remain unassigned.
 - `0x70000c58d0`, `0x70000c5f88`, `0x70000c6124`, `0x70000ca4ec` (the batter-decision helpers called
   by `0x70000c6f20`) were listed but not read line by line.

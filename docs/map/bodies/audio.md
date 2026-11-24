@@ -1,4 +1,4 @@
-# MLB The Show 26 (1.0.20) — audio map: stream engine, Scream DSP, PXP commentary
+# MLB The Show 26 (1.0.20), audio map: stream engine, Scream DSP, PXP commentary
 
 Read-only analysis of `main` (base `0x7000000000`), game version 1.0.20. No repo file was edited and the game was
 not run. Everything below comes from `tools/map_find.py`, the generated C in `work/gen/main/`, `tools/disasm.py` /
@@ -9,7 +9,7 @@ so most SCREAM functions can be named from the file and message they embed.
 
 Tags: **[C]** string, symbol, or code read; **[I]** strong pattern; **[H]** guess.
 
-Two tools serve this: `tools/fnxref.py` (every string a function references, in code order — this is what ties a log
+Two tools serve this: `tools/fnxref.py` (every string a function references, in code order; this is what ties a log
 line to the state store that follows it) and `tools/strdump.py` (the C string at a guest address).
 
 ## Summary
@@ -61,7 +61,7 @@ The port's own log confirms the format and the one-stream claim [C, `work/build/
 3072 bytes / 256 frames = 12 bytes per frame = 6 channels × 16 bit, i.e. 5.1 PCM16 at 48 kHz [C]. Only one 6-channel
 session exists; the 2-channel one starts with no buffers queued [C]. Because there is exactly one
 `OpenAudioOut` call site in `main` (`0x70018cff0c`) and it is reached once per `DeviceOut` instance, I read the 6-channel
-instance as the game mix and the 2-channel instance as the headset/voice-chat feed — the code cluster around
+instance as the game mix and the 2-channel instance as the headset/voice-chat feed; the code cluster around
 `0x70018ce000`–`0x70018d2000` is the headset library (`'Headset Thread'`, `'Microphone Thread'`, `LocalTalker`,
 `RemoteTalker`) [I].
 
@@ -161,13 +161,13 @@ Grain kinds named by the binary: `'Start Stream Playlist'`, `'Playlist Configura
 
 * if the slot has a live handle, it loads the word at `+0x4c4` into `x0`, sets `x1 = 1`, `v0 = 0, v1 = 8, v2 = 0`,
   logs `'%010d, Manual fade: Issuing fade request to audio system.\n'` and calls Scream `snd_AutoGain`
-  (`0x7001aa3ba0`, the function's own string is `'snd_AutoGain'`) — the ramp is issued on the voice, not on a mix bus;
+  (`0x7001aa3ba0`, whose own string is `'snd_AutoGain'`): the ramp is issued on the voice, not on a mix bus;
 * otherwise it logs `'%010d, Manual fade: Moving to STATE_WAITING_TO_ISSUE_STOP\n'`, stores state **6** and sets the
   stop-pending byte at `[manager+0x4e0] = 1`, returning 0.
 
 The hard stop is the sibling `0x70003ddcb4` (83 lines, 50 callers, `'Manual Stop: Issuing stop request to audio
 system.'`) and `0x70003ddaf0`, which drives the state machine directly [C]. So a fade is a gain ramp on the 989snd
-voice followed by the same stop handshake — there is no separate mix-level fade bus.
+voice followed by the same stop handshake; there is no separate mix-level fade bus.
 
 ## 3. The commentary event path (PXP)
 
@@ -176,7 +176,7 @@ voice followed by the same stop handshake — there is no separate mix-level fad
 The commentary engine is one class with a **129-entry vtable**; each play event is a virtual method:
 
 * `0x7000f64f94` and `0x7000fad928` are both `DoIntroLineupLeadInPXP`, "in vtable 0x70021e07d8 slot 31 of 129" and
-  "in vtable 0x70021e0bf0 slot 31 of 129" — i.e. the same slot in two adjacent vtables (`0x70021e0bf0 - 0x70021e07d8 =
+  "in vtable 0x70021e0bf0 slot 31 of 129", i.e. the same slot in two adjacent vtables (`0x70021e0bf0 - 0x70021e07d8 =
   0x418` = 131 slots of 8 bytes), two instantiations [C].
 * `0x7000f846a8` `PxPHitResultFoul` is slot 61 of 129 in `0x70021e07d8`; `0x7000f76770` is the Walk handler, slot 16,
   and its strings are `'[Walk: Clear Script Phrases]'` and `'IntentionalWalk'` [C].
@@ -201,9 +201,9 @@ The commentary engine is one class with a **129-entry vtable**; each play event 
 
 So the handler builds the event name in a 256-byte stack buffer and calls **vtable slot 9 (`+0x48`) with
 `(engine, name, 0, 0.5f)`** [C]. `0x18` off the engine holds the sound-system pointer that the next instructions load
-[`ldr x0, [x19, #0x18]` at `0xe37a44`] [C]. The engine then resolves that name against its pack's bank — the bank
+[`ldr x0, [x19, #0x18]` at `0xe37a44`] [C]. The engine then resolves that name against its pack's bank; the bank
 loader object references `'Audio\PXP.MRK'`, `'Audio\PXP.TBL'`, `'Audio\PXP.CTL'`, `'Audio\PXP.SKX'` (`0x7000ab7fa8`,
-vtable `0x70021a37d0` slot 10 of 11), i.e. markers, table, playlist control and sample bank — and the sound's
+vtable `0x70021a37d0` slot 10 of 11), i.e. markers, table, playlist control and sample bank, and the sound's
 playlist section picks the line, skipping anything in the global history (`0x7001ad69c4`) [C for the bank and the
 rejection; the name→bank-entry resolution itself is [I], because it happens inside the runtime-filled vtable slot].
 
@@ -263,7 +263,7 @@ fills `SndFileParams` and satisfies `SndFileInterface` (open/seek/read/close) fo
 | 0x70003d4170 | per-song metadata fields | C | `'SONG_NAME'`, `'ALBUM_NAME'`, `'ARTIST_NAME'`, `'LABEL_NAME'`, `'GENRE_NAME'`, `'LENGTH_STR'` |
 | 0x70003e8520 | streams the front-end jukebox | C | `'Mobile Song Buffer'`, `'Jukebox_%02d'` |
 | 0x70003f4e04 | playlist gate: refuses a playlist by camera / handedness | C | `'Could not play playlist because the batter isn't right-handed'`, `'...we aren't focused on first base'` (12 strings) |
-| 0x7001aa3ba0 | `snd_AutoGain` — the fade request | C | string `'snd_AutoGain'`; called by `0x70003df4b8` as `(slot+0x4c4, 1, 0.0f, 8, 0)` |
+| 0x7001aa3ba0 | `snd_AutoGain`, the fade request | C | string `'snd_AutoGain'`; called by `0x70003df4b8` as `(slot+0x4c4, 1, 0.0f, 8, 0)` |
 | 0x7001ab6110 | `snd_TestStreamPlaylist`: reports active playlists and streams | C | `'snd_TestStreamPlaylist(): More than %d unique active playlists found!'` |
 | 0x7001ad5610 | `PlaylistProcessor::AddPlaylistItem` | C | `'PlaylistProcessor::AddPlaylistItem(): Cannot add a %s grain before a Start Stream Playlist grain.'` |
 | 0x7001ad5e98 | `PlaylistProcessor::Start` | C | `'PlaylistProcessor::Start(): Cannot find starting marker or section '%s' in playlist '%s'.'` |
@@ -293,30 +293,30 @@ fills `SndFileParams` and satisfies `SndFileInterface` (open/seek/read/close) fo
 
 ## What is not mapped
 
-1. **The mix producer.** The consumer side of the PCM ring is proven (`0x700153b740`/`0x700153b95c` read into the audout
+1. The mix producer. The consumer side of the PCM ring is proven (`0x700153b740`/`0x700153b95c` read into the audout
    buffer), but I did not find the function that writes the summed 5.1 PCM into that ring, so "where the mix is
    produced" stops at "inside Scream's master/submix path" (`snd_SynthAllocSubmixVoice` `0x7001b0b090` and the DSP
    graph are the visible evidence). Finding it needs a write-watchpoint on the ring during a run, or `MLB_FNTRACE`
    over the Scream range.
-2. **Which audout session carries what.** The 6-channel/2-channel split is inferred from channel counts and from the
+2. Which audout session carries what. The 6-channel/2-channel split is inferred from channel counts and from the
    headset code cluster around `0x70018ce000`; no run was traced, so "6ch = game mix, 2ch = voice chat" is [I], not [C].
-3. **The target of commentary vtable slot 9 (`+0x48`).** The call with the event name is proven at `0xe37a40`, but the
+3. The target of commentary vtable slot 9 (`+0x48`). The call with the event name is proven at `0xe37a40`, but the
    slot is filled at runtime, so the resolving function (name → bank entry) is not identified statically. Same for the
    other 128 slots of `0x70021e07d8` and `0x70021e0bf0`.
-4. **Pack identity and count.** Five `PlayByPlay*` names and three engine-body copies are confirmed, but which pack a
+4. Pack identity and count. Five `PlayByPlay*` names and three engine-body copies are confirmed, but which pack a
    given vtable instance points at is not established, and the earlier reading call at `0x7000f64e84`
    (`'PlayByPlay_RF_RF'`) is not tied to a specific team or mode.
-5. **Thread ownership and clock.** Which thread ticks the stream state machine and Scream's render is not established;
+5. Thread ownership and clock. Which thread ticks the stream state machine and Scream's render is not established;
    `0x70003dde10` is called from two sites and the audio threads visible here (`0x70018cfd10`) are the last hop only.
-6. **DSP graph content.** Processor nodes are identified only by embedded source paths (`processor_input.cpp`,
+6. DSP graph content. Processor nodes are identified only by embedded source paths (`processor_input.cpp`,
    `processor_output.cpp`, `processor_delay.cpp`, `processor_lfo.cpp`, `processor_envelope*.cpp`,
    `processor_oscillator.cpp`, `processor_saturator.cpp`, `processor_param_eq.cpp`, `processor_trigger_filter.cpp`,
    `processor_hex_wave.cpp`, `wws_dsp_flt.cpp`); the patch/preset file format and which graph the game builds are not
    mapped.
-7. **Method caveat.** `tools/map_find.py str` attributes a string to every function whose pool references it, and can
+7. Method caveat. `tools/map_find.py str` attributes a string to every function whose pool references it, and can
    over-attribute when a large string blob is shared. Example found and discarded here: `0x7000590ce0` looks like
    `snd_SynthAllocSubmixVoice` from the `str` search but its own strings are a ZLS/bank-transition loader. Row evidence
    above therefore comes from `fnxref.py` (per-function, in code order) or from the function's own message, not from
    `str` alone.
-8. **No runtime cross-check.** Nothing here was confirmed by a run, an audio capture, or a breakpoint; the only
+8. No runtime cross-check. Nothing here was confirmed by a run, an audio capture, or a breakpoint; the only
    runtime artefact used is the existing `work/build/logs/mlb.log`.
