@@ -350,6 +350,13 @@ static void window_main(void *arg) {
         note_applied();
         refresh_rate_update(g_hwnd, 1);
         keep_awake(1);
+        // fastball: TOTK_HIDDEN_WINDOW=1 (unattended test runs): the window is never on screen or on the taskbar; the game,
+        // its memory and MLB_SHOT captures run as usual.
+        const char *hid = cfg_get("TOTK_HIDDEN_WINDOW");
+        if (hid && atoi(hid)) {
+            ShowWindow(g_hwnd, SW_HIDE);
+            rt_log("gfx: TOTK_HIDDEN_WINDOW: the window is hidden");
+        }
     }
     plat_event_set(&g_wnd_ready);
     if (g_wnd_failed) return;
