@@ -254,3 +254,13 @@ Detail on [Lighting](Lighting) (which covers the animation core it found next do
 - `f_7000c0dc6c` (slot 8) hands field values to the menu script; SHOW_DYNAMIC_PANELS = obj+0x129 && obj+0x128. [C]
 - Fields of the class "GameModesMain" (slot 4 `f_7000c0df84`): HAS_ANNOUNCEMENTS, ANNOUNCMENT_NUMBER, SHOW_DYNAMIC_PANELS, STUBS_CAP (`f_7000c0d970`). [C]
 - See docs/menu-offline-panel.md and runtime/mlb/menu_offline.c.
+
+## Trainer targets: settings, pitcher state, contact result (2026-11-24, read only, nothing written live)
+
+| Address | What | Tag | Evidence |
+|---|---|---|---|
+| `[main+0x4651350]` = match settings S | `GetConfig(k)` (`0x7001824b74`) and the setter `0x7001824c18`: byte keys 0..0x53 at `S+0x3e+k`, 16-bit keys from 0x54 at `S+0x2c..0x3c` | C | both bodies |
+| key names for 0..0x53 | key = field offset in the save class `D_GAME_OPTIONS` (`tools/save_schema.py`): 1/2 teams, 4 innings, 5 temperature, 6 cloud, 9 stadium, 19 game mode, 22..25 training mode/player/data/pitches, 68 time of day, 70 humidity, 72 retro, 73 fog, 78 extra-inning runner | I | 1/2 written live; 19, 24 and 72 match the mode tests in `docs/map/bodies/modes.md`; other keys unchecked |
+| `0x70002e9dc4` (`RolePitcher::PitchStoreFatigue`), third argument P | pitcher state: floats `P+0x20` stamina, `+0x0c/+0x10/+0x14` H/K/BB, `+0xf4` energy, `+0xf8` confidence | C offsets, not read live | the two "PITCH DIAGNOSTICS" printf argument loads |
+| `0x700167bb7c` contact model, result struct R | floats `R+0x40` incline, `+0x44` azimuth (radians), `+0x48` exit scalar, `+0x34/38/3c` spin; ints `R+8` hit type, `+0xc` hit direction | I | the "AUTO HIT" and "Hit Type" printf argument loads |
+| `[main+0x227e6e0]` W | `W+0x28` flag, `W+0x64/68/6c` floats printed as "AUTO WIND x y z": looks like a wind override | H | same function |
