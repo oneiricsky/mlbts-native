@@ -365,6 +365,15 @@ leave team select; the lineups follow a change of those bytes made then, and ign
 Traced 2026-11-24 (first-call trace of all of `main` on a cold exhibition run, block at 0x1c71dab80 that run): the
 match settings block is a keyed option object. `f_7001824fa0(block, key, value)` stores option `key` at block+0x3e+key
 (key 4 also forces +0x42 = 9; keys up to 0x53 are plain bytes), so HOMETEAM (key 1) is +0x3f and AWAYTEAM (key 2) is
-+0x40. `f_7001824f08` reads +0x3e (game mode, 3 = a mode test) through the pointer at main+0x4651350. The code that
-copies the team bytes into the rosters was not located: it is not among the functions that take the block as x0
-in the team-select to stadium-select window. Still open.
++0x40. `f_7001824f08` reads +0x3e (game mode, 3 = a mode test) through the pointer at main+0x4651350. The game's own
+matching setter is `f_7001824c18(key, value)`.
+
+Found 2026-11-24: the game reads the two bytes in `f_7000bab324`, the screen handler the menus run on the way out of
+team select. It passes both ids to `f_700066f324`, which resolves each one through the league's 30-entry team table
+(`f_700181ad34`, stride 0x550, team id at record+0xc) and calls the game-entry builder `f_700066f390` with the two
+team records. The builder copies each record into the match's two 0x550-byte team slots with `f_700185d058`, and the
+per-player work is in `f_700066f770`, which builds the side's 0x138-byte player entries from the player list in the
+copied record. So the ids are not written into roster rows: each id selects a team record that carries the roster,
+and the match builds its own copy. First-call trace of the fourth run (BOS at BAL,
+`work/runs/sonnet/logs/mlb.log`): team select at 45.759 s, the four functions above first called together at 61.426 s,
+GAME ENTERED at 88.886 s. Details on the wiki page [Dev harness and measuring](wiki/Dev-harness-and-measuring.md).
