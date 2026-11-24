@@ -7,7 +7,7 @@ The tool attaches by process name (without .exe), waits for the match settings b
 situation and prints one line per field with the value read back. Scenario file: `key = value` lines, `#` comments.
 
     home = 0            team id 0..29 (0 BAL ... 27 LAD ... 29 SF); default stays as the game made it
-    away = 1            CAUTION: this changes the stadium and the uniforms only. The players, lineups and scoreboard
+    away = 1            CAUTION: written this way (match already built) it changes the stadium and the uniforms only; use tools/exhibition.py to get the players. The players, lineups and scoreboard
                         names were loaded at boot for the default teams (LAD home, TOR away) and do not change.
     inning = 9          1..
     half = bottom       top | bottom

@@ -343,3 +343,15 @@ The panel grows with each step.
 - Stop conditions, state-snapshot contents, and the "sane frame rate" number.
 - Whether team id 12 is the Athletics.
 - 1.0.15: needs its exefs, then `tools/addrmap.py` and a test.
+
+## Choosing the teams of a run (2026-11-24)
+
+The lineups, rotations, cards and scorebug come from the match settings block (home team +0x3f, away +0x40 and their
+copies) at the moment the menus build the match, not from a live write into a match that is already loaded.
+`tools/exhibition.py --exe <name> --log <game log> --away <id> --home <id> --from title` presses the game's own menu
+buttons (needs `MLB_HARNESS_PAD=1`), overwrites the block right after the team-select confirm, and goes on to the first
+batter. Two traps found: the untouched default pick (TOR at LAD) keeps preloaded rosters, so the tool moves the home
+cursor once first; and the pause menu remembers its cursor, so leaving a match by menu is unreliable (start a fresh game
+instead). Check on a cold start: away 0 (BAL), home 1 (BOS): scorebug BAL/BOS, Taylor Ward batting, Garrett Crochet
+pitching, Fenway Park. Failed controls: a write made after the match was built gave Ohtani in a Red Sox uniform and a
+TOR/LAD scorebug.
