@@ -69,7 +69,7 @@ of the state handlers (`docs/map/regions/D-*.md`), the game-mode table (`0x7000e
 ## Rules that bit people before
 
 - **Diagnose before fixing; numbers before and after with run counts.** The pitch hitch was first written off as
-  "inherent GPU waits" and was in fact one redundant lighting bake (fixed by a 7-site code patch). Never call a game
+  "inherent GPU waits" and was in fact one redundant lighting bake (fixed by a code patch: 6 sites for the lighting plus 1 for the league-leader lists). Never call a game
   behaviour inherent until you have asked *why the game does that work*.
 - **1.0.15 and 1.0.20 differ.** Code addresses moved by +0x20..+0x1500, data by about +0x1000. Comments in `runtime/`
   are 1.0.15's unless they say otherwise. `tools/addrmap.py` maps an address between versions; every patch and every

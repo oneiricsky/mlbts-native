@@ -6,7 +6,7 @@ Read before reopening something. Sources: `docs/reports/*.md`, `docs/walkup-free
 
 | Problem | Cause | Fix | Evidence |
 |---|---|---|---|
-| 250-380 ms freeze before every pitch, longer at inning changes | after each play the game bakes stadium lighting in the background, then the batter-up handler forces a second blocking bake (~50 scene passes with a GPU wait each) | patch `walkup_light` (7 sites) + `walkup_leaders` (1 site; a duplicate league-leader list build) | frames over 100 ms in 30 pitches: 27 -> 0; fixed upstream in 0.2.0 |
+| 250-380 ms freeze before every pitch, longer at inning changes | after each play the game bakes stadium lighting in the background, then the batter-up handler forces a second blocking bake (~50 scene passes with a GPU wait each) | patch `walkup_light` (6 sites) + `walkup_leaders` (1 site; a duplicate league-leader list build) | frames over 100 ms in 30 pitches: 27 -> 0; fixed upstream in 0.2.0 |
 | 5-6 hour crash (issue 17) | loader bound symbols differently from Horizon's rtld: memory leak | copy rtld's rule | upstream 0.2.0 |
 | Bright yellow face with PS5 colour maps | a compute pass measures skin tone with `texelFetch` over a rectangle in Switch texel coordinates; on a 1024x512 image that is the wrong quarter, lit face shaders divide by it | bind PS5 images from the Switch-size level in compute (`get_view`, `hd_shift`) | blown faces 50 -> 0 of 101 shots |
 | 15 ms cold-disk stalls per PS5 head file, 200-670 ms frames | file read on the replay thread at first upload | prefetch thread on file open (`MLB_HD_PREFETCH`) | max stall on replay thread 28 ms -> 0.7 ms |

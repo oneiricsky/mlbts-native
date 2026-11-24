@@ -86,7 +86,7 @@ objects (`[obj]->[+0x80]`, `[+0x60]`, `[+0x90]`, `[+0x1b0]`) that were not resol
 | `0x700128d2a0` | indirect-light probes; refresh when the lighting-version counter (`0x7002ca9338`) changes | C |
 | `0x70019fb800`, `0x70019fb880`, `0x70019fbbb0` | turn stadium props off/on at 19.5 h (17.0 h in months 0 and 12); table at `0x70021edca0` | C |
 
-Patch `walkup_light`: 7 site edits (`main+0x108bbb4`, `0x12d1f74`, `0x12d1f7c`, `0x12d1f84`, `0x12d1f98`, `0x108bbc0`; see `tools/data/patches-1.0.20.txt`). Result: frames over
+Patch `walkup_light`: 6 sites (`main+0x108bbb4`, `0x12d1f74`, `0x12d1f7c`, `0x12d1f84`, `0x12d1f98`, `0x108bbc0`; see `tools/data/patches-1.0.20.txt`). Result: frames over
 100 ms in 30 pitches 27 -> 0.
 
 ## Broadcast "moments" and league leaders
