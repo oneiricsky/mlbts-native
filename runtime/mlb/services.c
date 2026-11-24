@@ -14,6 +14,7 @@
 #include "prompts.h"
 
 void gfx_capture_arm(long ahead);   // runtime/gfx/gfx_stubs.c
+void rtts_autosave_game_log(const char *text, int n);   // rtts_autosave.c
 
 static int memmem_lite(const char *h, int n, const char *needle) {
     int m = (int)strlen(needle);
@@ -56,6 +57,7 @@ static void lm_packet(const uint8_t *d, uint64_t n) {
     if (!text) return;
     while (text_n > 0 && (text[text_n - 1] == '\n' || text[text_n - 1] == '\r' || !text[text_n - 1])) text_n--;
     hid_game_log(text, text_n);   // fastball: the screens the game enters switch MLB_PAD_MAP=auto
+    rtts_autosave_game_log(text, text_n);   // and tell when a new Road to the Show player is being made
     if (memmem_lite(text, text_n, "===GAME ENTERED===")) {   // MLB_DRAWLOG=game: one frame's capture in the match
         const char *dl = cfg_get("MLB_DRAWLOG");
         if (dl && !strcmp(dl, "game")) gfx_capture_arm(600);
