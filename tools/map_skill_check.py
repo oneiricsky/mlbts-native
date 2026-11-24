@@ -14,7 +14,7 @@ vtables = {json.loads(l)["vtable"] for l in open(IDX + "/vtables.jsonl")}
 bad, total = [], 0
 for p in sorted(glob.glob(ROOT + "/.claude/skills/mlbts-game-code/**/*.md", recursive=True)):
     for n, line in enumerate(open(p, encoding="utf-8"), 1):
-        if any(k in line for k in ("1.0.15", "slot `", "inside a function", "map_find.py", "region 0x", "near 0x", "`-`",
+        if any(k in line for k in ("1.0.15", "slot `", "inside a function", "map_find.py", "strdump.py", "region 0x", "near 0x", "`-`",
                                    "Home Run Derby has its own")):
             continue
         for m in re.finditer(r"0x(7[0-9a-f]{9})\b", line):

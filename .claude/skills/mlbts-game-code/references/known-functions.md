@@ -180,7 +180,7 @@ PA, umpire and commentary are streams through the game's own 7-state slot machin
 | `0x70003df4b8` | manual fade: `snd_AutoGain` or state 6 plus a stop-pending byte | C | 48 callers |
 | `0x70003d263c` | music bank names `Jukebox_%02d` and `Audio\%s.bnk` | C | the strings |
 | `0x70021e07d8` | 129-entry play-by-play handler vtable (several copies exist) | C | vtable |
-| `0x7000e37a20` | PXP handler: copies an event name then calls vtable slot 9 (`+0x48`) | C | "PitchGetsAwayResult" |
+| `0x7000e37630` | `DoPickoffResultPXP`, a 1,444-line commentary handler. At offset `+0x3f0` it copies the event name with `strncpy`, then calls vtable slot 9 (`+0x48`) | C | "BaseResultHandler", "PitchGetsAwayResult", "PickoffStealResult" |
 
 ## The 119-slot actor API (47 tables)
 
