@@ -18,8 +18,8 @@ Rule: `runtime/core` holds nothing MLB-specific; `runtime/mlb` holds nothing ano
 
 ## Two ways the port meets the game [C]
 
-1. **Symbol override.** `main` imports 765 symbols from `sdk` through its GOT; the port replaces chosen ones (nn::fs, hid, account, swkbd, vi, nv, nvn procs) with host functions. Only calls from `main` into `sdk` can be caught this way.
-2. **IPC level.** Calls made inside `sdk` (oe/am/apm/lm init) reach services through IPC, implemented in `runtime/mlb/services.c` and siblings. A command not yet seen stops with a named fatal `ipc_unimplemented`.
+1. Symbol override. `main` imports 765 symbols from `sdk` through its GOT; the port replaces chosen ones (nn::fs, hid, account, swkbd, vi, nv, nvn procs) with host functions. Only calls from `main` into `sdk` can be caught this way.
+2. IPC level. Calls made inside `sdk` (oe/am/apm/lm init) reach services through IPC, implemented in `runtime/mlb/services.c` and siblings. A command not yet seen stops with a named fatal `ipc_unimplemented`.
 
 The port also wraps game functions/globals at known per-version addresses (`rtts_autosave.c`, `tutorials.c`, `framerate.c`, `resolution.c`, `hid.c`) and rewrites game instructions at generation time through code patch sets.
 

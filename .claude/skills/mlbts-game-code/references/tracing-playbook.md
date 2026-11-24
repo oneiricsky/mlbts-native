@@ -52,8 +52,8 @@ sed -n <line>,<line+N>p work/gen/main/<file> | sed -E 's/x30 = 0x[0-9a-f]+ull;.*
 ## 3. From finding to fix
 
 1. State the cause with evidence (a repro, a log, a measurement). If unconfirmed it is a hypothesis; test it.
-2. Ask **why the game does this work**, not how to make it cheaper. Check upstream first (`git fetch` to a temp ref and search the log; 0.2.0 had already fixed the freeze that took days to chase).
-3. Prefer a **code patch set** (`tools/data/patches-1.0.20.txt`): list sites as original words and replacement words; each replacement may write only registers the following code overwrites
+2. Ask why the game does this work, not how to make it cheaper. Check upstream first (`git fetch` to a temp ref and search the log; 0.2.0 had already fixed the freeze that took days to chase).
+3. Prefer a code patch set (`tools/data/patches-1.0.20.txt`): list sites as original words and replacement words; each replacement may write only registers the following code overwrites
    before reading, and must not set flags unless intended. The generator checks the original words. Add the 1.0.15 equivalent via `tools/addrmap.py`, or mark 1.0.20-only.
 4. Ship as one unit: patch + settings row in `runtime/mlb/cfg.c` (default on) + toggle in `runtime/gfx/ui/menu.cpp` + a doc with Cause, the fix, what else changes, how it was checked.
 5. Measure per-change: before/after with the run count, alternated, same settings, fixed from frame 0; uncapped (the 60 fps cap hides per-frame cost); first run of a fresh slot is slower (caches).

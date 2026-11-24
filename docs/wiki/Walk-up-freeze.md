@@ -4,7 +4,7 @@ Before every pitch the game froze for 250 to 380 ms, and for longer at inning ch
 
 The game lights each stadium for the time of day, and the clock moves during a match (about 17.5 s of game time per pitch, more per batter and inning). Each new time needs the lighting worked out again, which the game calls a bake.
 
-After every play the game quietly bakes the next time into a spare lighting buffer, one step per frame for about 50 frames. That is fine. Then, when the next pitch starts, one function asks for the lighting again with a "force" flag set. The force flag makes the game ignore the finished spare buffer and bake the same time again, all in one frame: about 50 full scene passes, each followed by a GPU kick and a wait. That is the freeze.
+After every play the game bakes the next time into a spare lighting buffer, one step per frame for about 50 frames. That is fine. Then, when the next pitch starts, one function asks for the lighting again with a "force" flag set. The force flag makes the game ignore the finished spare buffer and bake the same time again, all in one frame: about 50 full scene passes, each followed by a GPU kick and a wait. That is the freeze.
 
 ## The code involved (1.0.20 addresses)
 

@@ -6,20 +6,20 @@ description: Fluent map of the MLB The Show 26 (Switch 1.0.20) game code and its
 # MLB The Show 26 game code + the Fastball port
 
 Read this first, then open the reference file for the part you are touching. Everything here was checked against the
-repo, the binary and `docs/`; each claim is tagged **[C]** confirmed (read from binary/code/measurement),
-**[I]** inferred, **[H]** hypothesis. Do not state an [I] or [H] as fact.
+repo, the binary and `docs/`; each claim is tagged [C] confirmed (read from binary/code/measurement),
+[I] inferred, [H] hypothesis. Do not state an [I] or [H] as fact.
 
 ## What this is, in six lines
 
-- The game is **MLB The Show 26 for Nintendo Switch, version 1.0.20** (also 1.0.15). ARM64 code in two modules:
+- The game is MLB The Show 26 for Nintendo Switch, version 1.0.20 (also 1.0.15). ARM64 code in two modules:
   `main` (base `0x7000000000`, 94,991 functions, the game) and `sdk` (base `0x7004c00000`, 40,069 functions, Nintendo
   SDK 19.3.11 + NVN). `rtld` is not recompiled. [C]
-- **The port is a static recompilation.** `recomp/gen.py` turns every ARM64 function into C
+- The port is a static recompilation. `recomp/gen.py` turns every ARM64 function into C
   (`void f_<address>(Cpu *c)`, in `work/gen/{main,sdk}/*.c`, ~10.5M lines, git-ignored, rebuilt from the player's own
   game files). `runtime/` is a fake Switch OS + NVN-to-Vulkan graphics under that code. [C]
 - Guest addresses are host addresses. A function's name *is* its address: `f_70012c54ec` = guest `0x70012c54ec` =
   `main + 0x12c54ec`. [C]
-- The game has **no RTTI and no symbols** except SDK exports: 39 named in `main`, 19,260 in `sdk`. The game's own
+- The game has no RTTI and no symbols except SDK exports: 39 named in `main`, 19,260 in `sdk`. The game's own
   ~95,000 functions are anonymous. Meaning is recovered from strings, vtables, address neighbourhood, SDK calls and
   tracing. [C]
 - Game data never goes in git: `work/`, `gamefiles/`, `refs/` are ignored. Derived indexes of game code stay under
@@ -28,8 +28,8 @@ repo, the binary and `docs/`; each claim is tagged **[C]** confirmed (read from 
 
 ## Honest status of this skill (read before trusting it)
 
-This is an **index-level** map, not a read-through of the code. Built from: the repo docs, the port's source (parsed), strings and vtables recovered from the original
-machine code for all 135,060 recompiled functions, and six region notes written by Haiku agents from that index. Function **bodies** read in full so far: one
+This is an index-level map, not a read-through of the code. Built from: the repo docs, the port's source (parsed), strings and vtables recovered from the original
+machine code for all 135,060 recompiled functions, and six region notes written by Haiku agents from that index. Function bodies read in full so far: one
 (`0x700108b628`, see known-functions.md). About 12,800 of `main`'s 94,991 functions reference a string; the rest are known only by neighbours, vtable slots, callers and size.
 Treat region-note roles tagged [I] or [H] as leads, not facts, and read the body (see the playbook) before building on one. Next step if more fluency is wanted: read the bodies
 of the state handlers (`docs/map/regions/D-*.md`), the game-mode table (`0x7000e0fb10`) and the 47 AI class vtables of 119 slots, and add what you verify to known-functions.md.

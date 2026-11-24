@@ -17,7 +17,7 @@ Tags: [C] confirmed by a doc measurement, code, symbol or string; [I] inferred. 
 | `0x7000589b08` | crash/"dying" message writer (`MLB_DYING_MSG_START_V2`, "Built: %s %s") | C | string |
 | `0x7001ad9090` (1.0.15 `0x7001ad7bd0`) | engine print/log function; trace it with `MLB_FNTRACE` to read the game's messages | C | AGENTS.md |
 
-## Graphics glue inside the game
+## Graphics functions
 
 | Address | What | Tag | Source |
 |---|---|---|---|
@@ -31,7 +31,7 @@ Tags: [C] confirmed by a doc measurement, code, symbol or string; [I] inferred. 
 
 ## Game flow
 
-The game's top-level state machine is **12 state classes with the same interface** [C, vtables]: each a 32-36 slot vtable overriding a shared base
+The game's top-level state machine is 12 state classes with the same interface [C, vtables]: each a 32-36 slot vtable overriding a shared base
 (default stubs from `0x7000eb72c0`). Slots (consistent across all 12): 0,1 destructor thunks (5 lines); 2 returns the state name (8 lines);
 3 logs the sub-state; 5 and 7 are the two large handlers (slot 7 up to 1,270 lines); 6, 9, 10, 24, 32, 33 mid-size hooks. Which of slots 5 and 7 is
 "per-frame update" and which is "enter/transition" is not settled [H]. The BATTER_UP strings sit in slot 5.

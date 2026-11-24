@@ -30,24 +30,24 @@ Where the linker placed things. Boundaries are approximate (to the window) unles
 | `0x7000500000`-`0x70005fffff` | engine core: memory (`0x700055a820` allocator, `operator new/delete` `0x70005b30a0`/`0x70005b19d0`, `nninitStartup` `0x70005b19e0`), assertions, file layer (`0x7000570c50` in 1.0.15), NVN wrappers/GPU wait (`0x70005a1a90`), render sizes (`0x70005a5388`), ImGui | C | A |
 | `0x7000600000`-`0x70006fffff` | Flux archive + nlohmann JSON serialization, parsers, create-player front end, presentation engine (cutscenes: PresEngineBase, SceneBase) | C/I | B |
 | `0x7000700000`-`0x70008fffff` | roster moves, franchise setup, trades/strategy/uniforms, player data tables (`D_PLR_PROFILE`, `D_PLYR_CONTRACT`), UI widgets and rendering (glow/blur/tables) | I | B |
-| `0x7000900000`-`0x7000bbffff` | **online and Diamond Dynasty** (out of scope): CPartyManager, CNetSessionManager, CPluginAuth, CRosterCache, CContentDownloader, CVaultView, leaderboards, mini-season; the offline universal profile is here too | C | B |
+| `0x7000900000`-`0x7000bbffff` | online and Diamond Dynasty (out of scope): CPartyManager, CNetSessionManager, CPluginAuth, CRosterCache, CContentDownloader, CVaultView, leaderboards, mini-season; the offline universal profile is here too | C | B |
 | `0x7000bc0000`-`0x7000bfffff` | Road to the Show attributes/tokens/perks/college hub (the 11 upgrade commands around `0x7000bd1a4c`-`0x7000bd35e0`) | C | B |
 | `0x7000c00000`-`0x7000d3ffff` | league/team/player database screens, challenges, storylines, trades and free agency, inventory, crowd audio data | I | C |
 | `0x7000d40000`-`0x7000e00000` | replay vault and camera editor, in-game HUD action groups, game session/telemetry, ambience; the time-of-day clock (`0x7000d52680`) and game event handler (`main+0xd514e0`) | I/C | C |
-| `0x7000e00000`-`0x7000efffff` | game-mode table (`0x7000e0fb10`, 21,030 generated lines, the largest function), end-of-game and end-of-plate-appearance summaries, records/awards text, **broadcast leaders** (`0x7000e54c00`), base game-state stubs (`0x7000eb72c0`) | C/I | C |
-| `0x7000f00000`-`0x7000ffffff` | pitching/bullpen/substitution UI, **play-by-play commentary events** (PXP_RF, pxp_milb: PitcherHit, RunnerScores, CatchFly) | C | C |
-| `0x7001000000`-`0x70010fffff` | game flow: the **12 game-state classes** and their handlers (`0x700106d054`-`0x70010a3b5c`), crowd audio, quick-sim results | C | D |
-| `0x7001100000`-`0x70012fffff` | libwebp (~`0x70011468b0`), mini-XML, Flux class registry, stadium **lighting manager** (`0x70012c54ec`, `0x70012d....`, `0x70012e0150`), indirect-light probes (`0x700128d2a0`) | C | D |
+| `0x7000e00000`-`0x7000efffff` | game-mode table (`0x7000e0fb10`, 21,030 generated lines, the largest function), end-of-game and end-of-plate-appearance summaries, records/awards text, broadcast leaders (`0x7000e54c00`), base game-state stubs (`0x7000eb72c0`) | C/I | C |
+| `0x7000f00000`-`0x7000ffffff` | pitching/bullpen/substitution UI, play-by-play commentary events (PXP_RF, pxp_milb: PitcherHit, RunnerScores, CatchFly) | C | C |
+| `0x7001000000`-`0x70010fffff` | game flow: the 12 game-state classes and their handlers (`0x700106d054`-`0x70010a3b5c`), crowd audio, quick-sim results | C | D |
+| `0x7001100000`-`0x70012fffff` | libwebp (~`0x70011468b0`), mini-XML, Flux class registry, stadium lighting manager (`0x70012c54ec`, `0x70012d....`, `0x70012e0150`), indirect-light probes (`0x700128d2a0`) | C | D |
 | `0x7001300000`-`0x70013fffff` | Home Run Derby state machine (`0x700133da9c`), pad update (`0x7001341c20`), batter streaming, saves, animation core | C | D |
-| `0x7001400000`-`0x7001547fff` | animation/locomotion (LocoManager), engine base objects (streams, event sources, ClassManager), game objects (ball, bat, stadium), studio **online-services client** (olClient, olPlatform, nifm) | C/I | E |
-| `0x7001548000`-`0x7001648000` | **OpenSSL** (crypto, EVP, X.509, TLS) | C | E |
+| `0x7001400000`-`0x7001547fff` | animation/locomotion (LocoManager), engine base objects (streams, event sources, ClassManager), game objects (ball, bat, stadium), studio online-services client (olClient, olPlatform, nifm) | C/I | E |
+| `0x7001548000`-`0x7001648000` | OpenSSL (crypto, EVP, X.509, TLS) | C | E |
 | `0x7001650000`-`0x70017bffff` | network error dialogs, character creation (face scan), character/equipment/uniform asset names, textures/materials, presentation playback and commentary text | C/I | E |
 | `0x70017c0000`-`0x70017fffff` | 4,710 functions, 93% under 18 lines: C++ class boilerplate (getters, factories, destructors; 88% in vtables) + player-appearance/season-record serializers | I | E |
 | `0x7001800000`-`0x70018bffff` | frontend/stats/rosters (3,200 functions), in-game substitution/inning logic (`SubstitutionLogic`), "Halyard" dev-service client | C/I | F |
 | `0x70018c0000`-`0x7001a3ffff` | voice chat + libfvad, nlohmann JSON, stadium grass/field/college stadium table, Flux class registry, world/camera/lighting objects | C/I | F |
 | `0x7001a40000`-`0x7001a7ffff` | libcurl | I | E/F |
-| `0x7001a80000`-`0x7001bfffff` | **Sony SCREAM audio** and `wws_gattaca` DSP graph | C | F |
-| `0x7001c00000`-`0x7001c227e0` | Bink async decode threads; libc/allocator (`malloc` `0x7001c1f920`...); **733 import thunks** (9 lines each, jump through the table at `0x70022ab000`; hottest `0x7001c1fb70` 2,215 callers) | C | F |
+| `0x7001a80000`-`0x7001bfffff` | Sony SCREAM audio and `wws_gattaca` DSP graph | C | F |
+| `0x7001c00000`-`0x7001c227e0` | Bink async decode threads; libc/allocator (`malloc` `0x7001c1f920`...); 733 import thunks (9 lines each, jump through the table at `0x70022ab000`; hottest `0x7001c1fb70` 2,215 callers) | C | F |
 
 Data: vtables of the game-state classes at `0x70021d7400`-`0x70021e3538`; class-broker/boilerplate vtables near `0x700223a550`; a 1025-slot vtable at `0x700215c000` unidentified (region C);
 stadium props table `0x70021edca0`; import table `0x70022ab000`; globals pointer to universal profile `0x7003abfa98`; match settings pointer `0x7004651350`; pad records `0x70045aef28`.
