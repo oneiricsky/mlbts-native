@@ -21,6 +21,7 @@ Everything here was measured on one PC (an i5-12400F with an RX 6700 XT), game v
 | [The game binary](The-game-binary) | what the game's code is made of and where things sit in it |
 | [Game state machine](Game-state-machine) | the 12 game-flow states: what each vtable slot does, sub-state tables, how a play moves through them, with four detail pages |
 | [Region A](Region-A) to [Region F](Region-F) | the game's `main` code in six address ranges, with key functions |
+| [Function map](Function-map) | every function of `main` and `sdk`: the census, the per-region registers, and what is known about each |
 | [Dev harness and measuring](Dev-harness-and-measuring) | how a run is set up, and the rules for comparing two builds |
 | [Tools and the code map](Tools-and-the-code-map) | the scripts that index the code and how to rebuild them |
 | [History and open questions](History-and-open-questions) | what is not settled |

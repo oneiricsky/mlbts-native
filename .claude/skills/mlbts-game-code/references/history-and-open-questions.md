@@ -29,7 +29,8 @@ Read before reopening something. Sources: `docs/reports/*.md`, `docs/walkup-free
 | Frame timing | which screens use whole-vsync timing; MLB's lowest safe frame step | log the mode per screen |
 | Game state machine | slots 5, 6, 7 read as enter, exit and update in all 12 states (checked); still open: who owns and calls the states, what ends an inning or a game, how BATTER_UP hands over, what most event ids mean | find the caller through the vtable address, then the owner's loop |
 | Harness | where time of day and weather are stored; whether scenario code (Situation, Moment, Storyline) is callable | `MLB_WATCH` and state diffs |
-| Anonymous functions | about 95,000 `main` functions, about 12,800 with a string | the region notes list what is unexamined |
+| Anonymous functions | 47,308 `main` functions with no string, symbol or shape were read from their normalised bodies in batches. 18,195 `main` rows now carry C evidence, 333 are still guesses. The one-line roles are leads: a 10-function audit found 6 right, 1 incomplete and 3 wrong in a detail | verify the read roles in a second pass (the accuracy number is on the wiki's Read roles page); the unnamed `sdk` functions are still unread |
+| Lighting bake stage count | `docs/walkup-freeze.md` says one step a frame for about 50 frames; the 1.0.20 stage code has 28 jump-table stages (counter at `+0x10`) and its bit-9 path loops all of them with a GPU wait. The frame counts were not reconciled (2026-11-23) | trace the stage counter and the bake flags through one batter-up |
 
 ## Out of scope
 Online play, Diamond Dynasty, DLC, other game versions.

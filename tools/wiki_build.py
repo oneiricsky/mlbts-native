@@ -11,9 +11,10 @@ Sources (one place each, so the wiki never drifts from them):
   docs/map/README.md                            -> Tools-and-the-code-map
 Skill and map pages are generated: edit the source, not the wiki page. Wiki pages carry no front matter and no top
 heading (GitHub shows the page name), and links between pages use the wiki's own page names.
-Publishing is separate (tools/wiki_publish.py): this script only writes files.
+Publishing is separate and manual (see the wiki section of `.claude/skills/mlbts-game-code/SKILL.md`): this script
+only writes files.
 """
-import argparse, os, re, shutil
+import argparse, os, re, shutil, sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))).replace("\\", "/")
 SK = ROOT + "/.claude/skills/mlbts-game-code"
@@ -82,10 +83,14 @@ def main():
         pages.append(page)
     for letter, stem in REGIONS.items():
         body = relink(strip_front_and_title(read(f"{ROOT}/docs/map/regions/{stem}.md")))
+        body += (f"\nEvery function in this range that carries a symbol, an import or a string is listed on "
+                 f"[Functions {letter}](Functions-{letter}); the ones with no string or symbol are counted there by "
+                 f"shape and on [Function census](Function-census).\n")
         write(a.out, f"Region-{letter}", body, f"docs/map/regions/{stem}.md")
         pages.append(f"Region-{letter}")
     bodies = {"intro-states": "Intro-states", "batter-up": "Batter-up-state", "pre-play-in-play": "Play-states",
-              "play-inning-game-over": "End-states"}
+              "play-inning-game-over": "End-states", "fielding": "Fielding", "frontend": "Frontend",
+              "audio": "Audio", "ai-layer": "AI-actor-API", "lighting": "Lighting", "modes": "Game-modes"}
     for stem, page in bodies.items():
         body = relink(strip_front_and_title(read(f"{ROOT}/docs/map/bodies/{stem}.md")))
         write(a.out, page, body, f"docs/map/bodies/{stem}.md")
@@ -97,12 +102,28 @@ def main():
     readme = re.sub(r"\[bodies/\]\(bodies/\)", "the game flow pages", readme)
     write(a.out, "Tools-and-the-code-map", readme, "docs/map/README.md")
     pages.append("Tools-and-the-code-map")
+    # the complete function map: built from work/map/index/roles.jsonl (tools/map_roles.py), not from a committed source
+    sys.path.insert(0, ROOT + "/tools")
+    import map_functions_doc
+    fpages = map_functions_doc.pages_for(ROOT + "/work/map/index", a.out)
+    pages.extend(fpages)
     side = ["[Home](Home)", "", "Findings"] + [f"- [{p.replace('-', ' ')}]({p})" for p in
             ("Walk-up-freeze", "Match-start-freeze", "Load-stalls", "Frame-rate-and-GPU-waits", "PS5-textures", "Upstream-bug-research")]
     side += ["", "How it works"] + [f"- [{p.replace('-', ' ')}]({p})" for p in
              ("How-the-port-works", "The-game-binary", "Known-game-functions", "Tracing-playbook", "Dev-harness-and-measuring")]
+    fm = ["Function-map", "Function-census", "Functions-A", "Functions-B", "Functions-C", "Functions-D", "Functions-E",
+          "Functions-F", "Functions-SDK"]
+    if "Read-roles" in pages:
+        fm.append("Read-roles")
+    if "Class-fields" in pages:
+        fm.append("Class-fields")
+    if "Save-schema" in pages:
+        fm.append("Save-schema")
+    side += ["", "Function map"] + [f"- [{p.replace('-', ' ')}]({p})" for p in fm]
     side += ["", "Game flow"] + [f"- [{p.replace('-', ' ')}]({p})" for p in
              ("Game-state-machine", "Intro-states", "Batter-up-state", "Play-states", "End-states")]
+    side += ["", "Subsystems"] + [f"- [{p.replace('-', ' ')}]({p})" for p in
+             ("Fielding", "Frontend", "Audio", "AI-actor-API", "Lighting", "Game-modes")]
     side += ["", "Game binary regions"] + [f"- [Region {l}](Region-{l})" for l in REGIONS]
     side += ["", "Reference"] + [f"- [{p.replace('-', ' ')}]({p})" for p in
              ("History-and-open-questions", "Tools-and-the-code-map", "Start-here")]

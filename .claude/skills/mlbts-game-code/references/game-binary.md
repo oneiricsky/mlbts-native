@@ -24,7 +24,7 @@ Where the linker placed things. Boundaries are approximate (to the window) unles
 | Range | Contents | Tag | Note |
 |---|---|---|---|
 | `0x7000000000`-`0x70000fffff` | `_init`/`_fini`, `nnMain` (`0x7000000880`), then third-party/utility code: ASTC codec (~`0x700001e2e0`), nlohmann JSON, stb_image, tinyexr (`0x70001ecb90`), scene/mesh loading with mesh repair (`0x7000096960`, "smesh is not manifold") and the MSDF generator (`0x7000095390`, correction pass `0x7000030ec0`) | C | A |
-| `0x7000100000`-`0x70003fffff` | core match simulation and AI: fielding, throwing, catching, baserunning, batting reaction (strings STANDING, WATCH, Catcher, Swing reaction, Leadoff, BounceAnalyzer); a family of 47 AI class vtables of 119 slots each with role strings such as "ONLINE AI BATTER" (`0x70000c6f20`) and "ONLINE RUNNER DECISION" | I (names C) | A |
+| `0x7000100000`-`0x70003fffff` | core match simulation and AI: fielding, throwing, catching, baserunning, batting reaction (strings STANDING, WATCH, Catcher, Swing reaction, Leadoff, BounceAnalyzer); the 119-slot actor API family (47 tables; role strings such as "ONLINE AI BATTER" at `0x70000c6f20` and "ONLINE RUNNER DECISION" sit in the client code that drives it, not in the tables) | I (names C) | A |
 | `0x7000380000`-`0x7000400000` | audio playlists/streams | I | A |
 | `0x7000400000`-`0x7000500000` | UI/frontend, player cards, stats, calendar/rewards | I | A |
 | `0x7000500000`-`0x70005fffff` | engine core: memory (`0x700055a820` allocator, `operator new/delete` `0x70005b30a0`/`0x70005b19d0`, `nninitStartup` `0x70005b19e0`), assertions, file layer (`0x7000570c50` in 1.0.15), NVN wrappers/GPU wait (`0x70005a1a90`), render sizes (`0x70005a5388`), ImGui | C | A |
@@ -34,12 +34,12 @@ Where the linker placed things. Boundaries are approximate (to the window) unles
 | `0x7000bc0000`-`0x7000bfffff` | Road to the Show attributes/tokens/perks/college hub (the 11 upgrade commands around `0x7000bd1a4c`-`0x7000bd35e0`) | C | B |
 | `0x7000c00000`-`0x7000d3ffff` | league/team/player database screens, challenges, storylines, trades and free agency, inventory, crowd audio data | I | C |
 | `0x7000d40000`-`0x7000e00000` | replay vault and camera editor, in-game HUD action groups, game session/telemetry, ambience; the time-of-day clock (`0x7000d52680`) and game event handler (`main+0xd514e0`) | I/C | C |
-| `0x7000e00000`-`0x7000efffff` | game-mode table (`0x7000e0fb10`, 21,030 generated lines, the largest function), end-of-game and end-of-plate-appearance summaries, records/awards text, broadcast leaders (`0x7000e54c00`), base game-state stubs (`0x7000eb72c0`) | C/I | C |
+| `0x7000e00000`-`0x7000efffff` | end-of-game telemetry builder (`0x7000e0fb10`, 21,030 generated lines, the largest function: 334 record fields, and the settings-to-mode-name ladder), end-of-game and end-of-plate-appearance summaries, records/awards text, broadcast leaders (`0x7000e54c00`), base game-state stubs (`0x7000eb72c0`) | C/I | C |
 | `0x7000f00000`-`0x7000ffffff` | pitching/bullpen/substitution UI, play-by-play commentary events (PXP_RF, pxp_milb: PitcherHit, RunnerScores, CatchFly) | C | C |
 | `0x7001000000`-`0x70010fffff` | game flow: the 12 game-state classes and their handlers (`0x700106d054`-`0x70010a3b5c`), crowd audio, quick-sim results | C | D |
 | `0x7001100000`-`0x70012fffff` | libwebp (~`0x70011468b0`), mini-XML, Flux class registry, stadium lighting manager (`0x70012c54ec`, `0x70012d....`, `0x70012e0150`), indirect-light probes (`0x700128d2a0`) | C | D |
 | `0x7001300000`-`0x70013fffff` | Home Run Derby state machine (`0x700133da9c`), pad update (`0x7001341c20`), batter streaming, saves, animation core | C | D |
-| `0x7001400000`-`0x7001547fff` | animation/locomotion (LocoManager), engine base objects (streams, event sources, ClassManager), game objects (ball, bat, stadium), studio online-services client (olClient, olPlatform, nifm) | C/I | E |
+| `0x7001400000`-`0x7001547fff` | LocoManager and the locomotion states (`0x700140e900`-`0x7001437e00`), engine base objects (streams, event sources, ClassManager), game objects (ball, bat, stadium), then from about `0x7001500000` the studio online-services client (olClient, olPlatform, socket, OpenSSL, nifm) | C/I | E |
 | `0x7001548000`-`0x7001648000` | OpenSSL (crypto, EVP, X.509, TLS) | C | E |
 | `0x7001650000`-`0x70017bffff` | network error dialogs, character creation (face scan), character/equipment/uniform asset names, textures/materials, presentation playback and commentary text | C/I | E |
 | `0x70017c0000`-`0x70017fffff` | 4,710 functions, 93% under 18 lines: C++ class boilerplate (getters, factories, destructors; 88% in vtables) + player-appearance/season-record serializers | I | E |

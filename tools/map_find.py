@@ -7,6 +7,7 @@
     python -I tools/map_find.py src mlb_hd_load        # a source function of this repo (file, lines, callees)
     python -I tools/map_find.py callers 0x70005a1a90   # who calls a game function (direct calls only)
     python -I tools/map_find.py name nvnQueue          # SDK/libc symbols by name (demangled substring)
+    python -I tools/map_find.py role 0x700108b628      # the complete map's row (tools/map_roles.py), or role text
 
 Game addresses are 1.0.20's (`f_<addr>` in work/gen). Everything here is read-only. The data is derived from game
 code and lives under work/ (git-ignored): rebuild it with `python -I tools/map_all.py`.
@@ -154,6 +155,33 @@ def cmd_name(t):
     print(len(hits), "matches")
 
 
+def cmd_role(arg):
+    """The complete map's row for one function, or the functions whose role mentions a word."""
+    if arg.lower().startswith("0x"):
+        a = norm(arg)
+        hit = [r for r in rows("roles") if r["addr"] == a]
+        if not hit:
+            sys.exit(f"no role row for {a}: run python -I tools/map_roles.py")
+        r = hit[0]
+        print(f"{r['addr']}  {r['module']}  {r['span']} bytes  {r['lines']} generated lines  shape={r['shape']}")
+        print(f"kind={r['kind']} tag={r['tag']}  role: {r['role']}")
+        print(f"basis: {r['basis']}  callers={r['callers']}  callees={r['ncallees']}")
+        if r["apis"]:
+            print("calls:", ", ".join(r["apis"]))
+        if r["vtable"]:
+            print(f"vtable {r['vtable']} slot {r['slot']} of {r['vtable_size']}")
+        if r["sub"]:
+            print("window:", r["sub"])
+        for s in r["strings"]:
+            print("  string:", s[:120])
+        return
+    t = arg.lower()
+    hits = [r for r in rows("roles") if t in r["role"].lower()]
+    for r in hits[:60]:
+        print(f"{r['addr']} {r['module']:4} {r['tag']} {r['span']:5} {r['callers']:5}  {r['role'][:90]}")
+    print(len(hits), "matches")
+
+
 def main():
     if len(sys.argv) < 3:
         sys.exit(__doc__)
@@ -165,6 +193,7 @@ def main():
     elif c == "src": cmd_src(arg)
     elif c == "callers": cmd_callers(arg)
     elif c == "name": cmd_name(arg)
+    elif c == "role": cmd_role(arg)
     else: sys.exit(__doc__)
 
 

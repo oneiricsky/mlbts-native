@@ -128,3 +128,103 @@ Match-settings struct pointer at `0x7004651350` (`main+0x4651350`); team ids wri
 (all copies must be written; writing one gave the wrong uniforms). Team ids: 0 BAL, 1 BOS, 2 NYY, 3 TB, 4 TOR, 5 CWS, 6 CLE, 7 DET, 8 KC, 9 MIN, 10 HOU, 11 LAA,
 12 ATH (unconfirmed), 13 SEA, 14 TEX, 15 ATL, 16 MIA, 17 NYM, 18 PHI, 19 WSH, 20 CHC, 21 CIN, 22 MIL, 23 PIT, 24 STL, 25 AZ, 26 COL, 27 LAD, 28 SD, 29 SF.
 Boot options (`BOOT/CONFIG_MAIN_USER.TXT`): `AIvAI` + `GameOnly` = AI-vs-AI match with no input; option names are matched by a 32-bit hash (see game-binary.md).
+
+## Fielding, catching and running (body reads, 2026-11-23)
+
+Read from the generated C; the detail is on [Fielding](Fielding). The block is built on a named "ring" per
+character: a state function names its state in strings, then calls the shared ring entry.
+
+| Address | What | Tag | Source |
+|---|---|---|---|
+| `0x70002696a0` | shared "Working ring" state entry; all 22 callers are per-state ring functions | C | string "ARB Working ring" |
+| `0x700010b5c0` | selects a fielder's fly-ball time intervals | C | "Selecting flyball intervals for %d" |
+| `0x7000117700` | rejects an interval it cannot reach | C | "Rejecting interval: %d [%.2f-%.2f]" |
+| `0x7000271448` | "Get ball in ring": ball to fielder target, avoidance, throw and catch rings | C strings, I role | "Get ball in ring" |
+| `0x70003915c8` | catch-attempt dispatcher: canned, then predictive, then working catch ring | C | calls `0x7000379ea0` first |
+| `0x7000379ea0` / `0x700038b57c` | canned catch / deflection catch | C | the strings |
+| `0x7000384a60` | the throw itself; called only by `0x70003908f0` and `0x7000391000` | C | "Throw" |
+| `0x700032fd94` | runner advance/return/pickoff decision (8,427 lines, 129 callees) | C strings, I role | "RUNNER DECIDE %s foul = %s" |
+| `0x700031d438` | runner update hub, 77 callees, no strings | I | call edges |
+| `0x7000344134` | runner leadoff ring, 12 named states | C | "Runner Leadoff Ring" |
+| `0x70002d0a40` | umpire safe/out call ring | C | "SAFE TURN", "OUT CALL" |
+
+## Front-end, Road To The Show and the database layer
+
+Detail on [Frontend](Frontend). The front end is a data-driven UI: `uiEngine` keeps a screen deque and one
+worker prints the entry log; screens are C++ objects with a 14-slot vtable; cells bind to named properties.
+
+| Address | What | Tag | Source |
+|---|---|---|---|
+| `0x700089c9e0` | screen switch worker; prints `uiEngine: Entering screen: [%s->%s (%d)]` | C | the string |
+| `0x700089c720` | screen request by id (156 callers); `0xff` is the leave path | C | body |
+| `0x70008bb110` | pad bits to 16-bit UI action (452 callers) | C | `LD32(x0+38) & 0x3f` |
+| `0x70008a71f0` | pumps the next UI event from five providers | I | virtual calls `+0x80..+0xe0` |
+| `0x70004c77bc` | per-screen entry hook, slot 2 of 14 in vtable `0x700217e570` | C | vtable |
+| `0x70007fcc40`, `0x70007f4940`, `0x700084d070` | register 42 table, 22 list and 23 grid UI property names | C | `CURRENT_ROW`, `CELL_INDEX`, ... |
+| `0x700085cb60` | `uiElementDataTable` update with a dirty mask | C | the Mask string |
+| `0x700041a290` | loads `frontend//rtts//Goals.xml` | C | the path |
+| `0x7000bd559c` | applies one hub upgrade and records `calendar_date` | C | the fields |
+| `0x700181d2f0` | loads `Frontend\Stats\stats.bin` and its `_INJ` variant | C | the path |
+| `0x700181b070` | database index lookup by player id | C | "GetDatabaseIndex looping over %d players" |
+
+## Audio and commentary
+
+Detail on [Audio](Audio). One software mix (Sony SCREAM) goes to `audout` as 48 kHz 6-channel PCM16; music,
+PA, umpire and commentary are streams through the game's own 7-state slot machine.
+
+| Address | What | Tag | Source |
+|---|---|---|---|
+| `0x70018cfd10` | `DeviceOut` thread: lists and opens audout, then loops the pump | C | "DeviceOut" |
+| `0x70018d00e0` | drains the PCM ring into `nn::audio::AppendAudioOutBuffer` | C | the PLT call |
+| `0x70003dde10` | stream slot state machine: 7 states, state number at `+0` | C | "Moving to STATE BUFFERING" |
+| `0x70003df4b8` | manual fade: `snd_AutoGain` or state 6 plus a stop-pending byte | C | 48 callers |
+| `0x70003d263c` | music bank names `Jukebox_%02d` and `Audio\%s.bnk` | C | the strings |
+| `0x70021e07d8` | 129-entry play-by-play handler vtable (several copies exist) | C | vtable |
+| `0x7000e37a20` | PXP handler: copies an event name then calls vtable slot 9 (`+0x48`) | C | "PitchGetsAwayResult" |
+
+## The 119-slot actor API (47 tables)
+
+Detail on [AI actor API](AI-actor-API). This family is not the AI's scoring code: it is the actor/play-control
+interface that AI decision code calls through, and the role strings sit in the client code around it.
+
+| Address | What | Tag | Source |
+|---|---|---|---|
+| `0x7002164248`-`0x700216f038` | 47 tables of 119 slots, stride `0x3c8`, one interface | C | vtable index |
+| `0x70000b4ad4`-`0x70000b7cc4` | 119 public trampolines, one per slot | C | each calls the resolver |
+| `0x70000b4b4c` | resolver: object to canonical table, through the array at `0x700216f3f0` | C | 119 callers |
+| `0x70000b7d34`-`0x70000b8084` | the base table's 119 default stubs (return, or return 0) | C | bodies |
+| slots 20-25 / 56-60 / 73-89 | catch / runner-steal / bat-pitch input clusters | I | callers' strings |
+
+## Game records, telemetry and league leaders
+
+Detail on [Game modes](Game-modes). The largest function is not a mode-to-handler table: it builds the
+end-of-game telemetry record and derives the mode description from settings.
+
+| Address | What | Tag | Source |
+|---|---|---|---|
+| `0x7000e0fb10` | end-of-game telemetry builder: 334 map entries, mode-name ladder, single caller `0x7000df7fc0` | C | body |
+| `0x7000df7d2c` | formats `<TELEMETRY_MAN_ENDED PLAY_MODE=... GAME_MODE=...>` | C | the format |
+| `0x7000df7fc0` | vtable `0x7002295ae0` slot 2: 2 team + 80 batter + 80 pitcher builder calls | C | body |
+| `0x7000e54c00` | builds 92 league-leader lists: 23 stats in 4 groups | C | body |
+| `0x70006753d0` | collects up to 1,350 players and qsorts them | C | `mov w9,#0x546` |
+| `0x7000e5640c` | refreshes the leaders; builds twice, and 0.2.0's `walkup_leaders` nops the first | C | patch line |
+| `0x7000eb72c0` | bare `ret` virtual, slot 4 of 32 game-state vtables | C | body |
+
+## Animation and locomotion
+
+Detail on [Lighting](Lighting) (which covers the animation core it found next door).
+
+| Address | What | Tag | Source |
+|---|---|---|---|
+| `0x700140e900`-`0x7001437e00` | LocoManager: motion transitions, throttle, idles, ring containers | C strings, I extent | the strings |
+| `0x70013af7fc` / `0x70013a8250` / `0x7001383e80` | `KineCore::CoreAnimationState::SetupNewAnimation` / `AnimWrap::InitByMem` / `Kinematics::Update` | C | names |
+| `0x7000d4e560` | `LoadAnimBin`: loads an animation clip | C | the name |
+| `0x7001500000`-`0x7001547fff` | studio online services (olClient, socket, OpenSSL), not animation | C | string themes |
+
+## Corrections to earlier pages (2026-11-23)
+
+| Claim | Correction | Tag | Source |
+|---|---|---|---|
+| the 119-slot vtable family is "the AI decision layer" (Region A, [I]) | it is the actor/play-control API the AI drives; 47 tables, not about 40, and no AI scoring inside | C | [AI actor API](AI-actor-API) |
+| `0x7000e0fb10` is "the game-mode table" (game-binary.md) | an end-of-game telemetry builder that also maps settings to a mode description; the mode choice is that ladder | C | [Game modes](Game-modes) |
+| `0x70012d20a0` "one step a frame, ~50 frames" (walkup-freeze.md) | flag `0xec01` confirmed; the bit-9 path loops all stages with a GPU wait, which the 1.0.20 stage code does not reconcile with 50 frames | C flag, open count | [Lighting](Lighting) |

@@ -29,9 +29,14 @@ repo, the binary and `docs/`; each claim is tagged [C] confirmed (read from bina
 ## Honest status of this skill (read before trusting it)
 
 This is an index-level map, not a read-through of the code. Built from: the repo docs, the port's source (parsed), strings and vtables recovered from the original
-machine code for all 135,060 recompiled functions, and six region notes written by Haiku agents from that index. Function bodies read: the handlers of all 12 game-state classes (about 60 functions, read by agents and spot-checked, 20 claims per report, with the wrong ones corrected; see `docs/map/bodies/`) and one other in full. Nothing else.
-Treat region-note roles tagged [I] or [H] as leads, not facts, and read the body (see the playbook) before building on one. Next step if more fluency is wanted: read the bodies
-of the state handlers (`docs/map/regions/D-*.md`), the game-mode table (`0x7000e0fb10`) and the 47 AI class vtables of 119 slots, and add what you verify to known-functions.md.
+machine code for all 135,060 recompiled functions, and six region notes written by Haiku agents from that index. Every one of the 135,060 functions is classified:
+import name, SDK symbol, library, string evidence, or code shape (getter, forwarder, empty stub, ...). The 47,308 `main` functions that had no string, symbol or
+shape were then read from their own code, normalised to the operations that matter, in batches: 18,195 `main` rows now carry C evidence and 333 remain guesses.
+Those read roles are leads, not verified facts: a 10-function audit found 6 right, 1 incomplete and 3 with a wrong specific detail, so open the body before relying
+on a detail (the wiki's Read roles page carries the same warning). Function bodies read: the handlers of all 12 game-state classes (about 60 functions, read by agents
+and spot-checked, 20 claims per report, with the wrong ones corrected; see `docs/map/bodies/`) and about 300 more from the subsystem passes. Nothing else.
+Treat region-note roles tagged [I] or [H] as leads, not facts, and read the body (see the playbook) before building on one. Next step if more fluency is wanted: verify
+the read roles in a second pass, or read the 13,800 unnamed `sdk` functions, and add what you verify to known-functions.md.
 
 ## First 60 seconds on any task
 
@@ -48,6 +53,11 @@ of the state handlers (`docs/map/regions/D-*.md`), the game-mode table (`0x7000e
    | `python -I tools/map_find.py callers 0x70005a1a90` | direct callers |
    | `python -I tools/map_find.py name nvnQueue` | SDK and libc symbols |
    | `python -I tools/map_find.py src hd_apply` | a function of this repo's own source |
+   | `python -I tools/map_find.py role 0x700108b628` | the complete map's row: kind, role, shape, evidence, window |
+   | `python -I tools/fnxref.py 0x70003dde10` | every string a function references, in code order; use it instead of `str` when one string blob serves many functions |
+   | `python -I tools/strdump.py 0x7001c7d37f` | the C string at a guest address |
+   | `python -I tools/map_read_prep.py --limit 200` | normalise the next unread functions into a dossier for body reading |
+   | `python -I tools/map_read_merge.py` | validate the read answers into `work/map/index/roles_read.jsonl` (applied by `tools/map_roles.py`) |
 3. Read the generated C at the file:line `fn` prints, or `python -I tools/disasm.py work/build/game/exefs/main <addr> <len>`.
 4. To see it run: `MLB_FNTRACE`, `MLB_FNDUMP`, the harness (reference: tracing-playbook.md).
 5. Before changing anything: the repo rules in `CLAUDE.md` (diagnose first, numbers before and after, commit style,
@@ -63,6 +73,8 @@ of the state handlers (`docs/map/regions/D-*.md`), the game-mode table (`0x7000e
 | `references/tracing-playbook.md` | you must find out what game code does: methods, tools, patch workflow, evidence rules |
 | `references/history-and-open-questions.md` | before reopening a problem already investigated, or choosing what to research next |
 | `docs/map/regions/*.md` (A to F) | you need the per-window subsystem table and ~40 key functions of one address range; written by Haiku agents from the index, all claims tagged, spot-checked (106 of ~120 quoted strings matched, the rest escaping/truncation) but no function body was read |
+| the wiki's Function map (`Function-map`, `Function-census`, `Functions-A` to `Functions-SDK`) | you need every function of a region or window, not just the key ones: the complete census and the per-region register of every function with a symbol, import or string |
+| the wiki's subsystem pages (`Fielding`, `Frontend`, `Audio`, `AI-actor-API`, `Lighting`, `Game-modes`) | you need the on-field rings, the UI/screen layer, the audio path, the 119-slot actor API, the lighting bake or the end-of-game records, read from the bodies and checked against the index |
 | `docs/map/README.md`, `source/*.md`, `binary.md`, `coverage.md` | a function of the port's own source (11,308 listed with callees and purpose), or binary totals and the coverage check |
 
 ## Rules that bit people before
