@@ -355,3 +355,9 @@ cursor once first; and the pause menu remembers its cursor, so leaving a match b
 instead). Check on a cold start: away 0 (BAL), home 1 (BOS): scorebug BAL/BOS, Taylor Ward batting, Garrett Crochet
 pitching, Fenway Park. Failed controls: a write made after the match was built gave Ohtani in a Red Sox uniform and a
 TOR/LAD scorebug.
+
+Repeat check (2026-11-24, three cold starts, each a fresh game): away 0 / home 1 (BAL at BOS: Taylor Ward, Crochet),
+away 27 / home 4 (LAD at TOR, the reverse of the default: Ohtani batting, Gausman pitching, Rogers Centre), away 1 /
+home 0 (BOS at BAL: Roman Anthony batting, Trevor Rogers pitching). Each logged RESULT PASS and the scorebug matched.
+The field that picks the players is the settings block's home byte (+0x3f) and away byte (+0x40), read as the menus
+leave team select; the lineups follow a change of those bytes made then, and ignore one made later.
