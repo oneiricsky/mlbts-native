@@ -98,8 +98,8 @@ def svg_coverage(rs):
     w, top, rowh = 1000, 96, 50
     h = top + rowh * len(rs) + 42
     out = head(w, h, "Function map coverage",
-               ["upper bar: evidence behind the role (C string or symbol, I code shape, H neighbours).",
-                "lower bar: body read."],
+               ["Top bar: evidence behind each role (C string or symbol, I code shape, H neighbours).",
+                "Bottom bar: bodies that were read."],
                "Function map coverage by region")
     for pct in (0, 25, 50, 75, 100):
         x = LEFT + BW * pct / 100
@@ -114,9 +114,9 @@ def svg_coverage(rs):
         out += bar(LEFT, y + 20, BW, 6, [(r["read"], "read"), (r["total"] - r["read"], "unread")])
         pct = lambda n: 100.0 * n / (r["total"] or 1)
         out.append(f'<text x="{LEFT + BW + 12}" y="{y + 12}" font-size="10" class="f2">'
-                   f'C {pct(r["C"]):.0f}%   I {pct(r["I"]):.0f}%   H {pct(r["H"]):.0f}%</text>')
+                   f'C {pct(r["C"]):.0f}% · I {pct(r["I"]):.0f}% · H {pct(r["H"]):.0f}%</text>')
         out.append(f'<text x="{LEFT + BW + 12}" y="{y + 26}" font-size="10" class="f2">'
-                   f'read {pct(r["read"]):.0f}%</text>')
+                   f'bodies read {pct(r["read"]):.0f}%</text>')
     out += legend(h - 20, [("c", "C: string, symbol or import"), ("i", "I: code shape or call graph"),
                            ("h", "H: neighbours only"), ("read", "body read")])
     out.append("</svg>")
@@ -201,8 +201,8 @@ def svg_aspects(counts, themed, total):
     h = top + rowh * len(items) + 16
     share = 100.0 * themed / (total or 1)
     out = head(w, h, "Functions by aspect of the game",
-               [f"grouped by the theme the region pages give each 256 KB window, not by anything read in the",
-                f"function itself; {themed:,} of {total:,} functions sit in a themed window ({share:.1f}%)."],
+               ["Grouped by the theme the region pages give each 256 KB window, not by anything read in the",
+                f"function itself. {themed:,} of {total:,} functions sit in a themed window ({share:.1f}%)."],
                "Functions grouped by aspect of the game")
     sy = 70
     out.append(f'<text x="{LEFT - 12}" y="{sy + 12}" font-size="11" class="f1" text-anchor="end">Map coverage</text>')
@@ -211,7 +211,7 @@ def svg_aspects(counts, themed, total):
     out.append(f'<text x="{LEFT + BW * share / 100 - 7:.1f}" y="{sy + 12}" font-size="10" class="onbar" '
                f'text-anchor="end">{share:.1f}% themed</text>')
     out.append(f'<text x="{LEFT + BW * share / 100 + 8:.1f}" y="{sy + 12}" font-size="10" class="f2">'
-               f'no theme yet: {100 - share:.1f}%</text>')
+               f'No theme yet: {100 - share:.1f}%</text>')
     for pct in (0, 25, 50, 75, 100):
         x = LEFT + BW * pct / 100
         out.append(f'<line class="grid" x1="{x:.1f}" y1="{top - 8}" x2="{x:.1f}" y2="{h - 32}"/>')
