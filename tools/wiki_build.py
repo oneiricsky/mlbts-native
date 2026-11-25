@@ -118,14 +118,14 @@ def main():
     if "Theming-progress" in pages:
         fm.append("Theming-progress")
     sections = [
-        ("Findings", ("Walk-up-freeze", "Match-start-freeze", "Load-stalls", "Frame-rate-and-GPU-waits",
-                      "PS5-textures", "Upstream-bug-research")),
-        ("How it works", ("How-the-port-works", "The-game-binary", "Known-game-functions", "Tracing-playbook",
-                          "Dev-harness-and-measuring")),
-        ("Function map", tuple(fm)),
+        ("How the port works", ("How-the-port-works", "The-game-binary", "Known-game-functions", "Tracing-playbook",
+                                "Dev-harness-and-measuring")),
         ("Game flow", ("Game-state-machine", "Intro-states", "Batter-up-state", "Play-states", "End-states")),
         ("Subsystems", ("Fielding", "Frontend", "Audio", "AI-actor-API", "Lighting", "Game-modes")),
+        ("Function map", tuple(fm)),
         ("Game binary regions", tuple(f"Region-{l}" for l in REGIONS)),
+        ("Findings", ("Walk-up-freeze", "Match-start-freeze", "Load-stalls", "Frame-rate-and-GPU-waits",
+                      "PS5-textures", "Upstream-bug-research")),
         ("Reference", ("History-and-open-questions", "Tools-and-the-code-map", "Start-here")),
     ]
 
@@ -142,9 +142,12 @@ def main():
             return f"0x{lo:x}-0x{hi - 1:x}"
         return p.replace("-", " ")
 
+    def numbered(p):
+        return p.startswith("Functions-") or p.startswith("Region-")
+
     side = ["[Home](Home)"]
     for title, ps in sections:
-        side += ["", title] + [f"- [{label(p)}]({p})" for p in ps]
+        side += ["", title] + [f"{'1.' if numbered(p) else '-'} [{label(p)}]({p})" for p in ps]
     open(f"{a.out}/_Sidebar.md", "w", encoding="utf-8", newline="\n").write("\n".join(side) + "\n")
     # the home page's table of contents: every page, grouped the way the sidebar groups it, from the same lists. The
     # read-role detail pages are generated in bulk and kept off the sidebar; the table lists them too, so no page is
