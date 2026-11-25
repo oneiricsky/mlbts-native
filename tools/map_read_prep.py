@@ -170,21 +170,28 @@ def compact(line, self_addr=None):
     return c[:150]
 
 
-def read_ir(gen, funcs, max_ir):
-    """One streaming pass: compact IR per function, capped to max_ir with the middle summarised."""
-    by_file = defaultdict(list)
+def read_ir(gen, funcs, starts_by_file, max_ir):
+    """One streaming pass: compact IR per function, capped to max_ir with the middle summarised.
+
+    A function's body ends at the next function's first line, so the parser needs every function's start line in the
+    file, not only the selected ones. With a subset (`--addrs`, a cross-window sample) the file otherwise runs on into
+    the next function and the entry shows another function's tail.
+    """
+    want_by_file = defaultdict(dict)
     for f in funcs:
-        by_file[f["file"]].append(f)
+        want_by_file[f["file"]][f["line"]] = f["addr"]
     out = {}
-    for path, fl in by_file.items():
-        want = {f["line"]: f["addr"] for f in fl}
+    for path, want in want_by_file.items():
+        starts = starts_by_file[path]
         cur, acc = None, None
         with open(f"{gen}/{path}", encoding="utf-8", errors="replace") as fh:
             for ln, line in enumerate(fh, 1):
-                if ln in want:
+                if ln in starts:
                     if cur is not None:
                         out[cur] = acc
-                    cur, acc = want[ln], []
+                        cur, acc = None, None
+                    if ln in want:
+                        cur, acc = want[ln], []
                     continue
                 if acc is None:
                     continue
@@ -227,6 +234,7 @@ def main():
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--addrs", default="", help="file of addresses to batch (a rerun of missing.txt)")
     ap.add_argument("--start", type=int, default=0, help="skip this many batches (resume)")
+    ap.add_argument("--all", action="store_true", help="every function of the module, not only tag H")
     a = ap.parse_args()
 
     rows = [json.loads(l) for l in open(f"{a.index}/roles.jsonl", encoding="utf-8")]
@@ -239,8 +247,13 @@ def main():
         g = gen_funcs[r["addr"]]
         for c in g["calls"]:
             callers[c].append(r["addr"])
+    # every function's first line per generated file, so a body ends where the next function begins
+    starts_by_file = defaultdict(dict)
+    for g in gen_funcs.values():
+        starts_by_file[g["file"]][g["line"]] = g["addr"]
 
-    todo = [r for r in rows if r["tag"] == "H" and (a.only == "all" or r["module"] == a.only)]
+    todo = [r for r in rows if (a.all or r["tag"] == "H")
+            and (a.only == "all" or r["module"] == a.only)]
     os.makedirs(a.out, exist_ok=True)
     # the stable target list for the whole pass: merge validates answers against it across reruns
     tpath = a.out + "/targets.txt"
@@ -251,7 +264,7 @@ def main():
     strc = defaultdict(Counter)
     for r in rows:
         key = (r["module"], int(r["addr"], 16) >> 18)
-        if r["sub"]:
+        if r["sub"] and not r["sub"].isdigit():
             win.setdefault(key, r["sub"])
         for s in r["strings"][:4]:
             s = s.strip()
@@ -270,19 +283,22 @@ def main():
     if a.limit:
         todo = todo[: a.limit]
     print(f"{len(todo)} functions to read; {sum(r['lines'] for r in todo):,} generated lines")
-    ir = read_ir(a.gen, [gen_funcs[r["addr"]] for r in todo], a.max_ir)
+    ir = read_ir(a.gen, [gen_funcs[r["addr"]] for r in todo], starts_by_file, a.max_ir)
 
     os.makedirs(a.out, exist_ok=True)
     batches = []
     for i in range(0, len(todo), a.batch_size):
         chunk = todo[i:i + a.batch_size]
         num = i // a.batch_size
-        lines = [f"# Unread functions, batch {num} ({len(chunk)} functions, game 1.0.20)",
+        # fastball: `--all` builds dossiers for theming (not only for the 47k unread pass), so the title says what it is
+        title = "Functions" if a.all else "Unread functions"
+        lines = [f"# {title}, batch {num} ({len(chunk)} functions, game 1.0.20)",
                  "",
                  "Each entry: address, generated-C lines, direct callers, span in bytes, vtable slot, the 256 KB",
-                 "window's subsystem, the known role of each callee in brackets, then the function's operations:",
-                 "`call f_X` (a direct call), `LD32[x0+0x8]` / `ST8[x8+0xa]` (memory), `if ... goto L_x` (branch).",
-                 "Register names match the game's own; x0 is the first argument and the return value.",
+                 "window's subsystem, the function's own strings, the known role of each callee in brackets, then the",
+                 "function's operations: `call f_X` (a direct call), `LD32[x0+0x8]` / `ST8[x8+0xa]` (memory),",
+                 "`if ... goto L_x` (branch). Register names match the game's own; x0 is the first argument and the",
+                 "return value. The strings line is the only place this function's literals appear: quote from there.",
                  ""]
         for r in chunk:
             g = gen_funcs[r["addr"]]
@@ -293,13 +309,17 @@ def main():
                 nm = role_of(rows_by, c)
                 calls.append(f"f_{c[2:]}" + (f"({nm})" if nm else ""))
             vt = f" vtable {r['vtable']} slot {r['slot']}" if r["vtable"] else ""
-            label = win.get((r["module"], int(r["addr"], 16) >> 18), "")
+            label = win.get((r["module"], int(r["addr"], 16) >> 18), "") or "(no theme for this window)"
             lines.append(f"## {r['addr']}  l={r['lines']} span={r['span']}B callers={r['callers']}{vt} "
                          f"window=\"{label[:110]}\"")
             if cdesc:
                 lines.append(f"callers: {cdesc}")
             if calls:
                 lines.append("calls: " + ", ".join(calls))
+            lit = [s.strip() for s in (r.get("strings") or [])
+                   if 3 <= len(s.strip()) <= 60 and not s.strip().startswith(("/", "\\", "%"))][:8]
+            if lit:
+                lines.append("strings: " + ", ".join(json.dumps(s) for s in lit))
             for op in ir.get(r["addr"], []):
                 lines.append("  " + op)
             lines.append("")
