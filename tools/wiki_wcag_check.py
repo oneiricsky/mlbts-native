@@ -84,13 +84,14 @@ def main():
         if r < need:
             ok = False
         print(f"  {name:34s} {fg} on {bg}  {r:5.2f}:1  needs {need:.1f}  {verdict}")
-    for name in ("completeness.svg", "aspects.svg"):
-        path = f"{a.wiki}/{name}"
-        if not os.path.exists(path):
-            print(f"missing {path}")
-            ok = False
-            continue
+    import glob
+    charts = sorted(glob.glob(f"{a.wiki}/completeness-*.svg")) + sorted(glob.glob(f"{a.wiki}/aspects-*.svg"))
+    if not charts:
+        print(f"no chart SVGs in {a.wiki}")
+        ok = False
+    for path in charts:
         problems = check_svg(path)
+        name = os.path.basename(path)
         print(f"{name}: " + ("structure ok" if not problems else "; ".join(problems)))
         ok = ok and not problems
     home = f"{a.wiki}/Home.md"

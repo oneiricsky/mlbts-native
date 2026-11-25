@@ -13,6 +13,7 @@ not honoured on wiki pages. A dark card reads on either page and keeps every con
 which tools/wiki_wcag_check.py asserts.
 """
 import argparse
+import hashlib
 import json
 import os
 
@@ -235,13 +236,21 @@ def svg_aspects(counts, themed, total):
 
 
 def write(index, out):
-    """Write completeness.svg and aspects.svg into `out`."""
+    """Write content-named copies of both charts into `out`; returns {kind: filename} and the data.
+
+    The name carries a hash of the file's bytes because GitHub serves wiki images from a cache keyed by URL: a chart
+    rewritten under the same name keeps showing the old picture.
+    """
     os.makedirs(out, exist_ok=True)
     rs = rows(index)
     c, themed, total = aspects(index)
-    open(f"{out}/completeness.svg", "w", encoding="utf-8", newline="\n").write(svg_coverage(rs))
-    open(f"{out}/aspects.svg", "w", encoding="utf-8", newline="\n").write(svg_aspects(c, themed, total))
-    return rs, c, themed, total
+    names = {}
+    for kind, body in (("completeness", svg_coverage(rs)), ("aspects", svg_aspects(c, themed, total))):
+        digest = hashlib.sha256(body.encode("utf-8")).hexdigest()[:8]
+        name = f"{kind}-{digest}.svg"
+        open(f"{out}/{name}", "w", encoding="utf-8", newline="\n").write(body)
+        names[kind] = name
+    return names, rs, c, themed, total
 
 
 def main():
@@ -251,13 +260,13 @@ def main():
     a = ap.parse_args()
     if not os.path.exists(f"{a.index}/roles.jsonl"):
         raise SystemExit(f"missing {a.index}/roles.jsonl: run tools/map_roles.py first")
-    rs, c, themed, total = write(a.index, a.out)
+    names, rs, c, themed, total = write(a.index, a.out)
     for r in rs:
         print(f"{r['name']:>4}: {r['total']:>6,} functions  read {r['read']:>6,}")
     print(f"aspects: {themed:,} of {total:,} themed")
     for name, n in sorted(c.items(), key=lambda kv: -kv[1]):
         print(f"  {n:>6,}  {name}")
-    print(f"wrote {a.out}/completeness.svg and {a.out}/aspects.svg")
+    print("wrote " + ", ".join(names.values()))
 
 
 if __name__ == "__main__":
