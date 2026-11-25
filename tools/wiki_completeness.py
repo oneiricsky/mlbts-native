@@ -2,8 +2,8 @@
 
     python -I tools/wiki_completeness.py [--index work/map/index] [--out work/wiki]
 
-coverage.svg: two bars per region, one for the evidence behind each role (C string or symbol, I code shape, H
-neighbours) and one for the share of bodies read.
+coverage.svg: two bars per region, one for the evidence behind each role (C string, symbol or import; I inferred
+from the shape of the code or the call graph; H inferred from neighbours) and one for the share of bodies read.
 aspects.svg: functions grouped by the aspect of the game their 256 KB window's theme names. Only windows whose
 strings name a theme are grouped, and a strip above the bars shows how much of the map that covers.
 
@@ -100,8 +100,8 @@ def svg_coverage(rs):
     w, top, rowh = 1000, 96, 50
     h = top + rowh * len(rs) + 42
     out = head(w, h, "Function map coverage",
-               ["Top bar: evidence behind each role (C string or symbol, I code shape, H neighbours).",
-                "Bottom bar: bodies that were read."],
+               ["Top bar: evidence behind each role (C string, symbol or import, I inferred from shape or call graph,",
+                "H inferred from neighbours). Bottom bar: bodies that were read."],
                "Function map coverage by region")
     for pct in (0, 25, 50, 75, 100):
         x = LEFT + BW * pct / 100
@@ -119,8 +119,8 @@ def svg_coverage(rs):
                    f'C {pct(r["C"]):.0f}% · I {pct(r["I"]):.0f}% · H {pct(r["H"]):.0f}%</text>')
         out.append(f'<text x="{LEFT + BW + 12}" y="{y + 26}" font-size="10" class="f2">'
                    f'bodies read {pct(r["read"]):.0f}%</text>')
-    out += legend(h - 20, [("c", "C: string, symbol or import"), ("i", "I: code shape or call graph"),
-                           ("h", "H: neighbours only"), ("read", "body read")])
+    out += legend(h - 20, [("c", "C: string, symbol or import"), ("i", "I: inferred from shape"),
+                           ("h", "H: inferred from neighbours"), ("read", "body read")])
     out.append("</svg>")
     return "\n".join(out) + "\n"
 

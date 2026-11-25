@@ -102,6 +102,15 @@ def top_strings(rows, n=2):
     return ranked[:n]
 
 
+TAG_TABLE = [
+    "| Tag | Meaning |",
+    "|---|---|",
+    "| C | string, symbol, import |",
+    "| I | inferred via shape of code or call graph |",
+    "| H | inferred via neighbours |",
+]
+
+
 def census(rows):
     groups = defaultdict(list)
     for r in rows:
@@ -109,8 +118,7 @@ def census(rows):
     out = ["Every recompiled function belongs to exactly one 256 KB window of its module. The counts below add up "
            "to the whole binary, so a reader can see where the code is and how much of it carries evidence.",
            "",
-           "Tags: C means a symbol, an import or a string in the body said what the function is. I means the shape "
-           "of the code or the call graph did. H means only its neighbours and the window's theme did.",
+           *TAG_TABLE,
            ""]
     for name, mod in (("main", "main"), ("sdk", "sdk")):
         rr = [(k, v) for k, v in groups.items() if k[0] == mod]
@@ -200,8 +208,7 @@ def overview(rows, summary):
         "code sits 0x20 to 0x1500 lower (`tools/addrmap.py` maps one to the other).",
         "",
         "## How much is known", "", "\n".join(mt), "",
-        "Tags: C is confirmed by a symbol, an import name or a string inside the body; I is inferred from the shape of "
-        "the generated C, a vtable slot or the call graph; H is a guess from the neighbours and the window's theme.",
+        *TAG_TABLE,
         "",
         "## What each function got", "", "\n".join(kt), "",
         "An import thunk is nine lines of generated C that load a pointer from the import table and jump through it. "
@@ -209,9 +216,9 @@ def overview(rows, summary):
         "",
         f"Every function with no string, symbol or shape was then read from its own code: the generated C was "
         f"normalised to its meaningful operations and read in batches ({sum(1 for r in rows if r.get('read')):,} "
-        f"functions). Those rows are on [Read roles](Read-roles); their tag says whether a string or symbol proved "
-        f"the role (C), the operations showed it (I), or it is a guess (H). The audit on that page says how often "
-        f"they were right.",
+        f"functions). Those rows are on [Read roles](Read-roles); their tag says which evidence stands behind the "
+        f"role: C a string, symbol or import, I the shape of the code or the call graph, H the neighbours. The audit "
+        f"on that page says how often they were right.",
         "",
         "Those roles also label the per-class field index on [Class fields](Class-fields): every field of a class, "
         "with the functions that read and write it, in plain words.",

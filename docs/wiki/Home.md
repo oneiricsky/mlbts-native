@@ -17,8 +17,13 @@ Everything here was measured on one PC (an i5-12400F with an RX 6700 XT), game v
 
 ![Function map coverage]({{completeness.svg}})
 
-The tags are C for a string, symbol or import, I for the shape of the code or the call graph, and H for neighbours
-only. The lower bar counts the bodies that were read.
+| Tag | Meaning |
+|---|---|
+| C | string, symbol, import |
+| I | inferred via shape of code or call graph |
+| H | inferred via neighbours |
+
+The lower bar counts the bodies that were read.
 
 ![Functions by aspect of the game]({{aspects.svg}})
 
