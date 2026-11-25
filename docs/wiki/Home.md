@@ -17,12 +17,6 @@ Everything here was measured on one PC (an i5-12400F with an RX 6700 XT), game v
 
 ![Function map coverage]({{completeness.svg}})
 
-| Tag | Meaning |
-|---|---|
-| C | string, symbol, import |
-| I | inferred via shape of code or call graph |
-| H | inferred via neighbours |
-
 The lower bar counts the bodies that were read.
 
 ![Functions by aspect of the game]({{aspects.svg}})
@@ -30,6 +24,16 @@ The lower bar counts the bodies that were read.
 The labels come from the theme the region pages give each 256 KB window, so a function is grouped by its window
 rather than by anything read in its own body. Totals and the per-window census are on [Function map](Function-map)
 and [Function census](Function-census).
+
+## Tag legend
+
+Throughout the wiki, functions are tagged with the following letters to indicate how each one was mapped:
+
+| Tag | Meaning |
+|---|---|
+| C | string, symbol, import |
+| I | inferred via shape of code or call graph |
+| H | inferred via neighbours |
 
 ## How far the theme labels have got
 
