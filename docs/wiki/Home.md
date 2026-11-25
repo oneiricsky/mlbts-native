@@ -24,15 +24,11 @@ Throughout the wiki, functions are tagged with the following letters to indicate
 ## How complete the map is
 
 ![Function map coverage]({{completeness.svg}})
-The lower bar counts the bodies that were read.
+
 <br>
 
 
 ![Functions by aspect of the game]({{aspects.svg}})
-
-The labels come from the theme the region pages give each 256 KB window, so a function is grouped by its window
-rather than by anything read in its own body. Totals and the per-window census are on [Function map](Function-map)
-and [Function census](Function-census).
 
 
 ## How far the theme labels have got
