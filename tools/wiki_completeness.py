@@ -1,103 +1,249 @@
-"""Draw the function map's coverage as an SVG for the wiki home page.
+"""Draw the function map's coverage and its aspects as SVGs for the wiki home page.
 
     python -I tools/wiki_completeness.py [--index work/map/index] [--out work/wiki]
 
-Two bars per region: the upper splits every function by the evidence behind its role (C a string, symbol or import;
-I the shape of the code; H only the neighbours), the lower splits them by whether the body was read. The SVG is
-generated, never hand-edited; tools/wiki_build.py calls this after it writes the pages.
+coverage.svg: two bars per region, one for the evidence behind each role (C string or symbol, I code shape, H
+neighbours) and one for the share of bodies read.
+aspects.svg: functions grouped by the aspect of the game their 256 KB window's theme names (the themes are the ones
+the region pages give each window). Only windows whose strings name a theme are grouped; the subtitle says how many
+functions that covers.
+
+Both use CSS variables and a prefers-color-scheme rule, so they follow the reader's light or dark setting. The SVGs
+are generated, never hand-edited; tools/wiki_build.py calls this after it writes the pages.
 """
 import argparse
 import json
 import os
+import re
 import sys
+from collections import Counter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))).replace("\\", "/")
 REGIONS = [("A", 0x7000000000, 0x7000600000), ("B", 0x7000600000, 0x7000C00000),
            ("C", 0x7000C00000, 0x7001000000), ("D", 0x7001000000, 0x7001400000),
            ("E", 0x7001400000, 0x7001800000), ("F", 0x7001800000, 0x7001C22800)]
 
-C_COLOR, I_COLOR, H_COLOR = "#2e7d5b", "#5b7fb5", "#c49a6c"
-READ_COLOR, UNREAD_COLOR = "#3b3b3b", "#dcdcdc"
-TEXT, MUTED = "#1b1b1b", "#666666"
+STYLE = """<style>
+  .bg { fill: var(--bg); }
+  .f1 { fill: var(--fg); }
+  .f2 { fill: var(--fg2); }
+  .grid { stroke: var(--grid); stroke-width: 1; }
+  .c { fill: var(--c); } .i { fill: var(--i); } .h { fill: var(--h); }
+  .read { fill: var(--read); } .unread { fill: var(--unread); }
+  .k1 { fill: var(--k1); } .k2 { fill: var(--k2); } .k3 { fill: var(--k3); }
+  .k4 { fill: var(--k4); } .k5 { fill: var(--k5); } .k6 { fill: var(--k6); }
+  .k7 { fill: var(--k7); } .k8 { fill: var(--k8); } .k9 { fill: var(--k9); }
+  .k10 { fill: var(--k10); } .k11 { fill: var(--k11); } .k12 { fill: var(--k12); }
+  .bar { fill: var(--accent); }
+  .bar.none { fill: var(--none); }
+  .track { fill: var(--track); }
+  .onbar { fill: #ffffff; }
+  text { font-family: ui-sans-serif, "Segoe UI", system-ui, Arial, sans-serif; }
+  :root {
+    --bg:#ffffff; --fg:#16181d; --fg2:#6b7280; --grid:#e9ecef; --track:#eef0f3; --accent:#3f6fb0; --none:#c9ced6;
+    --c:#2f7d5c; --i:#5b7fb5; --h:#c49a6c; --read:#3b3b3b; --unread:#e6e8eb;
+    --k1:#3f6fb0; --k2:#4f8a6d; --k3:#a06a4f; --k4:#b0893f; --k5:#7a6aa8;
+    --k6:#4c8f9c; --k7:#9c5f6e; --k8:#6b8f3f; --k9:#8a6f4e; --k10:#5f7f9c;
+    --k11:#7f7f7f; --k12:#9c8f5f;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0d1117; --fg:#e6edf3; --fg2:#8b949e; --grid:#21262d; --track:#161b22; --accent:#6f9bd6; --none:#30363d;
+      --c:#3fa172; --i:#6f9bd6; --h:#c9a071; --read:#c9d1d9; --unread:#21262d;
+      --k1:#6f9bd6; --k2:#6fbf94; --k3:#c98a6f; --k4:#d6b25e; --k5:#a394d1;
+      --k6:#7fb8c4; --k7:#c47f90; --k8:#9fbf6f; --k9:#bfa07a; --k10:#8fb0cc;
+      --k11:#9aa0a6; --k12:#c9bd8f;
+    }
+  }
+</style>"""
+
+
+def head(w, h, title, subtitle, aria):
+    return [f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}" '
+            f'role="img" aria-label="{aria}">', STYLE, f'<rect class="bg" width="{w}" height="{h}"/>',
+            f'<text x="{LEFT}" y="26" font-size="16" font-weight="600" class="f1">{title}</text>',
+            f'<text x="{LEFT}" y="45" font-size="11" class="f2">{subtitle}</text>']
+
+
+LEFT, BW = 210, 600
+
+
+def bar(x, y, w, h, parts):
+    out, cx = [], x
+    total = sum(n for n, _ in parts) or 1
+    for n, color in parts:
+        if not n:
+            continue
+        sw = w * n / total
+        out.append(f'<rect x="{cx:.1f}" y="{y}" width="{sw:.1f}" height="{h}" rx="3" class="{color}"/>')
+        cx += sw
+    return out
+
+
+def legend(y, items):
+    out, x = [], LEFT
+    for cls, text in items:
+        out.append(f'<rect x="{x}" y="{y - 9}" width="10" height="10" rx="2" class="{cls}"/>')
+        out.append(f'<text x="{x + 15}" y="{y}" font-size="10" class="f2">{text}</text>')
+        x += 15 + 6 * len(text) + 20
+    return out
 
 
 def rows(index):
     data = [json.loads(l) for l in open(f"{index}/roles.jsonl", encoding="utf-8")]
     out = []
     for name, lo, hi in REGIONS + [("sdk", 0x7004C00000, 0x700524E231)]:
-        if name == "sdk":
-            rs = [r for r in data if r["module"] == "sdk"]
-        else:
-            rs = [r for r in data if r["module"] == "main" and lo <= int(r["addr"], 16) < hi]
+        rs = [r for r in data if r["module"] == ("sdk" if name == "sdk" else "main")
+              and (name == "sdk" or lo <= int(r["addr"], 16) < hi)]
         c = {t: sum(1 for r in rs if r["tag"] == t) for t in "CIH"}
-        read = sum(1 for r in rs if r.get("read"))
-        out.append(dict(name=name, total=len(rs), C=c["C"], I=c["I"], H=c["H"], read=read))
+        out.append(dict(name=name, total=len(rs), C=c["C"], I=c["I"], H=c["H"],
+                        read=sum(1 for r in rs if r.get("read"))))
     return out
 
 
-def bar(x, y, w, parts):
-    """parts: [(count, color)] over the row total."""
-    total = sum(n for n, _ in parts) or 1
-    out, cx = [], x
-    for n, color in parts:
-        if not n:
-            continue
-        sw = w * n / total
-        out.append(f'<rect x="{cx:.1f}" y="{y}" width="{sw:.1f}" height="14" fill="{color}"/>')
-        cx += sw
-    return out
-
-
-def svg(rs):
-    w, left, bw = 1000, 200, 620
-    top = 74
-    rowh = 48
-    h = top + rowh * len(rs) + 34
-    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" '
-           f'viewBox="0 0 {w} {h}" role="img" aria-label="Function map coverage by region">',
-           f'<rect width="{w}" height="{h}" fill="#ffffff"/>',
-           f'<text x="{left}" y="24" font-family="Segoe UI, Arial, sans-serif" font-size="16" fill="{TEXT}">'
-           f'Function map coverage: 135,060 functions</text>',
-           f'<text x="{left}" y="42" font-family="Segoe UI, Arial, sans-serif" font-size="11" fill="{MUTED}">'
-           f'upper bar: evidence behind the role (C string or symbol, I code shape, H neighbours); '
-           f'lower bar: body read</text>']
-    # axis ticks
+def svg_coverage(rs):
+    w, top, rowh = 1000, 78, 50
+    h = top + rowh * len(rs) + 44
+    out = head(w, h, "Function map coverage",
+               "upper bar: evidence behind the role (C string or symbol, I code shape, H neighbours). "
+               "lower bar: body read.", "Function map coverage by region")
     for pct in (0, 25, 50, 75, 100):
-        x = left + bw * pct / 100
-        out.append(f'<line x1="{x:.1f}" y1="{top - 8}" x2="{x:.1f}" y2="{h - 24}" stroke="#eeeeee"/>')
-        out.append(f'<text x="{x:.1f}" y="{top - 14}" font-family="Arial, sans-serif" font-size="9" '
-                   f'fill="{MUTED}" text-anchor="middle">{pct}%</text>')
+        x = LEFT + BW * pct / 100
+        out.append(f'<line class="grid" x1="{x:.1f}" y1="{top - 10}" x2="{x:.1f}" y2="{h - 34}"/>')
+        out.append(f'<text x="{x:.1f}" y="{top - 16}" font-size="9" class="f2" text-anchor="middle">{pct}%</text>')
     for i, r in enumerate(rs):
         y = top + i * rowh
-        label = f"{r['name']}" if r["name"] == "sdk" else f"Region {r['name']}"
-        out.append(f'<text x="10" y="{y + 13}" font-family="Segoe UI, Arial, sans-serif" font-size="12" '
-                   f'fill="{TEXT}">{label}</text>')
-        out.append(f'<text x="10" y="{y + 27}" font-family="Arial, sans-serif" font-size="10" '
-                   f'fill="{MUTED}">{r["total"]:,} functions</text>')
-        out += bar(left, y, bw, [(r["C"], C_COLOR), (r["I"], I_COLOR), (r["H"], H_COLOR)])
-        out += bar(left, y + 18, bw, [(r["read"], READ_COLOR), (r["total"] - r["read"], UNREAD_COLOR)])
+        label = "sdk" if r["name"] == "sdk" else f"Region {r['name']}"
+        out.append(f'<text x="10" y="{y + 13}" font-size="12" font-weight="600" class="f1">{label}</text>')
+        out.append(f'<text x="10" y="{y + 28}" font-size="10" class="f2">{r["total"]:,} functions</text>')
+        out += bar(LEFT, y, BW, 15, [(r["C"], "c"), (r["I"], "i"), (r["H"], "h")])
+        out += bar(LEFT, y + 20, BW, 6, [(r["read"], "read"), (r["total"] - r["read"], "unread")])
         pct = lambda n: 100.0 * n / (r["total"] or 1)
-        out.append(f'<text x="{left + bw + 10}" y="{y + 12}" font-family="Arial, sans-serif" font-size="10" '
-                   f'fill="{MUTED}">C {pct(r["C"]):.0f}% · I {pct(r["I"]):.0f}% · H {pct(r["H"]):.0f}% · '
+        out.append(f'<text x="{LEFT + BW + 12}" y="{y + 12}" font-size="10" class="f2">'
+                   f'C {pct(r["C"]):.0f}%   I {pct(r["I"]):.0f}%   H {pct(r["H"]):.0f}%</text>')
+        out.append(f'<text x="{LEFT + BW + 12}" y="{y + 26}" font-size="10" class="f2">'
                    f'read {pct(r["read"]):.0f}%</text>')
-    ly = h - 18
-    lx = left
-    for color, text in ((C_COLOR, "C: string, symbol or import"), (I_COLOR, "I: code shape or call graph"),
-                        (H_COLOR, "H: neighbours only"), (READ_COLOR, "body read")):
-        out.append(f'<rect x="{lx}" y="{ly - 9}" width="10" height="10" fill="{color}"/>')
-        out.append(f'<text x="{lx + 14}" y="{ly}" font-family="Arial, sans-serif" font-size="10" '
-                   f'fill="{MUTED}">{text}</text>')
-        lx += 14 + 7 * len(text) + 18
+    out += legend(h - 20, [("c", "C: string, symbol or import"), ("i", "I: code shape or call graph"),
+                           ("h", "H: neighbours only"), ("read", "body read")])
+    out.append("</svg>")
+    return "\n".join(out) + "\n"
+
+# Each window theme the region pages name, mapped to one aspect of the game. The order matters: the first
+# substring found in the theme wins, so the more specific entries come first.
+ASPECT_OF_THEME = [
+    ("Player search and list screens", "Online and Diamond Dynasty"),
+    ("Diamond Dynasty", "Online and Diamond Dynasty"),
+    ("Content downloader", "Online and Diamond Dynasty"),
+    ("Online network session", "Online and Diamond Dynasty"),
+    ("Online party", "Online and Diamond Dynasty"),
+    ("Vault:", "Online and Diamond Dynasty"),
+    ("Online account login", "Online and Diamond Dynasty"),
+    ("Online roster cache", "Online and Diamond Dynasty"),
+    ("Texture and face-scan download", "Online and Diamond Dynasty"),
+    ("Franchise and career setup", "Franchise, league and roster"),
+    ("League and player data", "Franchise, league and roster"),
+    ("Player database tables", "Franchise, league and roster"),
+    ("Roster moves", "Franchise, league and roster"),
+    ("Trades, team strategy", "Franchise, league and roster"),
+    ("Player, team and stadium database", "Franchise, league and roster"),
+    ("Road to the Show", "Road to the Show"),
+    ("Road To The Show", "Road to the Show"),
+    ("Create-player", "Road to the Show"),
+    ("Options menus", "Menus and UI"),
+    ("Dear ImGui", "Menus and UI"),
+    ("UI widgets", "Menus and UI"),
+    ("UI rendering", "Menus and UI"),
+    ("Game-mode settings", "Menus and UI"),
+    ("Presentation engine", "Presentation and animation"),
+    ("Player animation", "Presentation and animation"),
+    ("Play-event names", "Presentation and animation"),
+    ("Scene/mesh loading", "Graphics and textures"),
+    ("Texture decoding", "Graphics and textures"),
+    ("NVN graphics device", "Graphics and textures"),
+    ("Audio system", "Audio"),
+    ("JSON parsing", "Data and serialization"),
+    ("Reflection and serialization", "Data and serialization"),
+    ("nlohmann JSON", "Data and serialization"),
+    ("Generic parsers", "Data and serialization"),
+    ("Class registration framework", "Data and serialization"),
+    ("Stats, training", "Stats and records"),
+    ("Game-record bookkeeping", "Stats and records"),
+    ("Pitch and play analysis", "Gameplay: pitching"),
+    ("Pickoffs, play-result text", "Gameplay: pitching"),
+    ("Batting and catcher reactions", "Gameplay: batting"),
+    ("Fielding: choosing fly-ball", "Gameplay: fielding"),
+    ("Fielder catch and throw decisions", "Gameplay: fielding"),
+    ("Fielder and runner avoidance", "Gameplay: fielding"),
+    ("Runner and fielder work rings", "Gameplay: baserunning"),
+    ("Runner leadoff", "Gameplay: baserunning"),
+    ("In-play stance states", "Gameplay: in-play"),
+]
+
+
+def aspect_of(theme):
+    for key, aspect in ASPECT_OF_THEME:
+        if key in theme:
+            return aspect
+    return "Other themes"
+
+
+def aspects(index):
+    data = [json.loads(l) for l in open(f"{index}/roles.jsonl", encoding="utf-8")]
+    themes = Counter(r["sub"] for r in data if r.get("sub") and not r["sub"].isdigit())
+    out = Counter()
+    for theme, n in themes.items():
+        out[aspect_of(theme)] += n
+    return out, sum(themes.values()), len(data)
+
+
+def svg_aspects(counts, themed, total):
+    items = sorted(counts.items(), key=lambda kv: -kv[1])
+    w, top, rowh = 1000, 148, 38
+    h = top + rowh * len(items) + 14
+    share = 100.0 * themed / (total or 1)
+    subtitle = (f"{themed:,} of {total:,} functions ({share:.1f}%) carry a window theme; the bars split that "
+                f"themed share. The strip shows how much of the whole map the themes cover.")
+    out = head(w, h, "Functions by aspect of the game", subtitle, "Functions grouped by aspect of the game")
+    # coverage strip: themed against the whole map
+    sy = 70
+    out.append(f'<text x="{LEFT - 12}" y="{sy + 12}" font-size="11" class="f1" text-anchor="end">Map coverage</text>')
+    out.append(f'<rect x="{LEFT}" y="{sy}" width="{BW}" height="16" rx="3" class="track"/>')
+    out.append(f'<rect x="{LEFT}" y="{sy}" width="{BW * share / 100:.1f}" height="16" rx="3" class="bar"/>')
+    if BW * share / 100 >= 60:
+        out.append(f'<text x="{LEFT + BW * share / 100 - 7:.1f}" y="{sy + 12}" font-size="10" class="onbar" '
+                   f'text-anchor="end">{share:.1f}% themed</text>')
+    out.append(f'<text x="{LEFT + BW * share / 100 + 8:.1f}" y="{sy + 12}" font-size="10" class="f2">'
+               f'no theme yet: {100 - share:.1f}%</text>')
+    # aspect bars, shaded to the share of the themed functions
+    for pct in (0, 25, 50, 75, 100):
+        x = LEFT + BW * pct / 100
+        out.append(f'<line class="grid" x1="{x:.1f}" y1="{top - 8}" x2="{x:.1f}" y2="{h - 32}"/>')
+        out.append(f'<text x="{x:.1f}" y="{top - 14}" font-size="9" class="f2" text-anchor="middle">{pct}%</text>')
+    for i, (name, n) in enumerate(items):
+        y = top + i * rowh
+        pct = 100.0 * n / (themed or 1)
+        shade = BW * pct / 100
+        out.append(f'<text x="{LEFT - 12}" y="{y + 13}" font-size="11" class="f1" text-anchor="end">{name}</text>')
+        out.append(f'<rect x="{LEFT}" y="{y + 1}" width="{BW}" height="16" rx="3" class="track"/>')
+        out.append(f'<rect x="{LEFT}" y="{y + 1}" width="{shade:.1f}" height="16" rx="3" class="bar"/>')
+        label = f"{pct:.1f}%"
+        if shade >= 42:
+            out.append(f'<text x="{LEFT + shade - 7:.1f}" y="{y + 13}" font-size="10" class="onbar" '
+                       f'text-anchor="end">{label}</text>')
+        else:
+            out.append(f'<text x="{LEFT + shade + 7:.1f}" y="{y + 13}" font-size="10" class="f2">{label}</text>')
+        out.append(f'<text x="{LEFT + BW + 10}" y="{y + 13}" font-size="10" class="f2">{n:,} functions</text>')
     out.append("</svg>")
     return "\n".join(out) + "\n"
 
 
 def write(index, out):
-    """Write completeness.svg into `out`; returns the per-region rows."""
-    rs = rows(index)
+    """Write completeness.svg and aspects.svg into `out`."""
     os.makedirs(out, exist_ok=True)
-    open(f"{out}/completeness.svg", "w", encoding="utf-8", newline="\n").write(svg(rs))
-    return rs
+    open(f"{out}/completeness.svg", "w", encoding="utf-8", newline="\n").write(svg_coverage(rows(index)))
+    c, themed, total = aspects(index)
+    open(f"{out}/aspects.svg", "w", encoding="utf-8", newline="\n").write(svg_aspects(c, themed, total))
+    return rows(index), c, themed, total
 
 
 def main():
@@ -105,14 +251,15 @@ def main():
     ap.add_argument("--index", default=ROOT + "/work/map/index")
     ap.add_argument("--out", default=ROOT + "/work/wiki")
     a = ap.parse_args()
-    path = f"{a.index}/roles.jsonl"
-    if not os.path.exists(path):
-        sys.exit(f"missing {path}: run tools/map_roles.py first")
-    rs = write(a.index, a.out)
+    if not os.path.exists(f"{a.index}/roles.jsonl"):
+        sys.exit(f"missing {a.index}/roles.jsonl: run tools/map_roles.py first")
+    rs, c, themed, total = write(a.index, a.out)
     for r in rs:
-        print(f"{r['name']:>4}: {r['total']:>6,} functions  C {r['C']:>6,}  I {r['I']:>6,}  H {r['H']:>5,}"
-              f"  read {r['read']:>6,}")
-    print(f"wrote {a.out}/completeness.svg")
+        print(f"{r['name']:>4}: {r['total']:>6,} functions  read {r['read']:>6,}")
+    print(f"aspects: {themed:,} of {total:,} themed")
+    for name, n in c.most_common():
+        print(f"  {n:>6,}  {name}")
+    print(f"wrote {a.out}/completeness.svg and {a.out}/aspects.svg")
 
 
 if __name__ == "__main__":

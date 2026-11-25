@@ -18,8 +18,13 @@ Everything here was measured on one PC (an i5-12400F with an RX 6700 XT), game v
 ![Function map coverage](completeness.svg)
 
 The upper bar splits every function by the evidence behind its role: a string, symbol or import (C), the shape of the
-code or the call graph (I), or only its neighbours (H). The lower bar is the share whose body was read. The region
-totals and the per-window census are on [Function map](Function-map) and [Function census](Function-census).
+code or the call graph (I), or only its neighbours (H). The lower bar is the share whose body was read.
+
+![Functions by aspect of the game](aspects.svg)
+
+The second chart groups functions by the aspect of the game named by the theme of their 256 KB window. The strip at
+the top is the coverage: about a quarter of the functions sit in a themed window, and the bars below split that themed
+share. Totals and the per-window census are on [Function map](Function-map) and [Function census](Function-census).
 
 ## How it is built and measured
 
