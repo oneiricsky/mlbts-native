@@ -4,59 +4,61 @@
 
 coverage.svg: two bars per region, one for the evidence behind each role (C string or symbol, I code shape, H
 neighbours) and one for the share of bodies read.
-aspects.svg: functions grouped by the aspect of the game their 256 KB window's theme names (the themes are the ones
-the region pages give each window). Only windows whose strings name a theme are grouped; the subtitle says how many
-functions that covers.
+aspects.svg: functions grouped by the aspect of the game their 256 KB window's theme names. Only windows whose
+strings name a theme are grouped, and a strip above the bars shows how much of the map that covers.
 
-Both use CSS variables and a prefers-color-scheme rule, so they follow the reader's light or dark setting. The SVGs
-are generated, never hand-edited; tools/wiki_build.py calls this after it writes the pages.
+Both charts use a dark card (light text on #0d1117) rather than following the page colour scheme: GitHub decides an
+image's colour scheme from the reader's operating system, not the GitHub theme, and its theme-only URL fragments are
+not honoured on wiki pages. A dark card reads on either page and keeps every contrast ratio above the WCAG AA level,
+which tools/wiki_wcag_check.py asserts.
 """
 import argparse
 import json
 import os
-import re
-import sys
-from collections import Counter
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))).replace("\\", "/")
 REGIONS = [("A", 0x7000000000, 0x7000600000), ("B", 0x7000600000, 0x7000C00000),
            ("C", 0x7000C00000, 0x7001000000), ("D", 0x7001000000, 0x7001400000),
            ("E", 0x7001400000, 0x7001800000), ("F", 0x7001800000, 0x7001C22800)]
 
-PALETTES = {
-    False: dict(bg="#ffffff", fg="#16181d", fg2="#6b7280", grid="#e9ecef", track="#eef0f3",
-                accent="#3f6fb0", none="#c9ced6", c="#2f7d5c", i="#5b7fb5", h="#c49a6c",
-                read="#3b3b3b", unread="#e6e8eb"),
-    True: dict(bg="#0d1117", fg="#e6edf3", fg2="#8b949e", grid="#21262d", track="#161b22",
-               accent="#6f9bd6", none="#30363d", c="#3fa172", i="#6f9bd6", h="#c9a071",
-               read="#c9d1d9", unread="#21262d"),
-}
+# one palette, checked by tools/wiki_wcag_check.py: text pairs at 4.5:1 or better, bars at 3:1 or better
+PALETTE = dict(bg="#0d1117", fg="#e6edf3", fg2="#9aa4af", border="#30363d", accent="#6f9bd6",
+               onbar="#0d1117", track="#21262d", c="#3fa172", i="#6f9bd6", h="#c9a071",
+               read="#c9d1d9", unread="#21262d")
 
 CLASSES = """.bg { fill: var(--bg); }
+  .card { fill: none; stroke: var(--border); stroke-width: 1; }
   .f1 { fill: var(--fg); }
   .f2 { fill: var(--fg2); }
-  .grid { stroke: var(--grid); stroke-width: 1; }
+  .grid { stroke: var(--border); stroke-width: 1; }
   .c { fill: var(--c); } .i { fill: var(--i); } .h { fill: var(--h); }
   .read { fill: var(--read); } .unread { fill: var(--unread); }
   .bar { fill: var(--accent); }
   .track { fill: var(--track); }
-  .onbar { fill: #ffffff; }
+  .onbar { fill: var(--onbar); }
   text { font-family: ui-sans-serif, "Segoe UI", system-ui, Arial, sans-serif; }"""
 
 
-def style(dark):
-    root = " ".join(f"--{k}:{v};" for k, v in PALETTES[dark].items())
-    return f"<style>\n  {CLASSES}\n  :root {{ {root} }}\n</style>"
-
-
-def head(w, h, title, subtitle, aria, dark):
-    return [f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}" '
-            f'role="img" aria-label="{aria}">', style(dark), f'<rect class="bg" width="{w}" height="{h}"/>',
-            f'<text x="{LEFT}" y="26" font-size="16" font-weight="600" class="f1">{title}</text>',
-            f'<text x="{LEFT}" y="45" font-size="11" class="f2">{subtitle}</text>']
+def style():
+    root = " ".join(f"--{k}:{v};" for k, v in PALETTE.items())
+    return f"<style>\n  {CLASSES}\n  :root {{ color-scheme: dark; {root} }}\n</style>"
 
 
 LEFT, BW = 210, 600
+
+
+def head(w, h, title, subtitle_lines, aria):
+    out = [f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}" '
+           f'role="img" aria-label="{aria}">',
+           f'<title>{title}</title>',
+           f'<desc>{aria}. {subtitle_lines[0]}</desc>',
+           style(),
+           f'<rect class="bg" x="0.5" y="0.5" width="{w - 1}" height="{h - 1}" rx="8"/>',
+           f'<rect class="card" x="0.5" y="0.5" width="{w - 1}" height="{h - 1}" rx="8"/>',
+           f'<text x="{LEFT}" y="28" font-size="16" font-weight="600" class="f1">{title}</text>']
+    for i, line in enumerate(subtitle_lines):
+        out.append(f'<text x="{LEFT}" y="{47 + 15 * i}" font-size="11" class="f2">{line}</text>')
+    return out
 
 
 def bar(x, y, w, h, parts):
@@ -92,12 +94,13 @@ def rows(index):
     return out
 
 
-def svg_coverage(rs, dark):
-    w, top, rowh = 1000, 78, 50
-    h = top + rowh * len(rs) + 44
+def svg_coverage(rs):
+    w, top, rowh = 1000, 96, 50
+    h = top + rowh * len(rs) + 42
     out = head(w, h, "Function map coverage",
-               "upper bar: evidence behind the role (C string or symbol, I code shape, H neighbours). "
-               "lower bar: body read.", "Function map coverage by region", dark)
+               ["upper bar: evidence behind the role (C string or symbol, I code shape, H neighbours).",
+                "lower bar: body read."],
+               "Function map coverage by region")
     for pct in (0, 25, 50, 75, 100):
         x = LEFT + BW * pct / 100
         out.append(f'<line class="grid" x1="{x:.1f}" y1="{top - 10}" x2="{x:.1f}" y2="{h - 34}"/>')
@@ -118,6 +121,7 @@ def svg_coverage(rs, dark):
                            ("h", "H: neighbours only"), ("read", "body read")])
     out.append("</svg>")
     return "\n".join(out) + "\n"
+
 
 # Each window theme the region pages name, mapped to one aspect of the game. The order matters: the first
 # substring found in the theme wins, so the more specific entries come first.
@@ -180,32 +184,34 @@ def aspect_of(theme):
 
 def aspects(index):
     data = [json.loads(l) for l in open(f"{index}/roles.jsonl", encoding="utf-8")]
-    themes = Counter(r["sub"] for r in data if r.get("sub") and not r["sub"].isdigit())
-    out = Counter()
+    themes = {}
+    for r in data:
+        sub = r.get("sub") or ""
+        if sub and not sub.isdigit():
+            themes[sub] = themes.get(sub, 0) + 1
+    out = {}
     for theme, n in themes.items():
-        out[aspect_of(theme)] += n
+        out[aspect_of(theme)] = out.get(aspect_of(theme), 0) + n
     return out, sum(themes.values()), len(data)
 
 
-def svg_aspects(counts, themed, total, dark):
+def svg_aspects(counts, themed, total):
     items = sorted(counts.items(), key=lambda kv: -kv[1])
-    w, top, rowh = 1000, 148, 38
-    h = top + rowh * len(items) + 14
+    w, top, rowh = 1000, 152, 38
+    h = top + rowh * len(items) + 16
     share = 100.0 * themed / (total or 1)
-    subtitle = (f"grouped by the theme the region pages give each 256 KB window, not by anything read in the "
-                f"function itself; {themed:,} of {total:,} functions sit in a themed window ({share:.1f}%).")
-    out = head(w, h, "Functions by aspect of the game", subtitle, "Functions grouped by aspect of the game", dark)
-    # coverage strip: themed against the whole map
+    out = head(w, h, "Functions by aspect of the game",
+               [f"grouped by the theme the region pages give each 256 KB window, not by anything read in the",
+                f"function itself; {themed:,} of {total:,} functions sit in a themed window ({share:.1f}%)."],
+               "Functions grouped by aspect of the game")
     sy = 70
     out.append(f'<text x="{LEFT - 12}" y="{sy + 12}" font-size="11" class="f1" text-anchor="end">Map coverage</text>')
     out.append(f'<rect x="{LEFT}" y="{sy}" width="{BW}" height="16" rx="3" class="track"/>')
     out.append(f'<rect x="{LEFT}" y="{sy}" width="{BW * share / 100:.1f}" height="16" rx="3" class="bar"/>')
-    if BW * share / 100 >= 60:
-        out.append(f'<text x="{LEFT + BW * share / 100 - 7:.1f}" y="{sy + 12}" font-size="10" class="onbar" '
-                   f'text-anchor="end">{share:.1f}% themed</text>')
+    out.append(f'<text x="{LEFT + BW * share / 100 - 7:.1f}" y="{sy + 12}" font-size="10" class="onbar" '
+               f'text-anchor="end">{share:.1f}% themed</text>')
     out.append(f'<text x="{LEFT + BW * share / 100 + 8:.1f}" y="{sy + 12}" font-size="10" class="f2">'
                f'no theme yet: {100 - share:.1f}%</text>')
-    # aspect bars, shaded to the share of the themed functions
     for pct in (0, 25, 50, 75, 100):
         x = LEFT + BW * pct / 100
         out.append(f'<line class="grid" x1="{x:.1f}" y1="{top - 8}" x2="{x:.1f}" y2="{h - 32}"/>')
@@ -233,12 +239,9 @@ def write(index, out):
     os.makedirs(out, exist_ok=True)
     rs = rows(index)
     c, themed, total = aspects(index)
-    for dark, suffix in ((False, "light"), (True, "dark")):
-        open(f"{out}/completeness-{suffix}.svg", "w", encoding="utf-8", newline="\n").write(
-            svg_coverage(rs, dark))
-        open(f"{out}/aspects-{suffix}.svg", "w", encoding="utf-8", newline="\n").write(
-            svg_aspects(c, themed, total, dark))
-    return rows(index), c, themed, total
+    open(f"{out}/completeness.svg", "w", encoding="utf-8", newline="\n").write(svg_coverage(rs))
+    open(f"{out}/aspects.svg", "w", encoding="utf-8", newline="\n").write(svg_aspects(c, themed, total))
+    return rs, c, themed, total
 
 
 def main():
@@ -247,14 +250,14 @@ def main():
     ap.add_argument("--out", default=ROOT + "/work/wiki")
     a = ap.parse_args()
     if not os.path.exists(f"{a.index}/roles.jsonl"):
-        sys.exit(f"missing {a.index}/roles.jsonl: run tools/map_roles.py first")
+        raise SystemExit(f"missing {a.index}/roles.jsonl: run tools/map_roles.py first")
     rs, c, themed, total = write(a.index, a.out)
     for r in rs:
         print(f"{r['name']:>4}: {r['total']:>6,} functions  read {r['read']:>6,}")
     print(f"aspects: {themed:,} of {total:,} themed")
-    for name, n in c.most_common():
+    for name, n in sorted(c.items(), key=lambda kv: -kv[1]):
         print(f"  {n:>6,}  {name}")
-    print(f"wrote {a.out}/completeness-{{light,dark}}.svg and {a.out}/aspects-{{light,dark}}.svg")
+    print(f"wrote {a.out}/completeness.svg and {a.out}/aspects.svg")
 
 
 if __name__ == "__main__":
