@@ -23,44 +23,35 @@ REGIONS = [("A", 0x7000000000, 0x7000600000), ("B", 0x7000600000, 0x7000C00000),
            ("C", 0x7000C00000, 0x7001000000), ("D", 0x7001000000, 0x7001400000),
            ("E", 0x7001400000, 0x7001800000), ("F", 0x7001800000, 0x7001C22800)]
 
-STYLE = """<style>
-  .bg { fill: var(--bg); }
+PALETTES = {
+    False: dict(bg="#ffffff", fg="#16181d", fg2="#6b7280", grid="#e9ecef", track="#eef0f3",
+                accent="#3f6fb0", none="#c9ced6", c="#2f7d5c", i="#5b7fb5", h="#c49a6c",
+                read="#3b3b3b", unread="#e6e8eb"),
+    True: dict(bg="#0d1117", fg="#e6edf3", fg2="#8b949e", grid="#21262d", track="#161b22",
+               accent="#6f9bd6", none="#30363d", c="#3fa172", i="#6f9bd6", h="#c9a071",
+               read="#c9d1d9", unread="#21262d"),
+}
+
+CLASSES = """.bg { fill: var(--bg); }
   .f1 { fill: var(--fg); }
   .f2 { fill: var(--fg2); }
   .grid { stroke: var(--grid); stroke-width: 1; }
   .c { fill: var(--c); } .i { fill: var(--i); } .h { fill: var(--h); }
   .read { fill: var(--read); } .unread { fill: var(--unread); }
-  .k1 { fill: var(--k1); } .k2 { fill: var(--k2); } .k3 { fill: var(--k3); }
-  .k4 { fill: var(--k4); } .k5 { fill: var(--k5); } .k6 { fill: var(--k6); }
-  .k7 { fill: var(--k7); } .k8 { fill: var(--k8); } .k9 { fill: var(--k9); }
-  .k10 { fill: var(--k10); } .k11 { fill: var(--k11); } .k12 { fill: var(--k12); }
   .bar { fill: var(--accent); }
-  .bar.none { fill: var(--none); }
   .track { fill: var(--track); }
   .onbar { fill: #ffffff; }
-  text { font-family: ui-sans-serif, "Segoe UI", system-ui, Arial, sans-serif; }
-  :root {
-    --bg:#ffffff; --fg:#16181d; --fg2:#6b7280; --grid:#e9ecef; --track:#eef0f3; --accent:#3f6fb0; --none:#c9ced6;
-    --c:#2f7d5c; --i:#5b7fb5; --h:#c49a6c; --read:#3b3b3b; --unread:#e6e8eb;
-    --k1:#3f6fb0; --k2:#4f8a6d; --k3:#a06a4f; --k4:#b0893f; --k5:#7a6aa8;
-    --k6:#4c8f9c; --k7:#9c5f6e; --k8:#6b8f3f; --k9:#8a6f4e; --k10:#5f7f9c;
-    --k11:#7f7f7f; --k12:#9c8f5f;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg:#0d1117; --fg:#e6edf3; --fg2:#8b949e; --grid:#21262d; --track:#161b22; --accent:#6f9bd6; --none:#30363d;
-      --c:#3fa172; --i:#6f9bd6; --h:#c9a071; --read:#c9d1d9; --unread:#21262d;
-      --k1:#6f9bd6; --k2:#6fbf94; --k3:#c98a6f; --k4:#d6b25e; --k5:#a394d1;
-      --k6:#7fb8c4; --k7:#c47f90; --k8:#9fbf6f; --k9:#bfa07a; --k10:#8fb0cc;
-      --k11:#9aa0a6; --k12:#c9bd8f;
-    }
-  }
-</style>"""
+  text { font-family: ui-sans-serif, "Segoe UI", system-ui, Arial, sans-serif; }"""
 
 
-def head(w, h, title, subtitle, aria):
+def style(dark):
+    root = " ".join(f"--{k}:{v};" for k, v in PALETTES[dark].items())
+    return f"<style>\n  {CLASSES}\n  :root {{ {root} }}\n</style>"
+
+
+def head(w, h, title, subtitle, aria, dark):
     return [f'<svg xmlns="http://www.w3.org/2000/svg" width="{w}" height="{h}" viewBox="0 0 {w} {h}" '
-            f'role="img" aria-label="{aria}">', STYLE, f'<rect class="bg" width="{w}" height="{h}"/>',
+            f'role="img" aria-label="{aria}">', style(dark), f'<rect class="bg" width="{w}" height="{h}"/>',
             f'<text x="{LEFT}" y="26" font-size="16" font-weight="600" class="f1">{title}</text>',
             f'<text x="{LEFT}" y="45" font-size="11" class="f2">{subtitle}</text>']
 
@@ -101,12 +92,12 @@ def rows(index):
     return out
 
 
-def svg_coverage(rs):
+def svg_coverage(rs, dark):
     w, top, rowh = 1000, 78, 50
     h = top + rowh * len(rs) + 44
     out = head(w, h, "Function map coverage",
                "upper bar: evidence behind the role (C string or symbol, I code shape, H neighbours). "
-               "lower bar: body read.", "Function map coverage by region")
+               "lower bar: body read.", "Function map coverage by region", dark)
     for pct in (0, 25, 50, 75, 100):
         x = LEFT + BW * pct / 100
         out.append(f'<line class="grid" x1="{x:.1f}" y1="{top - 10}" x2="{x:.1f}" y2="{h - 34}"/>')
@@ -196,14 +187,14 @@ def aspects(index):
     return out, sum(themes.values()), len(data)
 
 
-def svg_aspects(counts, themed, total):
+def svg_aspects(counts, themed, total, dark):
     items = sorted(counts.items(), key=lambda kv: -kv[1])
     w, top, rowh = 1000, 148, 38
     h = top + rowh * len(items) + 14
     share = 100.0 * themed / (total or 1)
     subtitle = (f"{themed:,} of {total:,} functions ({share:.1f}%) carry a window theme; the bars split that "
                 f"themed share. The strip shows how much of the whole map the themes cover.")
-    out = head(w, h, "Functions by aspect of the game", subtitle, "Functions grouped by aspect of the game")
+    out = head(w, h, "Functions by aspect of the game", subtitle, "Functions grouped by aspect of the game", dark)
     # coverage strip: themed against the whole map
     sy = 70
     out.append(f'<text x="{LEFT - 12}" y="{sy + 12}" font-size="11" class="f1" text-anchor="end">Map coverage</text>')
@@ -240,9 +231,13 @@ def svg_aspects(counts, themed, total):
 def write(index, out):
     """Write completeness.svg and aspects.svg into `out`."""
     os.makedirs(out, exist_ok=True)
-    open(f"{out}/completeness.svg", "w", encoding="utf-8", newline="\n").write(svg_coverage(rows(index)))
+    rs = rows(index)
     c, themed, total = aspects(index)
-    open(f"{out}/aspects.svg", "w", encoding="utf-8", newline="\n").write(svg_aspects(c, themed, total))
+    for dark, suffix in ((False, "light"), (True, "dark")):
+        open(f"{out}/completeness-{suffix}.svg", "w", encoding="utf-8", newline="\n").write(
+            svg_coverage(rs, dark))
+        open(f"{out}/aspects-{suffix}.svg", "w", encoding="utf-8", newline="\n").write(
+            svg_aspects(c, themed, total, dark))
     return rows(index), c, themed, total
 
 
@@ -259,7 +254,7 @@ def main():
     print(f"aspects: {themed:,} of {total:,} themed")
     for name, n in c.most_common():
         print(f"  {n:>6,}  {name}")
-    print(f"wrote {a.out}/completeness.svg and {a.out}/aspects.svg")
+    print(f"wrote {a.out}/completeness-{{light,dark}}.svg and {a.out}/aspects-{{light,dark}}.svg")
 
 
 if __name__ == "__main__":
