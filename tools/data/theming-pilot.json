@@ -75,19 +75,21 @@
   "Presentation and animation": 1
  },
  "continuation": {
-  "functions": 40,
+  "functions": 196,
   "accepted": {
-   "strong": 6,
-   "medium": 1
+   "strong": 72,
+   "medium": 3
   },
-  "abstained": 33,
+  "abstained": 121,
   "aspects": {
-   "Presentation and animation": 1,
-   "Online and Diamond Dynasty": 2,
-   "Data and serialization": 1,
-   "Franchise, league and roster": 1,
-   "Gameplay: in-play": 1,
-   "Graphics and textures": 1
+   "Presentation and animation": 9,
+   "Online and Diamond Dynasty": 32,
+   "Data and serialization": 6,
+   "Franchise, league and roster": 11,
+   "Gameplay: in-play": 2,
+   "Graphics and textures": 6,
+   "Stats and records": 2,
+   "Menus and UI": 7
   }
  }
 }

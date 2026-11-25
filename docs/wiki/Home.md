@@ -35,8 +35,8 @@ Throughout the wiki, functions are tagged with the following letters to indicate
 
 ![Theme labels accepted]({{theming.svg}})
 
-Two independent reads and an evidence check have yielded 99 individual function labels so far. The latest batches
-accepted seven labels across 40 new functions. See the accepted labels by aspect and the evidence rules on
+Two independent reads and an evidence check have yielded 167 individual function labels so far. The continuation
+accepted 75 labels across 196 functions. See the accepted labels by aspect and the evidence rules on
 [Theming progress](Theming-progress).
 
 ## Table of Contents
