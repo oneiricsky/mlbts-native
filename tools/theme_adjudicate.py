@@ -242,7 +242,8 @@ def main():
           f"(strong {tiers['strong']}, medium {tiers['medium']}, weak {tiers['weak']}), "
           f"abstained {len(abstained)}, need a third read {len(queue)}, pending {pending}")
     for r in ok_rows[:6]:
-        print(f"  {r['addr']}  {r['aspect']:<28} {r['tier']:<7} {r['strength'][0]:<24} {' | '.join(r['evidence'])[:80]}")
+        strengths = " / ".join(s or "ungrounded" for s in r["strength"])
+        print(f"  {r['addr']}  {r['aspect']:<28} {r['tier']:<7} {strengths}  {' | '.join(r['evidence'])[:80]}")
 
 
 if __name__ == "__main__":
