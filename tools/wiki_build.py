@@ -133,12 +133,14 @@ def main():
     # 0x7001200000 should not have to work out which letter holds it
     ranges = {f"Functions-{k}": (lo, hi) for k, lo, hi in map_functions_doc.REGIONS}
     ranges["Functions-SDK"] = map_functions_doc.SDK
+    for k, lo, hi in map_functions_doc.REGIONS:
+        ranges[f"Region-{k}"] = (lo, hi)
 
     def label(p):
         if p in ranges:
             lo, hi = ranges[p]
             return f"0x{lo:x}-0x{hi - 1:x}"
-        return f"Region {p.split('-')[1]}" if p.startswith("Region-") else p.replace("-", " ")
+        return p.replace("-", " ")
 
     side = ["[Home](Home)"]
     for title, ps in sections:
