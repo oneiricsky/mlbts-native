@@ -129,13 +129,21 @@ def main():
         ("Reference", ("History-and-open-questions", "Tools-and-the-code-map", "Start-here")),
     ]
 
+    # the function-register pages are named by the address range they cover, not by a letter: a reader looking for
+    # 0x7001200000 should not have to work out which letter holds it
+    ranges = {f"Functions-{k}": (lo, hi) for k, lo, hi in map_functions_doc.REGIONS}
+    ranges["Functions-SDK"] = map_functions_doc.SDK
+
     def label(p):
+        if p in ranges:
+            lo, hi = ranges[p]
+            return f"0x{lo:x}-0x{hi - 1:x}"
         return f"Region {p.split('-')[1]}" if p.startswith("Region-") else p.replace("-", " ")
 
     side = ["[Home](Home)"]
     for title, ps in sections:
         side += ["", title] + [f"- [{label(p)}]({p})" for p in ps]
-    open(f"{a.out}/_Sidebar.md", "w", newline="\n").write("\n".join(side) + "\n")
+    open(f"{a.out}/_Sidebar.md", "w", encoding="utf-8", newline="\n").write("\n".join(side) + "\n")
     # the home page's table of contents: every page, grouped the way the sidebar groups it, from the same lists. The
     # read-role detail pages are generated in bulk and kept off the sidebar; the table lists them too, so no page is
     # reachable only through another page.
