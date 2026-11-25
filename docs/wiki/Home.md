@@ -1,23 +1,17 @@
 This is the research wiki for a personal fork of [Fastball](https://github.com/sam110411/fastball), the native Windows port of MLB The Show 26 for Switch. The fork exists to find out why the game stalls and where the port loses time, and to build tools for that work. The product is what we learn plus working tools, not releases. Fastball itself, its releases and its issues are upstream's.
 
-Everything here was measured on one PC (an i5-12400F with an RX 6700 XT), game version 1.0.20 unless a page says otherwise. Upstream's own numbers come from a Ryzen 5 5600X with an RTX 3060 Ti and are marked where they appear. Each page says how many runs a number comes from. Where something is a guess, the page says so.
+### Specs
 
-## What has been found
+```
+OS: Windows 11 Education (26H2) x86_64
+CPU: 12th Gen Intel(R) Core(TM) i5-12400F
+GPU: AMD Radeon RX 6700 XT (12 GB)
+RAM: 32GB DDR4
+```
 
-| Problem | Cause | State |
-|---|---|---|
-| [Freeze before every pitch](Walk-up-freeze) | The game baked its stadium lighting twice in a row | Fixed upstream in 0.2.0; our write-up and patch measurements |
-| [Freeze at match start](Match-start-freeze) | The game spends 0.7 s proving empty space has no edges | Fixed on a research branch, not merged |
-| [Stalls when something loads](Load-stalls) | Four separate causes, one of them ours | Ours fixed; the rest open |
-| [Frame rate in heavy scenes](Frame-rate-and-GPU-waits) | The game waits for the GPU, so costs add up instead of overlapping | Explained, partly improved |
-| [PS5 textures and the yellow face](PS5-textures) | A compute pass read the wrong part of a bigger texture | Fixed; still opt-in until more heads are checked |
-| [Open upstream bugs](Upstream-bug-research) | Four issues read and ranked | Research only, nothing run |
+## Tag legend
 
-## How complete the map is
-
-![Function map coverage]({{completeness.svg}})
-
-The lower bar counts the bodies that were read.
+Throughout the wiki, functions are tagged with the following letters to indicate how each one was mapped:
 
 | Tag | Meaning |
 |---|---|
@@ -25,11 +19,21 @@ The lower bar counts the bodies that were read.
 | I | inferred via shape of code or call graph |
 | H | inferred via neighbours |
 
+---
+
+## How complete the map is
+
+![Function map coverage]({{completeness.svg}})
+The lower bar counts the bodies that were read.
+<br>
+
+
 ![Functions by aspect of the game]({{aspects.svg}})
 
 The labels come from the theme the region pages give each 256 KB window, so a function is grouped by its window
 rather than by anything read in its own body. Totals and the per-window census are on [Function map](Function-map)
 and [Function census](Function-census).
+
 
 ## How far the theme labels have got
 
@@ -40,11 +44,10 @@ evidence each quotes, and a third read when they disagree. Anything without chec
 chart shows the first 200-function sample, and how giving vtable methods their class moved the stubs that had nothing
 of their own. The method, the numbers and the hand audit are on [Theming progress](Theming-progress).
 
-## Table of contents
-
-Every page of the wiki, grouped the way the sidebar groups it.
+## Table of Contents
 
 {{toc}}
+
 
 ## Rules the work follows
 
