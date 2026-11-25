@@ -32,24 +32,25 @@ The window theme is never accepted as evidence. A label that only repeats the wi
 ## Continuation batches
 
 Two Terra readers independently reviewed each function. A third reader saw the dossiers for disagreements without
-seeing the earlier votes. Later batches prioritized functions with specific strings in their own body or in their
-vtable siblings.
+seeing the earlier votes. Later batches prioritized functions with specific strings in their own body, their vtable
+siblings, or the functions they call.
 
 | Selection | Reviewed | Accepted | Abstained |
 |---|---:|---:|---:|
 | Functions spaced across `main` | 24 | 1 | 23 |
 | Functions with rare strings | 366 | 158 | 208 |
 | Small vtable methods with class evidence | 158 | 64 | 94 |
-| Total | 548 | 223 | 325 |
+| Functions with direct-call evidence | 64 | 11 | 53 |
+| Total | 612 | 234 | 378 |
 
-Of the 223 accepted labels, 218 have strong evidence and five have medium evidence.
+Of the 234 accepted labels, 229 have strong evidence and five have medium evidence.
 
 ## Accepted labels by aspect
 
 ![Aspects measured per function]({{theming-aspects.svg}})
 
-The chart includes 315 distinct accepted labels across the original sample (80), the vtable and control experiment
-(12), and the continuation (223).
+The chart includes 326 distinct accepted labels across the original sample (80), the vtable and control experiment
+(12), and the continuation (234).
 
 ## The hand audit
 
