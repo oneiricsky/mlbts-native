@@ -13,6 +13,14 @@ Everything here was measured on one PC (an i5-12400F with an RX 6700 XT), game v
 | [PS5 textures and the yellow face](PS5-textures) | A compute pass read the wrong part of a bigger texture | Fixed; still opt-in until more heads are checked |
 | [Open upstream bugs](Upstream-bug-research) | Four issues read and ranked | Research only, nothing run |
 
+## How complete the map is
+
+![Function map coverage](completeness.svg)
+
+The upper bar splits every function by the evidence behind its role: a string, symbol or import (C), the shape of the
+code or the call graph (I), or only its neighbours (H). The lower bar is the share whose body was read. The region
+totals and the per-window census are on [Function map](Function-map) and [Function census](Function-census).
+
 ## How it is built and measured
 
 | Page | Covers |

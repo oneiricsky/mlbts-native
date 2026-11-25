@@ -128,6 +128,10 @@ def main():
     side += ["", "Reference"] + [f"- [{p.replace('-', ' ')}]({p})" for p in
              ("History-and-open-questions", "Tools-and-the-code-map", "Start-here")]
     open(f"{a.out}/_Sidebar.md", "w", newline="\n").write("\n".join(side) + "\n")
+    # the home page's coverage chart: generated from the same index, so it always matches the numbers
+    if os.path.exists(ROOT + "/work/map/index/roles.jsonl"):
+        import wiki_completeness
+        wiki_completeness.write(ROOT + "/work/map/index", a.out)
     missing = [p for p in pages if not os.path.exists(f"{a.out}/{p}.md")]
     print(f"{len(pages)} pages written to {a.out}; missing: {missing}")
     # every [text](Page) link must point at a page we wrote
