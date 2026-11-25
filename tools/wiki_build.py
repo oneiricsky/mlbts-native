@@ -107,10 +107,6 @@ def main():
     import map_functions_doc
     fpages = map_functions_doc.pages_for(ROOT + "/work/map/index", a.out)
     pages.extend(fpages)
-    side = ["[Home](Home)", "", "Findings"] + [f"- [{p.replace('-', ' ')}]({p})" for p in
-            ("Walk-up-freeze", "Match-start-freeze", "Load-stalls", "Frame-rate-and-GPU-waits", "PS5-textures", "Upstream-bug-research")]
-    side += ["", "How it works"] + [f"- [{p.replace('-', ' ')}]({p})" for p in
-             ("How-the-port-works", "The-game-binary", "Known-game-functions", "Tracing-playbook", "Dev-harness-and-measuring")]
     fm = ["Function-map", "Function-census", "Functions-A", "Functions-B", "Functions-C", "Functions-D", "Functions-E",
           "Functions-F", "Functions-SDK"]
     if "Read-roles" in pages:
@@ -121,15 +117,38 @@ def main():
         fm.append("Save-schema")
     if "Theming-progress" in pages:
         fm.append("Theming-progress")
-    side += ["", "Function map"] + [f"- [{p.replace('-', ' ')}]({p})" for p in fm]
-    side += ["", "Game flow"] + [f"- [{p.replace('-', ' ')}]({p})" for p in
-             ("Game-state-machine", "Intro-states", "Batter-up-state", "Play-states", "End-states")]
-    side += ["", "Subsystems"] + [f"- [{p.replace('-', ' ')}]({p})" for p in
-             ("Fielding", "Frontend", "Audio", "AI-actor-API", "Lighting", "Game-modes")]
-    side += ["", "Game binary regions"] + [f"- [Region {l}](Region-{l})" for l in REGIONS]
-    side += ["", "Reference"] + [f"- [{p.replace('-', ' ')}]({p})" for p in
-             ("History-and-open-questions", "Tools-and-the-code-map", "Start-here")]
+    sections = [
+        ("Findings", ("Walk-up-freeze", "Match-start-freeze", "Load-stalls", "Frame-rate-and-GPU-waits",
+                      "PS5-textures", "Upstream-bug-research")),
+        ("How it works", ("How-the-port-works", "The-game-binary", "Known-game-functions", "Tracing-playbook",
+                          "Dev-harness-and-measuring")),
+        ("Function map", tuple(fm)),
+        ("Game flow", ("Game-state-machine", "Intro-states", "Batter-up-state", "Play-states", "End-states")),
+        ("Subsystems", ("Fielding", "Frontend", "Audio", "AI-actor-API", "Lighting", "Game-modes")),
+        ("Game binary regions", tuple(f"Region-{l}" for l in REGIONS)),
+        ("Reference", ("History-and-open-questions", "Tools-and-the-code-map", "Start-here")),
+    ]
+
+    def label(p):
+        return f"Region {p.split('-')[1]}" if p.startswith("Region-") else p.replace("-", " ")
+
+    side = ["[Home](Home)"]
+    for title, ps in sections:
+        side += ["", title] + [f"- [{label(p)}]({p})" for p in ps]
     open(f"{a.out}/_Sidebar.md", "w", newline="\n").write("\n".join(side) + "\n")
+    # the home page's table of contents: every page, grouped the way the sidebar groups it, from the same lists. The
+    # read-role detail pages are generated in bulk and kept off the sidebar; the table lists them too, so no page is
+    # reachable only through another page.
+    toc = ["| Section | Pages |", "|---|---|"]
+    for title, ps in sections:
+        toc.append(f"| {title} | " + " \u00b7 ".join(f"[{label(p)}]({p})" for p in ps) + " |")
+    listed = {p for _, ps in sections for p in ps}
+    read_rest = sorted(p for p in pages if p not in listed and re.match(r"Read-[A-F]-\d+$", p))
+    other = sorted(p for p in pages if p not in listed and p not in read_rest and p != "Home")
+    if read_rest:
+        toc.append("| Read roles detail | " + " \u00b7 ".join(f"[Read {p[5:]}]({p})" for p in read_rest) + " |")
+    if other:
+        toc.append("| Other pages | " + " \u00b7 ".join(f"[{label(p)}]({p})" for p in other) + " |")
     # the charts: coverage and window aspects from the index, theme-label progress from tools/data/theming-pilot.json.
     # Names carry a content hash, because GitHub serves wiki images from a cache keyed by URL. Every page may carry a
     # {{name.svg}} placeholder; the pages themselves carry the same counts in text.
@@ -146,6 +165,13 @@ def main():
             for kind, name in names.items():
                 t = t.replace("{{" + kind + ".svg}}", name)
             open(path, "w", encoding="utf-8", newline="\n").write(t)
+    for page in os.listdir(a.out):
+        if not page.endswith(".md"):
+            continue
+        path = f"{a.out}/{page}"
+        t = read(path)
+        if "{{toc}}" in t:
+            open(path, "w", encoding="utf-8", newline="\n").write(t.replace("{{toc}}", "\n".join(toc)))
     missing = [p for p in pages if not os.path.exists(f"{a.out}/{p}.md")]
     print(f"{len(pages)} pages written to {a.out}; missing: {missing}")
     # every [text](Page) link must point at a page we wrote

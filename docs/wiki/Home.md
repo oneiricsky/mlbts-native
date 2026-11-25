@@ -40,19 +40,11 @@ evidence each quotes, and a third read when they disagree. Anything without chec
 chart shows the first 200-function sample, and how giving vtable methods their class moved the stubs that had nothing
 of their own. The method, the numbers and the hand audit are on [Theming progress](Theming-progress).
 
-## How it is built and measured
+## Table of contents
 
-| Page | Covers |
-|---|---|
-| [How the port works](How-the-port-works) | the layers, how the game's code becomes C, how graphics and frame timing work |
-| [The game binary](The-game-binary) | what the game's code is made of and where things sit in it |
-| [Game state machine](Game-state-machine) | the 12 game-flow states: what each vtable slot does, sub-state tables, how a play moves through them, with four detail pages |
-| [Region A](Region-A) to [Region F](Region-F) | the game's `main` code in six address ranges, with key functions |
-| [Function map](Function-map) | every function of `main` and `sdk`: the census, the per-region registers, and what is known about each |
-| [Dev harness and measuring](Dev-harness-and-measuring) | how a run is set up, and the rules for comparing two builds |
-| [Tools and the code map](Tools-and-the-code-map) | the scripts that index the code and how to rebuild them |
-| [History and open questions](History-and-open-questions) | what is not settled |
-| [Start here](Start-here) | the entry point for a new session; the game-code and region pages are generated from the repo skill `mlbts-game-code` |
+Every page of the wiki, grouped the way the sidebar groups it.
+
+{{toc}}
 
 ## Rules the work follows
 
