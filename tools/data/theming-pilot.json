@@ -75,25 +75,25 @@
   "Presentation and animation": 1
  },
  "continuation": {
-  "functions": 388,
+  "functions": 548,
   "accepted": {
-   "strong": 155,
+   "strong": 218,
    "medium": 5
   },
-  "abstained": 228,
+  "abstained": 325,
   "aspects": {
-   "Presentation and animation": 14,
-   "Online and Diamond Dynasty": 69,
-   "Data and serialization": 9,
-   "Franchise, league and roster": 26,
+   "Presentation and animation": 23,
+   "Online and Diamond Dynasty": 89,
+   "Data and serialization": 15,
+   "Franchise, league and roster": 35,
    "Gameplay: in-play": 2,
-   "Graphics and textures": 12,
-   "Stats and records": 9,
-   "Menus and UI": 15,
-   "Gameplay: fielding": 1,
-   "Audio": 1,
+   "Graphics and textures": 16,
+   "Stats and records": 13,
+   "Menus and UI": 23,
+   "Gameplay: fielding": 2,
+   "Audio": 2,
    "Gameplay: baserunning": 1,
-   "Road to the Show": 1
+   "Road to the Show": 2
   }
  }
 }

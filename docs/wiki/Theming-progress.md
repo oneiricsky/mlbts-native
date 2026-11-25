@@ -38,18 +38,18 @@ vtable siblings.
 | Selection | Reviewed | Accepted | Abstained |
 |---|---:|---:|---:|
 | Functions spaced across `main` | 24 | 1 | 23 |
-| Functions with rare strings | 206 | 95 | 111 |
+| Functions with rare strings | 366 | 158 | 208 |
 | Small vtable methods with class evidence | 158 | 64 | 94 |
-| Total | 388 | 160 | 228 |
+| Total | 548 | 223 | 325 |
 
-Of the 160 accepted labels, 155 have strong evidence and five have medium evidence.
+Of the 223 accepted labels, 218 have strong evidence and five have medium evidence.
 
 ## Accepted labels by aspect
 
 ![Aspects measured per function]({{theming-aspects.svg}})
 
-The chart includes 252 distinct accepted labels across the original sample (80), the vtable and control experiment
-(12), and the continuation (160).
+The chart includes 315 distinct accepted labels across the original sample (80), the vtable and control experiment
+(12), and the continuation (223).
 
 ## The hand audit
 
