@@ -43,6 +43,10 @@ PAIRS = [
     ("I segment against background", PALETTE["i"], PALETTE["bg"], GRAPHIC),
     ("H segment against background", PALETTE["h"], PALETTE["bg"], GRAPHIC),
     ("read segment against background", PALETTE["read"], PALETTE["bg"], GRAPHIC),
+    ("no-evidence segment against background", PALETTE["n"], PALETTE["bg"], GRAPHIC),
+    ("not-settled segment against background", PALETTE["q"], PALETTE["bg"], GRAPHIC),
+    ("count inside a no-evidence segment", PALETTE["onbar"], PALETTE["n"], TEXT),
+    ("count inside a not-settled segment", PALETTE["onbar"], PALETTE["q"], TEXT),
     ("bar against its track", PALETTE["accent"], PALETTE["track"], GRAPHIC),
     ("card edge against background", PALETTE["border"], PALETTE["bg"], 1.0),
 ]
@@ -85,7 +89,8 @@ def main():
             ok = False
         print(f"  {name:34s} {fg} on {bg}  {r:5.2f}:1  needs {need:.1f}  {verdict}")
     import glob
-    charts = sorted(glob.glob(f"{a.wiki}/completeness-*.svg")) + sorted(glob.glob(f"{a.wiki}/aspects-*.svg"))
+    charts = (sorted(glob.glob(f"{a.wiki}/completeness-*.svg")) + sorted(glob.glob(f"{a.wiki}/aspects-*.svg"))
+              + sorted(glob.glob(f"{a.wiki}/theming-*.svg")))
     if not charts:
         print(f"no chart SVGs in {a.wiki}")
         ok = False

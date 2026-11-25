@@ -1,0 +1,68 @@
+{
+ "sample": 200,
+ "agreement": {
+  "both_labelled": 80,
+  "agreed": 61
+ },
+ "accepted": {
+  "strong": 29,
+  "medium": 2,
+  "weak": 49
+ },
+ "abstained": {
+  "no_evidence": 85,
+  "not_settled": 35
+ },
+ "window_prior_match": 23,
+ "vtable_round": {
+  "functions": 31,
+  "accepted": {
+   "medium": 2,
+   "strong": 9
+  },
+  "no_evidence": 16,
+  "not_settled": 4
+ },
+ "control_round": {
+  "functions": 9,
+  "accepted": {
+   "weak": 1
+  },
+  "no_evidence": 3,
+  "not_settled": 5
+ },
+ "audit": {
+  "pilot": {
+   "rows": 18,
+   "right": 14,
+   "wrong": 0,
+   "unsure": 4
+  },
+  "vtable": {
+   "rows": 12,
+   "right": 10,
+   "wrong": 0,
+   "unsure": 2
+  }
+ },
+ "class_evidence": {
+  "slots": 55394,
+  "method_strings": 17509,
+  "near_strings": 22123,
+  "either": 25243,
+  "classes": 5813,
+  "classes_without_strings": 4151
+ },
+ "aspects": {
+  "Menus and UI": 21,
+  "Stats and records": 2,
+  "Road to the Show": 5,
+  "Graphics and textures": 6,
+  "Data and serialization": 13,
+  "Franchise, league and roster": 5,
+  "Online and Diamond Dynasty": 20,
+  "Gameplay: in-play": 1,
+  "Presentation and animation": 2,
+  "Audio": 5
+ }
+}

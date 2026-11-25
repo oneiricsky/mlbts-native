@@ -26,6 +26,15 @@ The labels come from the theme the region pages give each 256 KB window, so a fu
 rather than by anything read in its own body. Totals and the per-window census are on [Function map](Function-map)
 and [Function census](Function-census).
 
+## How far the theme labels have got
+
+![Theme labels accepted]({{theming.svg}})
+
+A separate pass labels functions one by one: two independent reads of the function's code, a machine check of the
+evidence each quotes, and a third read when they disagree. Anything without checkable evidence stays unlabelled. The
+chart shows the first 200-function sample, and how giving vtable methods their class moved the stubs that had nothing
+of their own. The method, the numbers and the hand audit are on [Theming progress](Theming-progress).
+
 ## How it is built and measured
 
 | Page | Covers |

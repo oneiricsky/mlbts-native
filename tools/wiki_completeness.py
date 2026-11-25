@@ -25,7 +25,7 @@ REGIONS = [("A", 0x7000000000, 0x7000600000), ("B", 0x7000600000, 0x7000C00000),
 # one palette, checked by tools/wiki_wcag_check.py: text pairs at 4.5:1 or better, bars at 3:1 or better
 PALETTE = dict(bg="#0d1117", fg="#e6edf3", fg2="#9aa4af", border="#30363d", accent="#6f9bd6",
                onbar="#0d1117", track="#21262d", c="#3fa172", i="#6f9bd6", h="#c9a071",
-               read="#c9d1d9", unread="#21262d")
+               read="#c9d1d9", unread="#21262d", n="#9aa4af", q="#b083d0")
 
 CLASSES = """.bg { fill: var(--bg); }
   .card { fill: none; stroke: var(--border); stroke-width: 1; }
@@ -33,6 +33,7 @@ CLASSES = """.bg { fill: var(--bg); }
   .f2 { fill: var(--fg2); }
   .grid { stroke: var(--border); stroke-width: 1; }
   .c { fill: var(--c); } .i { fill: var(--i); } .h { fill: var(--h); }
+  .n { fill: var(--n); } .q { fill: var(--q); }
   .read { fill: var(--read); } .unread { fill: var(--unread); }
   .bar { fill: var(--accent); }
   .track { fill: var(--track); }

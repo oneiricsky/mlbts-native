@@ -119,6 +119,8 @@ def main():
         fm.append("Class-fields")
     if "Save-schema" in pages:
         fm.append("Save-schema")
+    if "Theming-progress" in pages:
+        fm.append("Theming-progress")
     side += ["", "Function map"] + [f"- [{p.replace('-', ' ')}]({p})" for p in fm]
     side += ["", "Game flow"] + [f"- [{p.replace('-', ' ')}]({p})" for p in
              ("Game-state-machine", "Intro-states", "Batter-up-state", "Play-states", "End-states")]
@@ -128,17 +130,22 @@ def main():
     side += ["", "Reference"] + [f"- [{p.replace('-', ' ')}]({p})" for p in
              ("History-and-open-questions", "Tools-and-the-code-map", "Start-here")]
     open(f"{a.out}/_Sidebar.md", "w", newline="\n").write("\n".join(side) + "\n")
-    # the home page's charts: generated from the same index, named by content so GitHub's image cache cannot serve a
-    # stale copy under the same URL. Home.md carries {{completeness.svg}} / {{aspects.svg}} placeholders.
+    # the charts: coverage and window aspects from the index, theme-label progress from tools/data/theming-pilot.json.
+    # Names carry a content hash, because GitHub serves wiki images from a cache keyed by URL. Every page may carry a
+    # {{name.svg}} placeholder; the pages themselves carry the same counts in text.
     if os.path.exists(ROOT + "/work/map/index/roles.jsonl"):
         import wiki_completeness
         names, *_ = wiki_completeness.write(ROOT + "/work/map/index", a.out)
-        home = f"{a.out}/Home.md"
-        if os.path.exists(home):
-            t = read(home)
+        import wiki_theming
+        names.update(wiki_theming.write(a.out))
+        for page in os.listdir(a.out):
+            if not page.endswith(".md"):
+                continue
+            path = f"{a.out}/{page}"
+            t = read(path)
             for kind, name in names.items():
                 t = t.replace("{{" + kind + ".svg}}", name)
-            open(home, "w", encoding="utf-8", newline="\n").write(t)
+            open(path, "w", encoding="utf-8", newline="\n").write(t)
     missing = [p for p in pages if not os.path.exists(f"{a.out}/{p}.md")]
     print(f"{len(pages)} pages written to {a.out}; missing: {missing}")
     # every [text](Page) link must point at a page we wrote
