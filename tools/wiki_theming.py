@@ -3,8 +3,7 @@
     python -I tools/wiki_theming.py --refresh          # recompute tools/data/theming-pilot.json from work/theme*
     python -I tools/wiki_theming.py --out work/wiki    # write the two SVGs (content-named)
 
-theming-<hash>.svg:        what the 200-function sample produced (labelled by evidence strength, no evidence, not
-                           settled), and how the vtable class context moved the 31 stubs that had none.
+theming-<hash>.svg:        progress across the 200-function sample, the vtable experiment and the continuation.
 theming-aspects-<hash>.svg: the accepted labels by aspect of the game, measured per function, beside the window-based
                            chart on the home page.
 
@@ -101,7 +100,11 @@ def refresh():
         "class_evidence": {"slots": 55394, "method_strings": 17509, "near_strings": 22123,
                            "either": 25243, "classes": 5813, "classes_without_strings": 4151},
         "aspects": dict(Counter(r["aspect"] for r in acc)),
+        "vtable_aspects": dict(Counter(r["aspect"] for r in eacc.values())),
     }
+    # The published continuation is reviewed separately from refreshing the two historical pilot runs.
+    with open(DATA, encoding="utf-8") as f:
+        d["continuation"] = json.load(f)["continuation"]
     os.makedirs(os.path.dirname(DATA), exist_ok=True)
     json.dump(d, open(DATA, "w", encoding="utf-8", newline="\n"), indent=1)
     print(f"wrote {DATA}")
@@ -112,11 +115,11 @@ def svg_progress(d):
     accepted, abstained = d["accepted"], d["abstained"]
     a_total = sum(accepted.values())
     w, top, rowh = 1000, 148, 46
-    h = top + rowh * 3 + 78
+    h = top + rowh * 4 + 78
     out = head(w, h, "Where the theme labels stand",
                ["One label per function from two independent body reads; a third read settles disagreements.",
                 f"{d['sample']} functions drawn across main: {a_total} labelled, {d['sample'] - a_total} not."],
-               "Theme labels accepted by evidence strength on a two-hundred-function sample")
+               "Theme labels accepted across the pilot, vtable experiment and continuation")
     parts = [(accepted["strong"], "c"), (accepted["medium"], "i"), (accepted["weak"], "h"),
              (abstained["no_evidence"], "n"), (abstained["not_settled"], "q")]
     y = 84
@@ -157,6 +160,15 @@ def svg_progress(d):
                                  (c["not_settled"], "q")])
     out.append(f'<text x="{LEFT + BW + 10}" y="{y + 15}" font-size="10" class="f2">'
                f'{sum(c["accepted"].values())} labelled (weak)</text>')
+    continuation = d["continuation"]
+    accepted = continuation["accepted"]
+    y = top + rowh * 3
+    out.append(f'<text x="{LEFT - 12}" y="{y + 15}" font-size="11" class="f1" text-anchor="end">'
+               f'continuation ({continuation["functions"]})</text>')
+    out += bar(LEFT, y, BW, 22, [(accepted.get("strong", 0), "c"), (accepted.get("medium", 0), "i"),
+                               (accepted.get("weak", 0), "h"), (continuation["abstained"], "n")])
+    out.append(f'<text x="{LEFT + BW + 10}" y="{y + 15}" font-size="10" class="f2">'
+               f'{sum(accepted.values())} labelled</text>')
     ag, both = d["agreement"]["agreed"], d["agreement"]["both_labelled"]
     au = d["audit"]
     rows = au["pilot"]["rows"] + au["vtable"]["rows"]
@@ -173,13 +185,16 @@ def svg_progress(d):
 
 
 def svg_aspects(d):
-    items = sorted(d["aspects"].items(), key=lambda kv: -kv[1])
+    counts = Counter(d["aspects"])
+    counts.update(d["vtable_aspects"])
+    counts.update(d["continuation"]["aspects"])
+    items = sorted(counts.items(), key=lambda kv: -kv[1])
     total = sum(n for _, n in items) or 1
     w, top, rowh = 1000, 128, 32
     h = top + rowh * len(items) + 34
     out = head(w, h, "Aspects measured per function",
-               [f"The {total} accepted labels of the {d['sample']}-function sample, each from the function's own",
-                "body or class, with abstention rather than a window guess. The home page has the window-based view."],
+               [f"{total} accepted labels across the pilot, vtable experiment and continuation.",
+                "Each label applies to one function and is backed by evidence from its body or class."],
                "Accepted theme labels by aspect of the game, measured per function")
     for pct in (0, 25, 50, 75, 100):
         x = LEFT + BW * pct / 100

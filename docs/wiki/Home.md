@@ -35,10 +35,9 @@ Throughout the wiki, functions are tagged with the following letters to indicate
 
 ![Theme labels accepted]({{theming.svg}})
 
-A separate pass labels functions one by one: two independent reads of the function's code, a machine check of the
-evidence each quotes, and a third read when they disagree. Anything without checkable evidence stays unlabelled. The
-chart shows the first 200-function sample, and how giving vtable methods their class moved the stubs that had nothing
-of their own. The method, the numbers and the hand audit are on [Theming progress](Theming-progress).
+Two independent reads and an evidence check have yielded 99 individual function labels so far. The latest batches
+accepted seven labels across 40 new functions. See the accepted labels by aspect and the evidence rules on
+[Theming progress](Theming-progress).
 
 ## Table of Contents
 

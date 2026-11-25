@@ -29,9 +29,23 @@ The window theme is never accepted as evidence. A label that only repeats the wi
 | Three reads did not settle it | 35 |
 | Accepted labels that just repeat the window theme | 23 of 80 = 29% |
 
+## Continuation batches
+
+Two Terra readers independently reviewed each function in both batches. A third Terra reader reviewed the four
+disagreements without seeing the earlier votes and resolved three.
+
+| Selection | Reviewed | Accepted | Abstained |
+|---|---:|---:|---:|
+| Functions spaced across `main` | 24 | 1 strong | 23 |
+| Small vtable methods with class evidence | 16 | 5 strong, 1 medium | 10 |
+| Total | 40 | 7 | 33 |
+
+## Accepted labels by aspect
+
 ![Aspects measured per function]({{theming-aspects.svg}})
 
-The accepted labels by aspect, measured per function. The window-based view is the chart on the home page; the two are not the same measurement.
+The chart includes 99 distinct accepted labels across the original sample (80), the vtable and control experiment
+(12), and the continuation (7).
 
 ## The hand audit
 
