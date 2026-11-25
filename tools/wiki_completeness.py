@@ -192,8 +192,8 @@ def svg_aspects(counts, themed, total, dark):
     w, top, rowh = 1000, 148, 38
     h = top + rowh * len(items) + 14
     share = 100.0 * themed / (total or 1)
-    subtitle = (f"{themed:,} of {total:,} functions ({share:.1f}%) carry a window theme; the bars split that "
-                f"themed share. The strip shows how much of the whole map the themes cover.")
+    subtitle = (f"grouped by the theme the region pages give each 256 KB window, not by anything read in the "
+                f"function itself; {themed:,} of {total:,} functions sit in a themed window ({share:.1f}%).")
     out = head(w, h, "Functions by aspect of the game", subtitle, "Functions grouped by aspect of the game", dark)
     # coverage strip: themed against the whole map
     sy = 70
