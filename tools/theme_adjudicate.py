@@ -1,25 +1,28 @@
-"""Adjudicate the two independent reads (step 3 of the double-read pipeline).
+"""Adjudicate the independent reads (step 3 of the double-read pipeline).
 
     python -I tools/theme_adjudicate.py [--theme work/theme]
 
-Reads `reads/a/out-*.jsonl` and `reads/b/out-*.jsonl` (and `reads/c/` for a third read where they disagree). Two
-answers are accepted only when they name the same aspect and each one rests on evidence the machine can check:
+Reads `reads/a/out-*.jsonl`, `reads/b/out-*.jsonl` and `reads/c/out-*.jsonl` (the third read, for disagreements).
+Two answers are accepted only when they name the same aspect and each one rests on evidence the machine can check:
 
-  * a string the reader quotes, which must be one of the function's own strings (from the map index); a string that
-    at most 20 `main` functions quote is `rare string`, otherwise `common string`;
-  * a callee address, which must be a direct callee of the function (from generated_functions.jsonl). If that
-    callee's own role or strings name the aspect's vocabulary (`tools/theme_aspects.py`), the strength is
-    `callee names the aspect`; otherwise it is only `callee without a label`.
+  * a string the reader quotes, which must be one of the function's own strings; at most 20 `main` functions quote a
+    `rare string`, otherwise it is a `common string`;
+  * a callee address, which must be a direct callee; if that callee's role or strings name the aspect's vocabulary
+    (`tools/theme_aspects.py`) it is `callee names the aspect`, else only `callee without a label`;
+  * for a vtable method, a string its class's other methods quote (`class method string`), a string one hop out
+    (`class near string`), or a sibling method whose role names the aspect (`sibling names the aspect`). The class
+    context comes from `tools/vtable_class.py` and is the same block the reader saw in the dossier.
 
-The window theme is never evidence: it is 37.5% right per function and the readers are told so. The strength of the
-weakest of the two agreeing rows sets the row's `tier`: `strong` (two rare strings or naming callees), `medium`
-(one of those, one weaker), `weak` (two weak rows). The hand audit reports precision per tier.
+The window theme is never evidence: it is 37.5% right per function and the readers are told so. The weakest row of an
+agreeing pair sets the row's `tier`: `strong` (rank 0 or 1: own rare string, naming callee, class method string,
+naming sibling), `medium` (class near string, common own string), `weak` (a bare callee). The hand audit reports
+precision per tier.
 
 Writes:
 
-  accepted.jsonl   rows both readers agree on whose evidence checks out, with the tier and both strengths
-  abstained.jsonl  rows not labelled, with a reason (unclear, disagreement not settled, evidence failed)
-  queue-c.jsonl    addresses the two reads disagree on; the third read's input
+  accepted.jsonl   rows the reads agree on whose evidence checks out, with tier, strengths and details
+  abstained.jsonl  rows not labelled, with a reason
+  queue-c.jsonl    addresses the reads disagree on; the third read's input
   state.json       counts, updated in place
 
 Every run rebuilds accepted/abstained/queue from the read files, so it is safe to rerun and safe to interrupt. A
@@ -36,11 +39,20 @@ from collections import Counter
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))).replace("\\", "/")
 sys.path.insert(0, ROOT + "/tools")
 from theme_aspects import ASPECTS, hits
+import vtable_class
 
 ADDR = re.compile(r"(?:0x|f_)([0-9a-f]{9,12})")
 RARE = 20  # a quoted string that at most this many main functions quote is specific evidence
 ASPECTS = set(ASPECTS) | {"Unclear"}
-NOT_PROOF = {"callee without a label": 3, "common string": 2, "rare string": 0, "callee names the aspect": 1}
+NOT_PROOF = {
+    "rare string": 0,
+    "callee names the aspect": 1,
+    "sibling names the aspect": 1,
+    "class method string": 1,
+    "class near string": 2,
+    "common string": 2,
+    "callee without a label": 3,
+}
 
 
 def load_jsonl(path):
@@ -71,32 +83,55 @@ def load_reads(folder):
     return out
 
 
-def grounding(row, strings, calls, string_count, roles):
-    """How well the row's own evidence supports its aspect. Returns (strength, rarity, detail) or (None, ...)."""
+def _better(a, b):
+    """Pick the stronger of two candidate evidences; ties keep the earlier (own evidence before class evidence)."""
+    if not a:
+        return b
+    if not b:
+        return a
+    return b if NOT_PROOF[b[0]] < NOT_PROOF[a[0]] else a
+
+
+def grounding(row, own_strings, calls, string_count, roles, vt, class_cache):
+    """How well the row's evidence supports its aspect. Returns (strength, rarity, detail) or (None, ...)."""
     ev = (row.get("evidence") or "").strip()
     low = ev.lower()
     best = None
-    for s in strings:
+    for s in own_strings:
         s = s.strip()
         if len(s) < 4 or s.lower() not in low:
             continue
         n = string_count.get(s, 0)
-        cand = ("rare string" if n <= RARE else "common string", n, s)
-        if best is None or NOT_PROOF[cand[0]] < NOT_PROOF[best[0]] or (
-                NOT_PROOF[cand[0]] == NOT_PROOF[best[0]] and n < best[1]):
-            best = cand
+        best = _better(best, ("rare string" if n <= RARE else "common string", n, s))
     for m in ADDR.findall(ev):
         m = "0x" + m.lower()
-        if m not in calls:
-            continue
-        cr = roles.get(m) or {}
-        said = " ".join([str(cr.get("role") or ""), str(cr.get("name") or "")] + list(cr.get("strings") or []))
-        if hits(said, row["aspect"]):
-            cand = ("callee names the aspect", 0, m)
-            if best is None or NOT_PROOF[cand[0]] < NOT_PROOF[best[0]]:
-                best = cand
-        elif best is None:
-            best = ("callee without a label", 10 ** 6, m)
+        if m in calls:
+            cr = roles.get(m) or {}
+            said = " ".join([str(cr.get("role") or ""), str(cr.get("name") or "")] + list(cr.get("strings") or []))
+            if hits(said, row["aspect"]):
+                best = _better(best, ("callee names the aspect", 0, m))
+            else:
+                best = _better(best, ("callee without a label", 10 ** 6, m))
+    # the vtable class, for methods whose own body is bare
+    c = vt.class_of(row["addr"])
+    if c:
+        vtable, slot, size = c
+        if vtable not in class_cache:
+            class_cache[vtable] = (vt.method_strings(vtable), vt.near_strings(vtable), set(vt.members(vtable)))
+        method, near, members = class_cache[vtable]
+        for s in method:
+            if len(s) >= 4 and s.lower() in low:
+                best = _better(best, ("class method string", 0, s))
+        for s in near:
+            if len(s) >= 4 and s.lower() in low:
+                best = _better(best, ("class near string", 0, s))
+        for m in ADDR.findall(ev):
+            m = "0x" + m.lower()
+            if m in members:
+                mr = roles.get(m) or {}
+                said = " ".join([str(mr.get("role") or "")] + list(mr.get("strings") or []))
+                if hits(said, row["aspect"]):
+                    best = _better(best, ("sibling names the aspect", 0, m))
     return best or (None, None, None)
 
 
@@ -139,6 +174,8 @@ def main():
         r = json.loads(line)
         if r["module"] == "main" and r["addr"].lower() in want:
             calls[r["addr"].lower()] = {x.lower() for x in (r.get("calls") or [])}
+    vt = vtable_class.load(a.index)
+    class_cache = {}
 
     A = load_reads(f"{a.theme}/reads/a")
     B = load_reads(f"{a.theme}/reads/b")
@@ -155,10 +192,10 @@ def main():
         if a1.get("aspect") not in ASPECTS or b1.get("aspect") not in ASPECTS:
             abstained.append({"addr": addr, "reason": "aspect outside the list"})
             continue
-        strings = roles.get(addr, {}).get("strings") or []
+        own = roles.get(addr, {}).get("strings") or []
         ca = calls.get(addr, set())
-        ga, na, da = grounding(a1, strings, ca, string_count, roles)
-        gb, nb, db = grounding(b1, strings, ca, string_count, roles)
+        ga, na, da = grounding(a1, own, ca, string_count, roles, vt, class_cache)
+        gb, nb, db = grounding(b1, own, ca, string_count, roles, vt, class_cache)
         if a1["aspect"] == b1["aspect"]:
             if a1["aspect"] == "Unclear":
                 abstained.append({"addr": addr, "reason": "both reads found no decisive evidence"})
@@ -170,19 +207,18 @@ def main():
                 abstained.append({"addr": addr, "aspect": a1["aspect"], "reason": "agreed but evidence failed",
                                   "strength": [ga, gb], "evidence": [a1.get("evidence", ""), b1.get("evidence", "")]})
             continue
-        # a disagreement (one side may be Unclear): settle it with the third read, or leave it pending
         rc = C.get(addr, [])
         if not rc:
             queue.append({"addr": addr, "batch": batch_of[addr], "a": a1.get("aspect"), "b": b1.get("aspect")})
             continue
         c1 = rc[0]
-        gc, nc, dc = grounding(c1, strings, ca, string_count, roles)
+        gc, nc, dc = grounding(c1, own, ca, string_count, roles, vt, class_cache)
         votes = [a1["aspect"], b1["aspect"], c1.get("aspect")]
         winner = next((v for v in votes if v != "Unclear" and votes.count(v) >= 2), None)
-        grounded_votes = [g for i, g in enumerate([ga, gb, gc]) if g and votes[i] == winner]
-        if winner and len(grounded_votes) >= 2:
+        grounded = [g for i, g in enumerate([ga, gb, gc]) if g and votes[i] == winner]
+        if winner and len(grounded) >= 2:
             ok_rows.append({"addr": addr, "aspect": winner, "reads": 3, "batch": batch_of[addr],
-                            "tier": tier_of(*grounded_votes), "strength": [ga, gb, gc], "detail": [da, db, dc],
+                            "tier": tier_of(*grounded), "strength": [ga, gb, gc], "detail": [da, db, dc],
                             "evidence": [x.get("evidence", "") for x in (a1, b1, c1)]})
         else:
             abstained.append({"addr": addr, "votes": votes, "reason": "three reads did not settle it",

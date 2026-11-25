@@ -111,11 +111,41 @@ does say the accepted rows are not visibly broken and that the failure mode is a
   94,991 functions is roughly 70–100 hours of wall clock; the third read adds about a quarter of that. The earlier
   cost estimate (about $55 of reads) stands.
 
+## Vtable class context (added the same day)
+
+33,403 of the 94,991 `main` functions are one slot of one of 5,813 vtables. A bare getter or empty stub carries no
+evidence of its own, but its class does. Dossiers now carry a `class:` line for every vtable method: the class's
+slot count, the strings its sibling methods quote (`method strings`), strings one hop out from the siblings
+(`near strings`, from their callees and callers), and up to three named sibling roles. The adjudicator checks class
+evidence the same way it checks the rest and ranks it: a method string is strong (rank 1), a one-hop string is medium
+(rank 2). The code is `tools/vtable_class.py`.
+
+Experiment: the 40 functions from the pilot that both readers had called Unclear — 31 vtable methods and 9
+non-vtable controls — were read again with the class line (same prompt otherwise, fresh readers):
+
+| Group | Readers labelled | Agreed | Accepted after a third read |
+|---|---|---|---|
+| 31 vtable methods | A 14, B 13 | 11 | **11 (9 strong, 2 medium)** |
+| 9 non-vtable controls | A 6, B 0 | 0 | 1 (weak, from operations) |
+
+The gain is specific to the vtable group: the control group shows the readers did not simply get bolder. Of the 40,
+19 still have no evidence at all — their classes quote nothing (field writes, `+0x` getters, empty stubs).
+
+Hand audit of the 12 accepted: **10 right, 0 wrong, 2 unsure** (a fielding-versus-in-play boundary, and Home Run Derby
+mapped to `Gameplay: batting` because the aspect list has no HRD). On decided rows that is 10/10.
+
+What the class line can and cannot reach, over the whole map: 25,243 of the 55,394 vtable slots sit in a class that
+quotes at least one string (17,509 have method strings, 22,123 one-hop strings); 4,151 classes quote nothing. Only 16
+classes quote a source-file name, so the class *name* is rarely available — the label rests on the vocabulary of its
+methods. In this sample the class line lifted coverage by 11 of 200 (5.5 points). The deeper version of the same
+idea — resolving each class's registration data to name its fields, which is how the batch-4 reader labelled 22 stub
+getters — is not automated yet.
+
 ## Suggested next step
 
-1. Exclude `library`-kind and recognisably third-party functions from the targets; require a naming callee for the
-   weak tier. Rerun this same 200 to see the accepted count and re-audit: if the weak tier shrinks to the rows with
-   real evidence, the remaining set should be auditable at 90%+ with a larger sample.
+1. Exclude `library`-kind and recognisably third-party functions from the targets; require a naming callee (or a
+   class string) for a row to be accepted. Rerun this same 200 with the class line in every dossier to see the
+   end-to-end coverage, and re-audit: the class evidence is the strongest new tier.
 2. Then draw 1,000 functions (25 batches) for an audit with a usable confidence interval before committing to the
    full pass. The full run is a background job in chunks of a few hundred, resumable through `accepted.jsonl`.
 

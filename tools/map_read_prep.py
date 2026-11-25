@@ -15,6 +15,9 @@ collects the answers). Derived from game code: stays under work/.
 import argparse, json, os, re, sys
 from collections import Counter, defaultdict
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+import vtable_class
+
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))).replace("\\", "/")
 DEF = re.compile(r"^void f_([0-9a-f]+)\(Cpu \*c\) \{")
 
@@ -251,6 +254,8 @@ def main():
     starts_by_file = defaultdict(dict)
     for g in gen_funcs.values():
         starts_by_file[g["file"]][g["line"]] = g["addr"]
+    # the vtable class of a method: its siblings' strings and named methods are evidence a bare stub lacks
+    vt_index = vtable_class.load(a.index)
 
     todo = [r for r in rows if (a.all or r["tag"] == "H")
             and (a.only == "all" or r["module"] == a.only)]
@@ -297,8 +302,10 @@ def main():
                  "Each entry: address, generated-C lines, direct callers, span in bytes, vtable slot, the 256 KB",
                  "window's subsystem, the function's own strings, the known role of each callee in brackets, then the",
                  "function's operations: `call f_X` (a direct call), `LD32[x0+0x8]` / `ST8[x8+0xa]` (memory),",
-                 "`if ... goto L_x` (branch). Register names match the game's own; x0 is the first argument and the",
-                 "return value. The strings line is the only place this function's literals appear: quote from there.",
+                 "`if ... goto L_x` (branch). A vtable method also gets a `class:` line: the strings its sibling",
+                 "methods quote (`method strings`), the strings their callees and callers quote (`near strings`), and",
+                 "their named roles. Register names match the game's own; x0 is the first argument and the return value.",
+                 "The strings line is the only place this function's literals appear: quote from there.",
                  ""]
         for r in chunk:
             g = gen_funcs[r["addr"]]
@@ -316,6 +323,9 @@ def main():
                 lines.append(f"callers: {cdesc}")
             if calls:
                 lines.append("calls: " + ", ".join(calls))
+            cls = vtable_class.describe(vt_index, r["addr"])
+            if cls:
+                lines.append(cls)
             lit = [s.strip() for s in (r.get("strings") or [])
                    if 3 <= len(s.strip()) <= 60 and not s.strip().startswith(("/", "\\", "%"))][:8]
             if lit:

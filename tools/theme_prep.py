@@ -38,6 +38,8 @@ def main():
     ap.add_argument("--limit", type=int, default=40)
     ap.add_argument("--exclude-gold", action="store_true", help="skip functions whose strings already name an aspect")
     ap.add_argument("--batch-size", type=int, default=40)
+    ap.add_argument("--only", default="", help="file of addresses to read, in that order (an experiment on a known set)")
+    ap.add_argument("--reuse", action="store_true", help="rebuild the dossiers for the addresses already in targets.jsonl")
     a = ap.parse_args()
 
     os.makedirs(f"{a.theme}/reads/a", exist_ok=True)
@@ -61,22 +63,31 @@ def main():
         main = [r for r in main if lo <= int(r["addr"], 16) < lo + 0x40000]
     main.sort(key=lambda r: int(r["addr"], 16))
 
-    # A sample with no window is drawn with a fixed stride over the address space, so it spreads across every region
-    # instead of piling into the first few windows. Same stride and limit give the same sample, which is what the
-    # "fixed from frame 0" habit asks of a rerun.
-    stride = max(1, len(main) // a.limit) if a.limit and not a.window else 1
-    picked = []
-    for i, r in enumerate(main):
-        if r["addr"] in done:
-            continue
-        if a.exclude_gold and r["tag"] == "C":
-            # tag C already carries a string-proven label; the pipeline is for the functions that do not
-            continue
-        if stride > 1 and i % stride:
-            continue
-        picked.append(r)
-        if len(picked) >= a.limit:
-            break
+    by_addr = {r["addr"].lower(): r for r in main}
+    if a.only:
+        # a deliberate set, including addresses an earlier run abstained on: no done-check, the file order wins
+        want = [x.strip().lower() for x in open(a.only, encoding="utf-8") if x.strip() and not x.startswith("#")]
+        picked = [by_addr[x] for x in want if x in by_addr]
+    elif a.reuse:
+        old = [r["addr"].lower() for r in load_jsonl(f"{a.theme}/targets.jsonl")]
+        picked = [by_addr[x] for x in old if x in by_addr]
+    else:
+        # A sample with no window is drawn with a fixed stride over the address space, so it spreads across every
+        # region instead of piling into the first few windows. Same stride and limit give the same sample, which is
+        # what the "fixed from frame 0" habit asks of a rerun.
+        stride = max(1, len(main) // a.limit) if a.limit and not a.window else 1
+        picked = []
+        for i, r in enumerate(main):
+            if r["addr"] in done:
+                continue
+            if a.exclude_gold and r["tag"] == "C":
+                # tag C already carries a string-proven label; the pipeline is for the functions that do not
+                continue
+            if stride > 1 and i % stride:
+                continue
+            picked.append(r)
+            if len(picked) >= a.limit:
+                break
 
     state_path = f"{a.theme}/state.json"
     state = json.load(open(state_path)) if os.path.exists(state_path) else {"batches": {}, "reads": {}}
