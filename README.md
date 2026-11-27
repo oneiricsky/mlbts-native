@@ -29,6 +29,25 @@ In six 400-second test runs on an RX 6700 XT the game ran at about 59 fps with a
 grow, and loading the faces took 0.5 to 0.8 seconds once per match. The textures are read from your dump and are not
 part of any release. Details and numbers: [docs/ps5-textures.md](docs/ps5-textures.md) and [docs/reports](docs/reports/).
 
+## Mods
+
+Optional changes to how the game plays. Each can be turned on or off, and none changes your installed game files.
+
+| Mod | What it changes | How to use | Depends On |
+| --- | --- | --- | --- |
+| [Starting tokens](mods/rtts-start-tokens/rtts_start_tokens.py) | A new Road to the Show player starts with the token count you choose, 0 to 60000, instead of 50 or 75. A career past player creation keeps its count. | Make the override with the command below, then run the game with `MLB_ROMFS_OVERRIDE=<full path of the override folder>` | Your own RomFS; tried on game 1.0.20 |
+| [Offline main menu](docs/menu-offline-panel.md) (built into the port) | Removes the "You are currently disconnected" panel, scrolls the menu to the mode tiles at start, and removes the "Network Error" box. The game's other message boxes still appear. | On by default. F1 → Game → Hide the offline panel and Skip the network error box, or `MLB_HIDE_OFFLINE_BANNER=0` and `MLB_NO_NETWORK_ERROR=0` to turn them off | Game 1.0.20; removing the box needs code generated with the patch file |
+| [In-game trainer](docs/trainer.md) (built into the port) | Sets the match situation, edits ratings and pitcher energy, runs slow motion and has guaranteed cheats. | `MLB_TRAINER=1` or F1 → Trainer; F2 in a match | Game 1.0.20 |
+
+Make the starting-token override, here with 60000 tokens:
+
+```
+python -I mods/rtts-start-tokens/rtts_start_tokens.py 60000 --romfs work/build/game/romfs --out work/mods/rtts_tokens
+```
+
+The override is a changed copy of a game file, so keep it under `work/`, which git ignores. The game reads one
+override folder at a time. Only the mod's script belongs in `mods/`.
+
 ## Research and the wiki
 
 The function map, the read roles, the per-class field index and the save schema are published on the fork's wiki:
@@ -186,6 +205,7 @@ prints `FATAL:` with host frames that can be symbolized with `llvm-symbolizer`.
 | `runtime/mlb/` | MLB layer: boot, settings, services, input, log and crash reporter |
 | `runtime/gfx/` | NVN front end, Vulkan back end, presentation, window, in-game menu, RenderDoc support |
 | `tools/` | Build, extraction and analysis scripts |
+| `mods/` | Optional gameplay mods, one folder each ([Mods](#mods)) |
 | `docs/` | Binary reconnaissance, runtime notes, graphics plan |
 
 Changes to vendored upstream files are marked `fastball` in the source with a comment explaining the case that
