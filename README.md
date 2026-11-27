@@ -43,8 +43,7 @@ lists the changes.
 | Background pipeline builds | Shader pipelines (the compiled graphics programs) build on background workers and at boot, so drawing does not stop to wait for a compile. | Built-In | Nothing |
 | Skip boot intro | Skips the two boot movies, so the loading screen goes straight to the title. | `MLB_SKIP_INTRO`, or F1 → Game → Skip intro logos | Nothing |
 | Dev options | The game's hidden dev options work, so `AIvAI` with `GameOnly` boots straight into an AI-vs-AI game. | Option table and hashes: [docs/dev-config.md](docs/dev-config.md) | Nothing |
-| PS5 face normal maps | Replaces the face normal map (the texture that carries surface detail for lighting) with the PS5 one, for 2,370 heads. | Build an index with `tools/make_hd_index.py`; `MLB_HD_TEXTURES=off` turns it off | A PS5 dump |
-| PS5 face colour maps | Does the same for colour maps. Off by default because only a few faces have been checked. | Add `--color` when building the index | A PS5 dump |
+| PS5 face textures | Replaces each player's face colour map and normal map (the texture that carries surface detail for lighting) with the PS5 ones: 2,409 heads' colour maps and 2,411 heads' normal maps. | Build an index with `tools/make_hd_index.py --all-heads`; F1 → Graphics → PS5 face textures, or `MLB_HD_TEXTURES=0` to turn them off | A PS5 dump |
 | Run summary | Turns one run's log into a JSON summary of frame rate, slow frames and PS5 texture loads. | `python -I tools/perf_summary.py <log>` | A run log |
 | Shorter match-start freeze | Skips the empty-space pixels in the match-start field pass, cutting that step from about 0.7 s to about 0.2 s with the same finished picture on the two stadiums tested. | `MLB_MSDF_SKIP` (on by default); settings menu, Shorter freeze at match start; game 1.0.20 only so far; report: [docs/reports/2026-11-23-msdf-skip.md](docs/reports/2026-11-23-msdf-skip.md) | Nothing |
 | Idle sound thread | Stops a sound file thread's 100 µs sleep loop from spinning a processor core, cutting that thread from 97-99 % of a core to about 7 % with no measurable change in frame rate. Sound has not been checked by ear. | Built-In; details: [docs/sound-thread-spin.md](docs/sound-thread-spin.md) | Nothing |
@@ -57,10 +56,11 @@ lists the changes.
 
 </details>
 
-In six 400-second test runs on an RX 6700 XT, the game ran at about 59 fps with and without PS5 textures and memory
-did not grow. Loading the faces took 0.5 to 0.8 seconds, once per match. The textures are read from your dump and are
-not part of any release. Details and numbers are in [docs/ps5-textures.md](docs/ps5-textures.md) and
-[docs/reports](docs/reports/).
+In short runs on an RX 6700 XT the game held about 59 fps with PS5 textures on and off. One played match with them
+on ran at a median of about 44 fps, with no run to compare it with, and stadiums turned black now and then in it; the
+cause of neither is known. The textures are read from your dump and are not part of any release. Details and numbers
+are in [docs/ps5-textures.md](docs/ps5-textures.md) and the
+[2026-11-27 report](docs/reports/2026-11-27-ps5-all-face-textures.md).
 
 ## Research and the wiki
 

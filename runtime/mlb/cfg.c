@@ -29,6 +29,8 @@ static const CfgMeta metas[] = {
                                            // movies) answered as not found; the game-modes menu follows directly
     {"HIDE_OFFLINE_BANNER", "1", "0|1", RESTART},   // menu_offline.c: the main menu shows no "you are currently disconnected" panel
     {"NO_NETWORK_ERROR", "1", "0|1", LIVE},   // hid.c: the "NETWORK ERROR" box after a tile that needs the network is dismissed
+    {"HD_TEXTURES", "1", "0|1", RESTART},   // hdtex.c: PS5 face textures where there is an index (hdtex/index.txt); 0 or
+                                            // off none; a folder name takes that folder's index
     {"HD_PREFETCH", "1", "0|1", RESTART},   // hdtex.c: a head file the game opens makes a background thread read its PS5 file
                                             // (the hard disk's cold read, about 15 ms each, no longer lands in the upload)
     {"OFFLINE_PACKAGES", "0", "0|1", RESTART},   // packages.c: Road to the Show's Packages from a server on this PC

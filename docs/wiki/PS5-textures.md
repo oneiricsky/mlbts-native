@@ -8,7 +8,11 @@ The game does not take a texture's size from the `.TEX` file's header. It create
 2. A match reads the PS5 file (`runtime/mlb/hdtex.c`), rearranges its blocks into plain rows and creates a second image. That image takes the place of the Switch-sized one for the next binding.
 3. Ohtani's normal map becomes 1024x512 BC7 (0.7 MiB) in place of 256x128.
 
-`tools/make_hd_index.py --all-heads` builds the index from the Switch files and the dump's headers. 2,411 heads have a normal map in both, and 2,370 entries remain after 41 are dropped because their Switch textures share a hash with another entry. It takes about 70 s. `--check` validates an index.
+`tools/make_hd_index.py --all-heads` builds the index from the Switch files and the dump. It covers the colour maps of
+2,409 heads and the normal maps of 2,411, every head that has the map on both sides. 13 heads cannot be used: 12 have no
+PS5 file and one is only in the dump. Switch textures that share their first 16 KiB are told apart by a hash of the
+whole storage, or, for four pairs with identical Switch colour maps, by which head file the game opened. `--check`
+validates an index. The setting `MLB_HD_TEXTURES` (menu: Graphics, PS5 face textures) is on by default.
 
 ## The PS5 file format
 
@@ -24,11 +28,13 @@ Found by decoding the files; none of it is documented. Same TX12 container as th
 | Level order | levels 0 and 1 first, then the smaller levels in reverse order |
 | Blocks | 64-byte units along strips four block rows high |
 
-## Normal maps: done
+## Performance
 
-The PS5 normal map is a visible gain up close (stubble on Ohtani). A match swaps about 58 heads with no errors in the log and VRAM unchanged at about 2,593 MiB. Cold reads went from 31 ms to 12 ms per file after the loader was changed to read the header plus one block holding only the levels it keeps.
+Matched short runs on an RX 6700 XT held about 59 fps with the textures on and off. A match loads 50 to 60 heads; with
+the files read ahead, the loads cost the drawing thread 62 ms over one played match.
 
-Performance: three configurations on the harness match, two runs of 400 s each (about 21,000 frames). Each cell gives run 1 and run 2.
+An older measurement, before the 0.2.0 merge: three configurations, two runs of 400 s each. Each cell gives run 1 and
+run 2.
 
 | Config | Fps | Low | Slow |
 |---|---|---|---|
@@ -36,7 +42,7 @@ Performance: three configurations on the harness match, two runs of 400 s each (
 | Normal maps | 57.5, 59.0 | 45.5, 43.7 | 30, 26 |
 | Normal and colour | 58.9, 57.4 | 44.2, 42.4 | 29, 24 |
 
-Low is the 1 percent low in fps (median of six one-minute windows); Slow counts frames over 100 ms. Once boot stalls are set aside all three run at about 59 fps. The 1 percent low is about 1 to 2 fps lower with PS5 textures, about the spread between repeats. The extra slow frames may be noise or about one more hitch a minute. RAM and GPU memory did not grow. Two of four PS5 runs had an 8.4 s or 10.1 s frame at frame 14; six start-up-only runs did not, and the cause was not found.
+Low is the 1 percent low in fps (median of six one-minute windows); Slow counts frames over 100 ms.
 
 ## The yellow face (fixed)
 
@@ -58,7 +64,9 @@ An earlier conclusion in the investigation, that every reader group needs the sm
 
 ## Known limits
 
-- Colour maps stay opt-in in the index tool. The fix was checked on two players' faces. The other 2,300 heads, the 2048 level, crowds, uniforms and stadiums are not checked. The branch's gate for making colour maps default is a check on about two dozen heads from both teams with the known-bad control, plus one full match.
+- Colour maps are on by default since 2026-11-27. Few faces have been looked at close up; the rest are checked offline
+  only (the right file is found and loads).
+- Stadiums turned black now and then in one played match. Not reproduced; the cause is not known.
+- Crowd heads, created-player layers, mascots, uniforms and stadiums are not replaced.
 - A PS5 file is read on first use on the replay thread, from the dump's drive. From a hard disk, cold, that cost 200 to 670 ms frames. A prefetch thread fixes it (see [Load stalls](Load-stalls)).
-- Two Switch textures with the same first 16 KiB would share an index entry.
 - A compute dispatch binds PS5 images from the Switch-size level, so a new PS5 category needs its compute consumers checked first.

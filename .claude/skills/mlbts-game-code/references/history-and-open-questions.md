@@ -22,7 +22,8 @@ Read before reopening something. Sources: `docs/reports/*.md`, `docs/walkup-free
 | Match-start CPU work (1.4 to 1.6 s frame) | grass tiles about 172 ms plus MSDF about 700 ms; MSDF fixed on a research branch, grass untouched; other start frames: a 52-wait GPU burst at Pitch History and Meter init (245 ms), shader-loading frames, a UI node event wait | profile the grass step; trace the 52-wait burst |
 | Lineup card stall (555 ms, now about 64 ms) | believed to be the same lighting bake, inferred from the shape, never traced with the manager's fields | log the manager's fields at the lineup card |
 | `msdf_skip` equality | proven for two stadiums only | more stadiums, times of day and weather, a whole match, the 1.0.15 address (needs the 1.0.15 exefs); re-measure `research/float-fixup` |
-| PS5 colour maps | opt-in; verified on about two heads | about two dozen heads from both teams with the known-bad control and one full match; compute consumers of other PS5 categories |
+| Stadiums turn black now and then | reported from one played match (2026-11-27), not reproduced; upstream issue 30 may be related (guess) | a screenshot and the moment; the same match with `--no-hd-textures` and with `--no-walkup-light` |
+| PS5 crowd heads, created-player layers, mascots | player head maps are done and on by default; these categories are untouched | check each category's compute consumers first (`docs/ps5-textures.md`) |
 | Issue 10 | confirm flips to circle on `PresSkip` and the dynamic challenge popup | add those screens to the menu list in `hid_game_log`; needs the challenge screen's real name |
 | Issue 18 | no ball in one batting-cage mode above 60 fps; cause unknown; the 0.2.0 step guard is unconfirmed | same mode at 60, 144 and 240; `frame rate:` log lines; an F12 capture |
 | Issues 21 and 26 | local 2-player is a design limit (all pads merged into Player 1) | how the game asks for pad 2 |

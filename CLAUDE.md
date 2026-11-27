@@ -49,10 +49,9 @@ head-file prefetch (a pack file, remembered players, mode detection) is deferred
   matched game events, never frame numbers, and never judge a visual fix from two faces. The 60 fps cap hides
   per-frame cost, so measure uncapped for performance claims.
   Tools: `tools/perf_summary.py` turns a run log into JSON; `work/scratch/ycount.py` counts blown-yellow pixels.
-- PS5 textures: `MLB_HD_TEXTURES=off` disables them. Colour maps stay opt-in until they pass verification on many
-  heads. A compute dispatch binds PS5 images from the Switch-size level (`get_view`, `cur_texel`); a new PS5
+- PS5 textures: `MLB_HD_TEXTURES=off` disables them. Player head colour and normal maps are in the default index
+  (`docs/reports/2026-11-27-ps5-all-face-textures.md`). A compute dispatch binds PS5 images from the Switch-size level (`get_view`, `cur_texel`); a new PS5
   asset category needs its compute consumers checked first.
-- `MLB_HD_TEXTURES` still needs a settings row in `cfg.c` (every setting there is also a command-line flag).
 
 ## Open question: why does the game make so many NaNs at match start?
 

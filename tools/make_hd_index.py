@@ -6,20 +6,24 @@ port recognises a texture at upload by a hash of the first 16 KiB of its storage
 the PS5 file of the same name (docs/ps5-textures.md). This tool computes those hashes from the Switch files.
 
   python -I tools/make_hd_index.py --ps5 <PS5 dump folder> --romfs work/build/game/romfs \
-      --out work/build/hdtex/index.txt --heads OHTANI_SHOHEI [--scale 4] [--color] [path under NSW/ ...]
+      --out work/build/hdtex/index.txt --all-heads [--no-color] [--scale 4]
+  ... or --heads OHTANI_SHOHEI [...] or paths under NSW/ in place of --all-heads
 
-One line per Switch variant of a texture: `<hash> <width> <height> <levels> <drop> <PS5 file>`; drop is how many of
-the PS5 file's largest levels are left out so the image is about --scale times the Switch one on each side.
+One line per Switch variant of a texture: `<hash> <width> <height> <levels> <drop> [=<full>/<bytes>] <PS5 file>`; drop
+is how many of the PS5 file's largest levels are left out so the image is about --scale times the Switch one on each
+side. <hash> is of the first 16 KiB of the Switch storage. Where several Switch textures share it and they cannot all
+take one PS5 file, each of their lines also has <full>, a hash of the whole decompressed storage, <bytes> long.
 
   python -I tools/make_hd_index.py --check work/build/hdtex/index.txt [--ps5 <PS5 dump folder>]
 
 checks an existing index against the PS5 files it names (no Switch files needed): one line per problem, a count at
 the end, exit status 1 when there is any. docs/ps5-textures.md says what each message means.
 """
-import argparse, re, struct, sys
+import argparse, hashlib, re, struct, sys
 from pathlib import Path
 
 PREFIX = 16384
+KINDS = ("COLOR", "NORMAL")
 PS5_HEADER = 1440   # header bytes of every PS5 file looked at (all 11-level BC7 heads, 7,116 index lines)
 
 
@@ -67,27 +71,30 @@ def fnv64(b):
     return h
 
 
-def switch_variants(path):
-    """[(width, height, levels, storage prefix bytes)] of the Switch file's variants."""
+def switch_variants(path, full=False):
+    """[(width, height, levels, storage bytes)] of the Switch file's variants: the first 16 KiB, or all of it."""
     d = path.read_bytes()
     if d[:8] != b"TX12NSW\0":
         sys.exit(f"{path}: not a Switch TX12 file")
     hs = u32(d, 0x154)
     nv = u32(d, 0x170)
-    w, h = struct.unpack_from("<HH", d, 0x84)
-    nm = u32(d, 0x8c)
-    out = []
-    if nv == 1:
-        total = u32(d, 0x10)
-        out.append((w, h, nm, lz4_prefix(d[hs:], min(PREFIX, total))))
-    elif nv == 2:
-        total = u32(d, 0x10)
-        out.append((w, h, nm, lz4_prefix(d[hs:], min(PREFIX, total))))
-        seg2_unc, seg2_off = u32(d, 0x104), u32(d, 0x10c)
-        w2, h2 = struct.unpack_from("<HH", d, 0xa4)
-        out.append((w2, h2, u32(d, 0xac), lz4_prefix(d[hs + seg2_off:], min(PREFIX, seg2_unc))))
-    else:
+    if nv not in (1, 2):
         print(f"  {path.name}: {nv} variants, not handled")
+        return []
+    # One LZ4 block per segment: [(offset after the header, decompressed bytes)]. With two variants the first block is
+    # the large level only and the second the half-size variant's whole chain, which is also the rest of the first's.
+    blocks = [(0, u32(d, 0x10))]
+    if nv == 2:
+        blocks = [(0, u32(d, 0x10) - u32(d, 0x104)), (u32(d, 0x10c), u32(d, 0x104))]
+    out = []
+    for i, (at, mips) in enumerate([(0x84, 0x8c), (0xa4, 0xac)][:nv]):
+        w, h = struct.unpack_from("<HH", d, at)
+        data = b""
+        for off, size in blocks[i:]:
+            want = size if full else min(size, PREFIX - len(data))
+            if want > 0:
+                data += lz4_prefix(d[hs + off:], want)
+        out.append((w, h, u32(d, mips), data))
     return out
 
 
@@ -167,6 +174,9 @@ def check_index(index_path, ps5_root=None):
             continue
         lines += 1
         f = ln.split(None, 5)
+        full = ""
+        if len(f) == 6 and re.fullmatch(r"=[0-9a-fA-F]{1,16}/[1-9][0-9]* +.*", f[5]):
+            full, f[5] = f[5].split(None, 1)
         try:
             if len(f) != 6 or not re.fullmatch(r"[0-9a-fA-F]{1,16}", f[0]):
                 raise ValueError
@@ -174,16 +184,16 @@ def check_index(index_path, ps5_root=None):
             if min(w, h, lv) < 1 or drop < 0:
                 raise ValueError
         except ValueError:
-            probs.append((no, "not a line of the form <hash> <width> <height> <levels> <drop> <PS5 file>"))
+            probs.append((no, "not a line of the form <hash> <width> <height> <levels> <drop> [=<full>/<bytes>] <PS5 file>"))
             continue
-        entries.append((no, int(f[0], 16), w, h, lv, drop, f[5]))
+        entries.append((no, int(f[0], 16), w, h, lv, drop, f[5], full))
     if root is None:
         probs.append((0, "no root line in the index and no --ps5 folder given"))
         return lines, probs
-    for no, hsh, w, h, lv, drop, rel in entries:
-        seen.setdefault((hsh, w, h, lv), set()).add(rel)
-    for no, hsh, w, h, lv, drop, rel in entries:
-        if len(seen[(hsh, w, h, lv)]) > 1:
+    for no, hsh, w, h, lv, drop, rel, full in entries:
+        seen.setdefault((hsh, w, h, lv), {})[rel] = full
+    for no, hsh, w, h, lv, drop, rel, full in entries:
+        if len(seen[(hsh, w, h, lv)]) > 1 and not all(seen[(hsh, w, h, lv)].values()):
             probs.append((no, f"{rel}: another PS5 file has the same hash and size, the two cannot be told apart"))
         parts = rel.split("/")
         if parts[0] != "PS5" or ".." in parts or not rel.upper().endswith(".TEX") or len(parts) < 3:
@@ -236,59 +246,132 @@ def main():
     ap.add_argument("--out")
     ap.add_argument("--scale", type=int, default=4, help="HD size over the Switch size, per side (default 4)")
     ap.add_argument("--max-dim", type=int, default=1024, help="largest HD side (default 1024)")
-    ap.add_argument("--heads", nargs="*", default=[], help="player folders under CHARACTERS/HEADS (their NORMAL maps)")
-    ap.add_argument("--color", action="store_true",
-                    help="--heads also takes the COLOR maps (checked on two heads so far; docs/ps5-textures.md)")
-    ap.add_argument("--all-heads", action="store_true",
-                    help="every player folder under CHARACTERS/HEADS that has a NORMAL map in both the Switch files and the PS5 dump")
+    ap.add_argument("--heads", nargs="*", default=[], help="player folders under CHARACTERS/HEADS")
+    ap.add_argument("--no-color", action="store_true", help="the normal maps only")
+    ap.add_argument("--all-heads", action="store_true", help="every player folder under CHARACTERS/HEADS")
     ap.add_argument("tex", nargs="*", help="paths under NSW/ (and PS5/)")
     a = ap.parse_args()
     if a.check:
         sys.exit(run_check(a.check, a.ps5))
     if not (a.ps5 and a.romfs and a.out):
         ap.error("--ps5, --romfs and --out are required unless --check is given")
+    kinds = [k for k in KINDS if k == "NORMAL" or not a.no_color]
+    nsw = Path(a.romfs) / "NSW"
     paths = list(a.tex)
     heads = list(a.heads)
+    # Every head's Switch file is read, picked or not: one that shares its first 16 KiB with a picked head must not be
+    # given that head's PS5 file.
+    every = [f"CHARACTERS/HEADS/{d.name}/{d.name}-{k}.TEX" for d in sorted((nsw / "CHARACTERS" / "HEADS").iterdir())
+             if d.is_dir() for k in KINDS if (d / f"{d.name}-{k}.TEX").exists()]
     if a.all_heads:
-        base = Path(a.romfs) / "NSW" / "CHARACTERS" / "HEADS"
-        for d in sorted(x.name for x in base.iterdir() if x.is_dir()):
-            if (base / d / f"{d}-NORMAL.TEX").exists() and (Path(a.ps5) / "PS5" / "CHARACTERS" / "HEADS" / d / f"{d}-NORMAL.TEX").exists():
-                heads.append(d)
+        heads += sorted({r.split("/")[2] for r in every} - set(heads))
     for n in heads:
-        paths += [f"CHARACTERS/HEADS/{n}/{n}-NORMAL.TEX"] + ([f"CHARACTERS/HEADS/{n}/{n}-COLOR.TEX"] if a.color else [])
-    lines = []
-    for rel in paths:
-        try:
-            (pw, ph), pn, code = ps5_info(Path(a.ps5) / "PS5" / rel)
-            variants = switch_variants(Path(a.romfs) / "NSW" / rel)
-        except (SystemExit, OSError) as e:
-            print(f"{rel}: skipped ({e})")
-            continue
-        if code not in (13, 22):
-            print(f"{rel}: PS5 format code {code} is not BC1 or BC7, skipped")
-            continue
-        for w, h, nm, pre in variants:
-            drop = 0
-            while drop + 1 < pn and (pw >> (drop + 1)) >= w * a.scale:
-                drop += 1
-            while drop + 1 < pn and max(pw, ph) >> drop > a.max_dim:
-                drop += 1
-            hd = (max(1, pw >> drop), max(1, ph >> drop))
-            lines.append(f"{fnv64(pre):016x} {w} {h} {nm} {drop} PS5/{rel}")
-            print(f"{rel}: Switch {w}x{h} ({nm} levels) -> PS5 {hd[0]}x{hd[1]} (drop {drop})")
-    seen = {}
-    for ln in lines:
-        key = tuple(ln.split()[:4])
-        seen.setdefault(key, set()).add(ln.split()[5])
-    dup = {k for k, v in seen.items() if len(v) > 1}
-    if dup:
-        n0 = len(lines)
-        lines = [ln for ln in lines if tuple(ln.split()[:4]) not in dup]
-        print(f"{n0 - len(lines)} entries dropped: their Switch textures share a hash, so the PS5 file could not be told apart")
+        for k in kinds:
+            rel = f"CHARACTERS/HEADS/{n}/{n}-{k}.TEX"
+            if (nsw / rel).exists() or not a.all_heads:
+                paths.append(rel)
+    entries, report = build_index(Path(a.ps5), nsw, list(dict.fromkeys(paths)), every, a.scale, a.max_dim)
     out = Path(a.out)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(f"root {a.ps5}\n" + "\n".join(lines) + "\n")
-    print(f"{len(lines)} entries -> {out}")
+    out.write_text(f"root {a.ps5}\n" + "".join(ln + "\n" for ln in entries))
+    print_report(report, kinds, Path(a.ps5), nsw, a.all_heads)
+    print(f"{len(entries)} entries -> {out}")
+
+
+def build_index(ps5_root, nsw, paths, others, scale=4, max_dim=1024):
+    """(index lines, report) for the textures `paths`; `others` are further Switch files that may share their hashes.
+
+    report: {"indexed": {path}, "opened": {path} (told apart only by which file the game opens),
+             "unused": {path: reason}}."""
+    keys, info, unused = {}, {}, {}
+    wanted = set(paths)
+    for rel in dict.fromkeys(list(paths) + list(others)):
+        ps5 = ps5_root / "PS5" / rel
+        try:
+            variants = switch_variants(nsw / rel)
+        except (SystemExit, OSError, IndexError, struct.error) as e:
+            if rel in wanted:
+                unused[rel] = f"no readable Switch file ({e})"
+            continue
+        usable = False
+        if rel in wanted:
+            if not ps5.is_file():
+                unused[rel] = "no PS5 file in the dump"
+            else:
+                try:
+                    hd = ps5_header(ps5)
+                    bad = check_header(hd)
+                    if bad:
+                        raise ValueError(bad[0])
+                    usable, info[rel] = True, hd
+                except (ValueError, OSError) as e:
+                    unused[rel] = str(e)
+        for i, (w, h, nm, pre) in enumerate(variants):
+            keys.setdefault((fnv64(pre), w, h, nm), []).append((rel, i, usable))
+
+    lines, indexed, by_open = [], set(), set()
+    for (hsh, w, h, nm), group in sorted(keys.items(), key=lambda kv: (kv[1][0][0], kv[1][0][1])):
+        if not any(u for _, _, u in group):
+            continue
+        picks = []   # (path, "=full/bytes " or "")
+        if len(group) == 1:
+            picks = [(group[0][0], "")]
+        else:
+            rows = []   # (path, usable, full token, the PS5 texture data's digest)
+            for rel, i, usable in group:
+                store = switch_variants(nsw / rel, full=True)[i][3]
+                body = None
+                if usable:
+                    body = hashlib.sha256((ps5_root / "PS5" / rel).read_bytes()[info[rel]["hs"]:]).digest()
+                rows.append((rel, usable, f"={fnv64(store):016x}/{len(store)} ", body))
+            if all(u for _, u, _, _ in rows) and len({b for *_, b in rows}) == 1:
+                # one PS5 texture under several names: whichever player it is, the picture is right
+                picks = [(rows[0][0], "")]
+                indexed.update(r for r, *_ in rows)
+            else:
+                for token in dict.fromkeys(t for _, u, t, _ in rows if u):
+                    same = [r for r in rows if r[2] == token]
+                    ok = [r for r in same if r[1]]
+                    if len({r[3] for r in ok}) == 1 and len(ok) == len(same):
+                        picks.append((ok[0][0], token))
+                        indexed.update(r[0] for r in ok)
+                    elif len(ok) == len(same):
+                        picks += [(r[0], token) for r in ok]
+                        by_open.update(r[0] for r in ok)
+                    else:
+                        for r in ok:
+                            other = next(x[0] for x in same if not x[1])
+                            unused[r[0]] = f"its Switch texture is the same as {other}, which has no PS5 file here"
+        for rel, token in picks:
+            hd = info[rel]
+            pw, ph, pn = hd["w"], hd["h"], hd["levels"]
+            drop = 0
+            while drop + 1 < pn and (pw >> (drop + 1)) >= w * scale:
+                drop += 1
+            while drop + 1 < pn and max(pw, ph) >> drop > max_dim:
+                drop += 1
+            lines.append(f"{hsh:016x} {w} {h} {nm} {drop} {token}PS5/{rel}")
+            indexed.add(rel)
+    return lines, {"indexed": indexed, "opened": by_open, "unused": unused}
+
+
+def print_report(report, kinds, ps5_root, nsw, all_heads):
+    for kind in kinds:
+        end = f"-{kind}.TEX"
+        have = sorted(r for r in report["indexed"] if r.endswith(end))
+        told = [r for r in report["opened"] if r.endswith(end)]
+        unused = {r: why for r, why in report["unused"].items() if r.endswith(end) and r not in report["indexed"]}
+        if all_heads:
+            for d in sorted((ps5_root / "PS5" / "CHARACTERS" / "HEADS").iterdir()):
+                rel = f"CHARACTERS/HEADS/{d.name}/{d.name}{end}"
+                if (d / f"{d.name}{end}").is_file() and not (nsw / rel).is_file():
+                    unused[rel] = "a PS5 file only: the game has no Switch texture to replace"
+        print(f"{kind}: {len(have) + len([r for r in told if r not in have])} heads indexed"
+              f" ({len(told)} of them told apart by which file the game opens), {len(unused)} not usable")
+        for rel in sorted(told):
+            print(f"  by opened file: {rel.split('/')[-1]}")
+        for rel, why in sorted(unused.items()):
+            print(f"  not used: {rel.split('/')[-1]}: {why}")
 
 
 if __name__ == "__main__":
