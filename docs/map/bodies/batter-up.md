@@ -1,8 +1,8 @@
 # BATTER_UP: what the function bodies show
 
-Game 1.0.20, class vtable `0x70021e2708` (36 slots), read from the recompiler's generated C (`work/gen/main`); in that C `x19` is the state object ("this"). Citations are lines of `work/gen/main/<file>`, the recompiler's output, so they only help someone who has generated that folder. Tags: [C] the body I read shows it, [I] inferred, [H] guess. The tables below give what was read, the sub-state machine and its setter, the object's fields, its events, what each part calls, and what is still open.
+Game 1.0.20, class vtable `0x70021e2708` (36 slots), read from the recompiler's generated C (`work/gen/main`); in that C `x19` is the state object ("this"). Citations are lines of `work/gen/main/<file>`, the recompiler's output, so they only help someone who has generated that folder. Tags: [C] the body I read shows it, [I] inferred, [H] guess.
 
-## What was read
+## Coverage
 
 | Scope | Members | Note |
 |---|---|---|
@@ -10,7 +10,7 @@ Game 1.0.20, class vtable `0x70021e2708` (36 slots), read from the recompiler's 
 | Cited, not redone | slot 5 (`0x700108b628`) | read earlier in the same session and is cited |
 | Not read | `0x700108c9b8`, `cae0`, `cc58`, `ce48`, `d194`, `d340`, `d5d0`, `d720`, `d808`, `daa0`, `dba4`, `be8c` | only summarised by their callees |
 
-## What was found
+## Findings
 
 | Part | Function | What it does | Tag |
 |---|---|---|---|
@@ -38,19 +38,19 @@ Game 1.0.20, class vtable `0x70021e2708` (36 slots), read from the recompiler's 
 | 10 | MANAGER_MODE | `d4ec`, `e4ec` | main_0120.c:54395, main_0121.c:1461 to 1546 |
 | 11 | no log | not found | slot 7 tests it at main_0120.c:53456 |
 
-## The setter
+## Setter
 
 The names come from a jump table in the setter `0x700108b500`:
 
 | Step | Function | What it does | Evidence | Tag |
 |---|---|---|---|---|
-| Store the value | `0x700108b500` | stores the new sub-state at `[this+0x18]` and its second argument at `[this+0x1c]` | — | [C] |
+| Store the value | `0x700108b500` | stores the new sub-state at `[this+0x18]` and its second argument at `[this+0x1c]` | | [C] |
 | Compare | `0x700108b500` | compares the value with 10, then indexes a byte table at `0x7001d9c8de` | main_0120.c:52043 to 52058 | [C] |
-| Each case | `0x700108b500` | logs one string and prints a newline (the call `f_7001c1fc90(0xa)`, newline by its argument) | — | [I] for the newline |
-| Values 4 and 6 | `0x700108b500` | map to the default case, which logs no string (it only prints the newline); values above 10 also go there | — | [C] |
-| Enter functions | `cd24`, `cf34`, `d4ec`, `e610` | write the number directly and log the same strings, so they work as "enter this sub-state" functions | — | [C] |
+| Each case | `0x700108b500` | logs one string and prints a newline (the call `f_7001c1fc90(0xa)`, newline by its argument) | | [I] for the newline |
+| Values 4 and 6 | `0x700108b500` | map to the default case, which logs no string (it only prints the newline); values above 10 also go there | | [C] |
+| Enter functions | `cd24`, `cf34`, `d4ec`, `e610` | write the number directly and log the same strings, so they work as "enter this sub-state" functions | | [C] |
 
-## The pitch sequence
+## Pitch sequence
 
 | From | To | How | Evidence | Tag |
 |---|---|---|---|---|
@@ -109,8 +109,8 @@ Four floats are written by slot 3 into globals; what they time is not stated by 
 
 | Call | Shape | Note | Tag |
 |---|---|---|---|
-| Subscribe | slot 9 calls `f_70005e6830(id, bus, this, mode)` for 17 ids on the bus at `[0x7002298000+0x428]` | — | [C] |
-| Unsubscribe | slot 10 calls `f_70005e69d0(id, bus, 0)` for the same ids | — | [C] |
+| Subscribe | slot 9 calls `f_70005e6830(id, bus, this, mode)` for 17 ids on the bus at `[0x7002298000+0x428]` | | [C] |
+| Unsubscribe | slot 10 calls `f_70005e69d0(id, bus, 0)` for the same ids | | [C] |
 | Post | `f_70005e6b40(id, payload)` is the matching post call, used here with ids 0x13d, 0x151, 0x16b, 0x133, 0x2a2, 0x8a and 0x72 | 964 callers | [C] for the shape, [I] for the names subscribe, unsubscribe and post |
 
 ## Event handler
@@ -135,7 +135,7 @@ Handler `0x700108debc` takes (id, payload, this):
 
 Case targets for 0x11a to 0x167 come from the byte table at `0x7001d9c8e9` (main_0121.c:1038).
 
-## What each part calls
+## Calls
 
 | Callee | Role | Tag | Evidence |
 |---|---|---|---|
@@ -169,10 +169,10 @@ Case targets for 0x11a to 0x167 come from the byte table at `0x7001d9c8e9` (main
 | 32 | `e9d8` | in sub-state 2, if a queried byte is set, post event 0x72 | [C] |
 | 33 | `ead0` | when two virtual queries pass and the sub-state is 0xb or 2, call `f_7000d1eef4(global, 1)`; always set step 3 | [C] |
 | 34, 35 | `ebd8`, `ec30` | thunks calling `f_700133fcc0` with fixed arguments | [C] |
-| 4, 8, 11 to 13, 19 to 22, 29, 30 | — | point at 5 to 7 line stubs shared with other states, not read | none |
-| 14 to 18, 23, 25 | — | small thunks, not read | none |
+| 4, 8, 11 to 13, 19 to 22, 29, 30 | | point at 5 to 7 line stubs shared with other states, not read | none |
+| 14 to 18, 23, 25 | | small thunks, not read | none |
 
-## Not determined
+## Open questions
 
 | Question | What is known | Tag |
 |---|---|---|
@@ -180,4 +180,4 @@ Case targets for 0x11a to 0x167 come from the byte table at `0x7001d9c8e9` (main
 | What states 4, 6 and 11 mean | state 6 is a variant of the launch when `0x70022b65b0` equals 0x12; the meaning of that value is unknown | none |
 | What the 7.0 second value times, and why a countdown ends in MANAGER_MODE | `e4ec` compares the timer with the float at the pointer `0x7002298000+0x3f8` (main_0121.c:1484 to 1491), stores the remaining time to `0x7003b18000+0x1a8`, and on expiry or a true `f_7000f29804` posts event 0x16b and writes 10; a pitch clock is a guess | [H] |
 | The bodies of the twelve step functions listed at the top, and who first writes sub-states 1 and 2 | not read | none |
-| Slot 5's first act | a call to `f_70005398c0` with the value 0xace9617f (main_0120.c:52150 to 52156); if it returns true the handler logs "We're trying to crash 1." and branches to `be80`, which logs and then tail-calls `be8c`. The shape fits the hash-matched dev options in `docs/dev-config.md`, and that hash is not among the 27 named there | [I] |
+| Slot 5's first act | a call to `f_70005398c0` with the value 0xace9617f (main_0120.c:52150 to 52156); if it returns true the handler logs "We're trying to crash 1." and branches to `be80`, which logs and then tail-calls `be8c`. The shape fits the hash-matched dev options in `docs/dev-config.md`, and `tools/config_options.py` lists it as a read option hash with no name yet | [I] |

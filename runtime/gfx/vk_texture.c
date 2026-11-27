@@ -1297,7 +1297,7 @@ static void hd_apply(Tex *e) {
         hd_drop(e);
         return;
     }
-    if (e->hd_image && e->hd_hash == mlb_hd_hash(h)) {   // the same texture again: its PS5 image is still right
+    if (e->hd_image && e->hd_hash == mlb_hd_id(h)) {   // the same texture again: its PS5 image is still right
         hd_pub_set(e, &e->hd_ps5);
         e->hd_active = 1;
         return;
@@ -1357,12 +1357,12 @@ static void hd_apply(Tex *e) {
     uint32_t hd_sh = 0;   // the levels above the Switch texture's width
     while (hd_sh + 1 < tx.levels && (tx.width >> hd_sh) > d->width) hd_sh++;
     e->hd_ps5 = (HdSaved){img, fmt, usage, tx.width, tx.height, tx.levels, 0, 0, 0, (uint8_t)hd_sh};
-    e->hd_image = img, e->hd_alloc = alloc, e->hd_hash = mlb_hd_hash(h);
+    e->hd_image = img, e->hd_alloc = alloc, e->hd_hash = mlb_hd_id(h);
     hd_pub_set(e, &e->hd_ps5);
     e->hd_active = 1;
     tex_gen_bump(e->pub.addr);
     static volatile int32_t n_logged;
-    if (plat_inc32(&n_logged) <= 64)
+    if (plat_inc32(&n_logged) <= 512)
         rt_log("hdtex: texture %#llx %ux%u (%u levels, nvn %#x, vk %d%s) is %s: image %ux%u, %u levels, %s%s, %.1f MiB, %.1f ms",
                (unsigned long long)e->pub.addr, (unsigned)d->width, (unsigned)d->height, (unsigned)levels, (unsigned)d->format,
                (int)e->f.vk, e->f.alpha_one ? ", alpha one" : "", mlb_hd_name(h), tx.width, tx.height, tx.levels,

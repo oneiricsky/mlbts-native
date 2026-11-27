@@ -2,7 +2,7 @@
 
 A function-level map of this repo and the game binary it runs. Built by scripts in `tools/`, so it can be regenerated and checked.
 
-## Rebuild and check
+## Rebuild
 
 ```
 python -I -m pip install libclang --target work/pylib      # once; libclang for the C/C++ parse
@@ -18,7 +18,7 @@ python -I tools/map_coverage.py                                   # exits 1 if a
 
 See [coverage.md](coverage.md) for the last result.
 
-## What is in the repo
+## Repo contents
 
 | Area | Functions | Page |
 |---|---|---|
@@ -38,19 +38,34 @@ See [coverage.md](coverage.md) for the last result.
 
 Total: 11385 source functions. C/C++ come from a libclang parse (a real compiler front end, same defines and include paths as the build), Python from `ast`, vendored C# and GLSL from a regex (lower fidelity).
 
-## The game binary
+## Game binary
 
 See [binary.md](binary.md): 135,060 recompiled functions in the `main` and `sdk` modules, address ranges, SDK namespaces and the functions the repo already names.
 
-[regions/](regions/) holds one note per address range of `main` (A to F, with the `sdk` module in F): subsystem per 256 KB window and key functions, every claim tagged confirmed, inferred or guess. The `.claude/skills/mlbts-game-code` skill is the entry point for future sessions. [bodies/](bodies/) holds notes from reading function bodies (the 12 game-state classes and six subsystem passes), each report spot-checked against the generated C.
+[regions/](regions/) holds one note per address range of `main` (A to F, with the `sdk` module in F): subsystem per 256 KB window and key functions, every claim tagged confirmed, inferred or guess.
 
-A complete function map is generated from the same index: [Function map](Function-map) has the method and the totals, [Function census](Function-census) counts every function in every 256 KB window, and `Functions-A` to `Functions-F` plus `Functions-SDK` list every function that carries a symbol, an import or a string. `tools/map_roles.py` names the import thunks from the relocation table and classifies every body; `tools/map_functions_doc.py` writes the pages. Both read `work/map/index/`, so those pages are rebuilt locally like the index and are not committed.
+[bodies/](bodies/) holds notes from reading function bodies (the 12 game-state classes and six subsystem passes), each report spot-checked against the generated C. The `.claude/skills/mlbts-game-code` skill is the entry point for future sessions.
 
-The functions with no string, symbol or simple shape are read from their own code. `tools/map_read_prep.py` normalises each generated body to its meaningful operations and writes dossiers in batches; the batches are read by subagents that write `out-<n>.jsonl`; `tools/map_read_merge.py` validates them into `work/map/index/roles_read.jsonl`; `tools/map_roles.py` applies that overlay, so the census and the `Read roles` pages carry what the read found. That pass covered 47,308 `main` functions; the completeness pass reads every remaining body, `sdk` included — see [read-pass.md](read-pass.md).
+A complete function map is generated from the same index:
+
+- [Function map](Function-map) has the method and the totals.
+- [Function census](Function-census) counts every function in every 256 KB window.
+- `Functions-A` to `Functions-F` plus `Functions-SDK` list every function that carries a symbol, an import or a string.
+
+`tools/map_roles.py` names the import thunks from the relocation table and classifies every body; `tools/map_functions_doc.py` writes the pages. Both read `work/map/index/`, so those pages are rebuilt locally like the index and are not committed.
+
+The functions with no string, symbol or simple shape are read from their own code:
+
+1. `tools/map_read_prep.py` normalises each generated body to its meaningful operations and writes dossiers in batches.
+2. Subagents read the batches and write `out-<n>.jsonl`.
+3. `tools/map_read_merge.py` validates them into `work/map/index/roles_read.jsonl`.
+4. `tools/map_roles.py` applies that overlay, so the census and the `Read roles` pages carry what the read found.
+
+That pass covered 47,308 `main` functions; the completeness pass reads every remaining body, `sdk` included (see [read-pass.md](read-pass.md)).
 
 The game's saves carry their own class and field names. `tools/save_schema.py` reads that schema out of the zlib-compressed Flux archive in a save and writes `work/map/saves/schema.json`; the wiki's `Save schema` page lists the classes and fields, and searching one of those names in the code finds the function that reads or writes it.
 
-## Subsystem guide
+## Subsystems
 
 | Area | What it is |
 |---|---|

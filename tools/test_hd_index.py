@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Tests of `make_hd_index.py --check`. Standard library only, no PS5 dump needed:
+"""Tests of make_hd_index.py: building an index and `--check`. Standard library only, no PS5 dump needed:
 
   python -I -m unittest discover -s tools -p test_hd_index.py
 
@@ -163,6 +163,117 @@ class CheckTest(unittest.TestCase):
         r = run(bad)
         self.assertEqual(r.returncode, 1)
         self.assertIn("1 problems in 1 lines", r.stdout)
+
+
+def lz4_literals(data):
+    """An LZ4 block holding `data` as one run of literals."""
+    out, n = bytearray(), len(data)
+    out.append(min(n, 15) << 4)
+    if n >= 15:
+        n -= 15
+        out += b"\xff" * (n // 255) + bytes([n % 255])
+    return bytes(out) + data
+
+
+def nsw_bytes(first, second=None):
+    """A TX12NSW file whose storage is `first` (16x8, 2 levels), followed by `second` (the 8x4 half-size variant)."""
+    hd = bytearray(0x2A0)
+    hd[:8] = b"TX12NSW\0"
+    a = lz4_literals(first)
+    b = lz4_literals(second) if second is not None else b""
+    struct.pack_into("<I", hd, 0x10, len(first) + len(second or b""))
+    struct.pack_into("<HH", hd, 0x84, 16, 8)
+    struct.pack_into("<I", hd, 0x8c, 2)
+    struct.pack_into("<I", hd, 0x154, len(hd))
+    struct.pack_into("<I", hd, 0x170, 1 if second is None else 2)
+    if second is not None:
+        struct.pack_into("<HH", hd, 0xa4, 8, 4)
+        struct.pack_into("<I", hd, 0xac, 1)
+        struct.pack_into("<I", hd, 0x104, len(second))
+        struct.pack_into("<I", hd, 0x10c, len(a))
+    return bytes(hd) + a + b
+
+
+def storage(tail=b"", fill=1):
+    return bytes([fill]) * m.PREFIX + tail
+
+
+class BuildTest(unittest.TestCase):
+    def setUp(self):
+        self._tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self._tmp.cleanup)
+        self.root = Path(self._tmp.name)
+        self.nsw = self.root / "NSW"
+
+    def head(self, name, switch, ps5_fill=None):
+        """A Switch head normal map, and its PS5 file unless ps5_fill is None."""
+        rel = f"CHARACTERS/HEADS/{name}/{name}-NORMAL.TEX"
+        p = self.nsw / rel
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_bytes(switch)
+        if ps5_fill is not None:
+            q = self.root / "PS5" / rel
+            q.parent.mkdir(parents=True, exist_ok=True)
+            data = bytearray(ps5_bytes())
+            data[-1] = ps5_fill
+            q.write_bytes(bytes(data))
+        return rel
+
+    def build(self, paths, others=()):
+        lines, report = m.build_index(self.root, self.nsw, paths, list(others))
+        index = self.root / "index.txt"
+        index.write_text(f"root {self.root}\n" + "".join(ln + "\n" for ln in lines))
+        self.assertEqual(m.check_index(index)[1], [])
+        return [ln.split() for ln in lines], report
+
+    def test_two_variants_are_two_blocks(self):
+        p = self.root / "v.tex"
+        p.write_bytes(nsw_bytes(storage(b"abc"), b"half"))
+        got = m.switch_variants(p, full=True)
+        self.assertEqual([(w, h, n, d) for w, h, n, d in got],
+                         [(16, 8, 2, storage(b"abc") + b"half"), (8, 4, 1, b"half")])
+        self.assertEqual(m.switch_variants(p)[0][3], storage()[:m.PREFIX])
+
+    def test_a_texture_of_its_own_needs_no_second_hash(self):
+        lines, _ = self.build([self.head("AAA", nsw_bytes(storage()), 1)])
+        self.assertEqual([len(x) for x in lines], [6])
+
+    def test_same_start_different_rest_is_told_apart_by_the_whole_storage(self):
+        paths = [self.head("AAA", nsw_bytes(storage(b"a")), 1), self.head("BBB", nsw_bytes(storage(b"b")), 2)]
+        lines, report = self.build(paths)
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(lines[0][0], lines[1][0])
+        self.assertEqual({x[5] for x in lines},
+                         {f"={m.fnv64(storage(t)):016x}/{m.PREFIX + 1}" for t in (b"a", b"b")})
+        self.assertEqual((len(report["indexed"]), report["opened"]), (2, set()))
+
+    def test_one_ps5_texture_under_two_names_is_one_line(self):
+        paths = [self.head("AAA", nsw_bytes(storage(b"a")), 1), self.head("BBB", nsw_bytes(storage(b"a")), 1)]
+        lines, report = self.build(paths)
+        self.assertEqual([len(x) for x in lines], [6])
+        self.assertEqual(report["indexed"], set(paths))
+
+    def test_same_switch_texture_different_ps5_files_wait_for_the_opened_file(self):
+        paths = [self.head("AAA", nsw_bytes(storage(b"a")), 1), self.head("BBB", nsw_bytes(storage(b"a")), 2)]
+        lines, report = self.build(paths)
+        self.assertEqual(len(lines), 2)
+        self.assertEqual(lines[0][5], lines[1][5])
+        self.assertEqual(report["opened"], set(paths))
+
+    def test_a_head_without_a_ps5_file_blocks_the_short_hash(self):
+        mine = self.head("AAA", nsw_bytes(storage(b"a")), 1)
+        other = self.head("BBB", nsw_bytes(storage(b"b")))
+        lines, report = self.build([mine], [other])
+        self.assertEqual([len(x) for x in lines], [7])
+        self.assertEqual(report["indexed"], {mine})
+
+    def test_same_switch_texture_as_a_head_without_a_ps5_file_is_not_used(self):
+        mine = self.head("AAA", nsw_bytes(storage(b"a")), 1)
+        other = self.head("BBB", nsw_bytes(storage(b"a")))
+        lines, report = self.build([mine, other])
+        self.assertEqual(lines, [])
+        self.assertIn("is the same as", report["unused"][mine])
+        self.assertEqual(report["unused"][other], "no PS5 file in the dump")
 
 
 class RealIndexTest(unittest.TestCase):

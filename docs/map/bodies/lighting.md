@@ -1,6 +1,16 @@
 # Stadium lighting and animation, MLB The Show 26 (Switch) 1.0.20, `main` base 0x7000000000
 
-Read-only analysis of the stadium lighting and the player animation in `main` 1.0.20 (base 0x7000000000): the lighting block 0x70012c0000-0x7001300000, the `LocoManager` cluster 0x700140e900-0x7001437e00, and `KineCore` just below it at 0x7001340000-0x70013b0000. Addresses are 1.0.20 (`f_<addr>` in `work/gen`), and each fact was read in the generated C at the quoted `file:line` or in the binary's strings and symbols. Tags: [C] = string, symbol or code read; [I] = strong pattern; [H] = guess; where a row's string is [C] but the role is an inference the tag says `C/I`, which the tables write [C/I]. The tables follow the order the code runs in: the manager and its two buffers, one bake step by step, then the functions of each half.
+Read-only analysis of the stadium lighting and the player animation in `main` 1.0.20 (base 0x7000000000):
+
+| Block | Range |
+|---|---|
+| lighting | 0x70012c0000-0x7001300000 |
+| `LocoManager` cluster | 0x700140e900-0x7001437e00 |
+| `KineCore` | just below it, 0x7001340000-0x70013b0000 |
+
+Addresses are 1.0.20 (`f_<addr>` in `work/gen`), and each fact was read in the generated C at the quoted `file:line` or in the binary's strings and symbols.
+
+Tags: [C] string, symbol or code read; [I] strong pattern; [H] guess. Where a row's string is [C] but the role is an inference the tag says `C/I`, which the tables write [C/I].
 
 ## Summary
 
@@ -18,7 +28,9 @@ Read-only analysis of the stadium lighting and the player animation in `main` 1.
 | 10 | Animation location | `KineCore`/`AnimWrap`/`Kinematics` at 0x7001340000-0x70013b0000; 0x7001500000+; 0x7001400000 | The animation core is **not** in 0x7001400000-0x7001548000: `KineCore`/`AnimWrap`/`Kinematics` sit at 0x7001340000-0x70013b0000, and 0x7001500000+ is the online-services client. 0x7001400000 holds `LocoManager`. | [C] |
 | 11 | `LocoManager` | transition builders ("start/end/turn trans"); the "ring" containers; throttle ("walk-to-jog"); idles; current-motion query | `LocoManager` owns the locomotion state machine: transition builders ("start/end/turn trans"), the "ring" motion containers, throttle ("walk-to-jog"), idles, and the current-motion query it hands to Kinematics. The animation half is the player's motion state machine (walking, turning, idling, catching), which hands clip choices to the game's skeleton system. | [C] |
 
-## Bake lifecycle (what one step is)
+## Bake lifecycle
+
+What one step is.
 
 | Step | Function | Evidence | What it does | Tag |
 |---|---|---|---|---|
@@ -99,7 +111,7 @@ Read-only analysis of the stadium lighting and the player animation in `main` 1.
 | 0x7000d4e560 | Kinematics::LoadAnimBin | string "Kinematics::LoadAnimBin (%p)" | [C] |
 | 0x700136bbc0 | BatterStreamerAlt::CheckMaxMoveSize | "BatterStreamerAlt::CheckMaxMoveSize", "MAX_MOVE_SLOT_SI" | [C] |
 
-## What is not mapped
+## Open questions
 
 | Topic | Evidence | What is open | Tag |
 |---|---|---|---|
@@ -113,5 +125,5 @@ Read-only analysis of the stadium lighting and the player animation in `main` 1.
 | LocoManager layout | the objects these functions drive have `+0xc0` (pointer array), `+0x104` (count), `+0x30`, `+0x9c` (type 6 checks), `+0x190/+0x198` (2-D position), `+0x574` flags | Which of those is the manager and which is the player/actor was not separated; the manager's constructor and vtable were not found. | [H] |
 | Clip/blend math | `KineCore::CoreAnimationState::SetupNewAnimation` (0x70013af7fc) and `AnimWrap::InitByMem` (0x70013a8250) are the entry points; the actual clip sampling/blend graph (`BlendGraphDb::Unpack`, 0x70003cc110; `AnimBlock report`, 0x700134af00; `KineCore_MT`, 0x70013ad320) was not read | The clip sampling and blend graph itself is unread. | [H] |
 | Probe cluster | only `0x700128d2a0` is listed; its neighbours 0x700128c16c ("AtlasIrradiance"), 0x700128df40 ("IRTSample: ...") and 0x700128e7b8 ("DrawInstancedProbes") were matched by string only | Their bodies were not read, so their roles are guesses. | [H] |
-| Range correction | 0x7001500000-0x7001548000 is Ollsc/socket/OpenSSL code ("olClient", "Socket", "ShopServiceAccessor", "OpenSSL"), not animation; 0x7001440000+ is the engine object/stream layer; the animation and lighting work in this task's ranges is the 0x70012c0000-0x7001300000 lighting block and the `LocoManager` cluster 0x700140e900-0x7001437e00, plus `KineCore` just below at 0x7001340000-0x70013b0000 | The ranges named in the task map onto these blocks, not onto the 0x7001400000-0x7001548000 band. | [C] |
+| Ranges | 0x7001500000-0x7001548000 is Ollsc/socket/OpenSSL code ("olClient", "Socket", "ShopServiceAccessor", "OpenSSL"), not animation; 0x7001440000+ is the engine object/stream layer; the animation and lighting work is in the 0x70012c0000-0x7001300000 lighting block and the `LocoManager` cluster 0x700140e900-0x7001437e00, plus `KineCore` just below at 0x7001340000-0x70013b0000 | The ranges named in the task map onto these blocks, not onto the 0x7001400000-0x7001548000 band. | [C] |
 | Not in the table, named only by a caller or stage link (role is a guess) | `0x70012e4374`, `0x70012dcf74`, `0x70012dd350`, `0x70012df3f8`, `0x7001426410`, `0x7001413da0`, `0x7001408888`, `0x7001427a4c` | Each is named only by a caller or a stage link, so its role is a guess. | [H] |

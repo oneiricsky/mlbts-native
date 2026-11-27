@@ -325,7 +325,7 @@ static bool g_modal;            // a confirmation is open: B and Esc close it, n
 static const char *const kMenuKeys[] = {
     "RENDER_SCALE", "UPSCALER", "SHARPNESS", "DLSS", "DLSS_PRESET", "FSR", "FSR_VERSION", "FSR_SHARPNESS", "AA", "AA_STRENGTH", "ANISO", "COLOR_PRESET", "COLOR_BRIGHTNESS", "COLOR_CONTRAST", "COLOR_SATURATION",
     "COLOR_GAMMA", "FULLSCREEN", "WINDOW_SIZE", "VK_PRESENT", "FPS_LIMIT", "ASPECT", "GPU_INDEX", "PERF_OVERLAY", "FRAME_QUEUE",
-    "ASSUME_FOCUS", "KEEP_TUTORIALS", "RTTS_AUTOSAVE", "HIDE_OFFLINE_BANNER", "NO_NETWORK_ERROR", "WALKUP_LIGHT", "WALKUP_LEADERS", "MSDF_SKIP", "VOLUME", "PAD_MAP", "PROMPTS", "RUMBLE", "RUMBLE_STRENGTH", "STICK_DEADZONE", "LSTICK_DEADZONE",
+    "ASSUME_FOCUS", "KEEP_TUTORIALS", "RTTS_AUTOSAVE", "HIDE_OFFLINE_BANNER", "NO_NETWORK_ERROR", "WALKUP_LIGHT", "WALKUP_LEADERS", "MSDF_SKIP", "HD_TEXTURES", "VOLUME", "PAD_MAP", "PROMPTS", "RUMBLE", "RUMBLE_STRENGTH", "STICK_DEADZONE", "LSTICK_DEADZONE",
     "RSTICK_DEADZONE", "ASYNC_PREEMPT", "REPLAY_ASYNC", "PIPE_WAIT", "PIPE_SKIP", "LIB_PREBUILD",
     "LIB_PREBUILD_THREADS", "PIPE_PREBUILD", "PREWARM_XLATE", "GPL", "ASTC", "MEMORY", "TEX_ALIAS",
     "TEX_VRAM_PRESSURE", "ASTC_BC", "LOD_GUARD", "FIX_C0", "FIX_ZERO", "BIND_SKIP", "SHADER_MEMO", "PIPE_MEMO",
@@ -536,6 +536,10 @@ static void tab_graphics(float scale) {
                "shimmering on the grass). Higher is smoother but a little blurrier; 0 only smooths the edges.",
                5, "%.0f %%");
     opt_group("Textures");
+    opt_toggle("HD_TEXTURES", "PS5 face textures",
+               "On (the default), players' faces take their colour and normal maps from your own PS5 dump of the game, "
+               "listed in hdtex/index.txt (tools/make_hd_index.py makes it). Without that list, or for a face it cannot "
+               "match, the Switch textures are shown. Applies after a restart.");
     static const char *const aniso[] = {"game", "2", "4", "8", "16"};
     static const char *const aniso_names[] = {"Game", "2x", "4x", "8x", "16x"};
     opt_choice_list("ANISO", "Texture filtering", aniso, aniso_names, 5,
@@ -1047,8 +1051,9 @@ static void tab_dev(float scale) {
     if (opt_toggle("DEV_MODE", "Dev mode",
                    "Turns on the dev harness panel: match setup (teams, seed, fixed clock), scenario drop-in, recorder "
                    "controls (markers, texture dump, reference screenshot, frame log) and live readouts. It opens as "
-                   "soon as you turn this on; F7 opens and closes it afterwards. Keyboard and mouse only. This is a "
-                   "development build feature and is not in release builds.") &&
+                   "soon as you turn this on; F7 opens and closes it afterwards, unless the trainer uses F7 for one "
+                   "of its keys (then open it here). Keyboard and mouse only. This is a development build feature and is "
+                   "not in release builds.") &&
         cfg_bool("DEV_MODE")) {
         change_open(0);
         change_dev(1);

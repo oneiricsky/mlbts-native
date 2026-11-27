@@ -43,6 +43,7 @@
 #include "cfg.h"
 #include "gfx.h"
 #include "host.h"
+#include "nne_plan.h"
 #include "platform/platform.h"
 #include "prompts.h"
 #include "swkbd.h"
@@ -192,13 +193,10 @@ static int movie_is(const char *m, int n, const char *const *list) {
 // At start, with the offline panel hidden, the menu page also begins unscrolled (an empty gap, the tile row cut off): a
 // Down press 1.0 s later scrolls it to the tile row (menu_offline.c).
 // While this happens at start the window shows black (gfx_present_hold) and the player's own input is ignored: from the first
-// GameModesMain until 0.7 s after the last press (after a tile press: from the online entry until 0.7 s after the Ok). The presses and that
+// GameModesMain until 0.7 s after the last press (after a tile press: from the online entry until 0.7 s after the Ok, or with
+// no press to make, 0.7 s after the menu is back). The presses and that
 // end are timed on a clock that counts only while the game polls its input, because the game pauses without the focus; a wall
 // time limit of 12 s ends the black in any case.
-#define NNE_DELAY_NS 300000000ull
-#define NNE_HOLD_NS 100000000ull
-#define NNE_GAP_NS 1000000000ull
-#define NNE_TAIL_NS 700000000ull
 #define NNE_WINDOW_NS 20000000000ull
 #define NNE_LIMIT_NS 12000000000ull
 int menu_offline_active(void);   // menu_offline.c
@@ -265,26 +263,25 @@ static void nne_log(const char *t, int n) {
 }
 
 static void nne_finish(void) {
-    {
-        g_nne_step = 0;
-        uint64_t c = g_focus_clk_ns, end = 0;
-        if (cfg_bool("MLB_NO_NETWORK_ERROR") && !nne_patched()) {   // the code patch leaves no box to press
-            g_synth_from_ns = c + NNE_DELAY_NS;
-            g_synth_to_ns = g_synth_from_ns + NNE_HOLD_NS;
-            end = g_synth_to_ns + NNE_TAIL_NS;
-            rt_log("hid: the network error box is dismissed with A in 0.3 s (MLB_NO_NETWORK_ERROR)");
-        }
-        // The page starts unscrolled and, with the offline panel hidden, shows an empty gap above a cut-off tile row; a
-        // Down once the box is gone scrolls it to the tiles (seen 2026-11-26 [C]). Only at start: after a tile press the
-        // page is already scrolled to that tile.
-        if (g_nne_boot && menu_offline_active()) {
-            g_gap_from_ns = c + NNE_GAP_NS;
-            g_gap_to_ns = g_gap_from_ns + NNE_HOLD_NS;
-            end = g_gap_to_ns + NNE_TAIL_NS;
-            rt_log("hid: Down in 1.0 s scrolls the menu to the tile row (MLB_HIDE_OFFLINE_BANNER)");
-        }
-        if (end) g_hold_end_clk_ns = end, rt_log("hid: black hold will end 1.8 s of play from now (frame %llu)", (unsigned long long)gfx_stats().frames);
+    g_nne_step = 0;
+    int press_a = cfg_bool("MLB_NO_NETWORK_ERROR") && !nne_patched();   // the code patch leaves no box to press
+    // The page starts unscrolled and, with the offline panel hidden, shows an empty gap above a cut-off tile row; a
+    // Down once the box is gone scrolls it to the tiles (seen 2026-11-26 [C]). Only at start: after a tile press the
+    // page is already scrolled to that tile.
+    int press_down = g_nne_boot && menu_offline_active();
+    uint64_t c = g_focus_clk_ns;
+    NnePlan p = nne_plan(c, press_a, press_down);
+    if (press_a) {
+        g_synth_from_ns = p.a_from, g_synth_to_ns = p.a_to;
+        rt_log("hid: the network error box is dismissed with A in 0.3 s (MLB_NO_NETWORK_ERROR)");
     }
+    if (press_down) {
+        g_gap_from_ns = p.down_from, g_gap_to_ns = p.down_to;
+        rt_log("hid: Down in 1.0 s scrolls the menu to the tile row (MLB_HIDE_OFFLINE_BANNER)");
+    }
+    g_hold_end_clk_ns = p.hold_end;
+    rt_log("hid: black hold will end %.1f s of play from now (frame %llu)", (double)(p.hold_end - c) / 1e9,
+           (unsigned long long)gfx_stats().frames);
 }
 
 void hid_game_log(const char *text, int n) {

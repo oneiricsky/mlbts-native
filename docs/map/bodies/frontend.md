@@ -1,8 +1,22 @@
 # Front-end / Road To The Show, and the stats-roster block (main 1.0.20)
 
-This page covers the front end / Road To The Show range of the 1.0.20 `main` image and the stats-roster block behind it: the screen engine, the element property registrars, the per-screen descriptor tables, the RTTS XML loaders, the hub up-grade grid, and the binary DB layer at 0x7001800000-0x70018c0000 that loads `stats.bin`, `rosters.bin` and `players.bin`. The front end is a data-driven UI: `uiEngine` keeps a deque of screens (+0x218..+0x230), every swap goes through one worker that prints `uiEngine: Entering screen: [%s->%s (%d)]` and delivers an enter event, and screens are C++ objects with vtables (0x70004c77bc is slot 2 of the 14-slot screen vtable 0x700217e570). Each row was read from the instructions, the strings and the callees the function references, and carries a tag: [C] for what the code shows directly, [I] where the behaviour is inferred, [H] for a hypothesis. Cells get text from named properties — four element classes (Table/List/HorizontalList/TextBox) update from a data source, registrars publish 42/22/23 fields (`CURRENT_ROW`, `CELL_INDEX`, `IS_CURRENT_CELL`, ...), each screen declares its own rows (`NUM_ROWS`, `TITLE_STR`, ...) — and RTTS content loads from `frontend//rtts/*.xml` into C++ record tables, is validated, and writes `calendar_date` events.
+This page covers the front end / Road To The Show range of the 1.0.20 `main` image and the stats-roster block behind it:
 
-## Screens, input and dispatch
+- the screen engine and the element property registrars
+- the per-screen descriptor tables
+- the RTTS XML loaders and the hub up-grade grid
+- the binary DB layer at 0x7001800000-0x70018c0000 that loads `stats.bin`, `rosters.bin` and `players.bin`
+
+The front end is a data-driven UI:
+
+- `uiEngine` keeps a deque of screens (+0x218..+0x230). Every swap goes through one worker that prints `uiEngine: Entering screen: [%s->%s (%d)]` and delivers an enter event.
+- Screens are C++ objects with vtables (0x70004c77bc is slot 2 of the 14-slot screen vtable 0x700217e570).
+- Cells get text from named properties. Four element classes (Table/List/HorizontalList/TextBox) update from a data source, registrars publish 42/22/23 fields (`CURRENT_ROW`, `CELL_INDEX`, `IS_CURRENT_CELL`, ...), and each screen declares its own rows (`NUM_ROWS`, `TITLE_STR`, ...).
+- RTTS content loads from `frontend//rtts/*.xml` into C++ record tables, is validated, and writes `calendar_date` events.
+
+Each row was read from the instructions, the strings and the callees the function references. Tags: [C] what the code shows directly, [I] inferred behaviour, [H] a hypothesis.
+
+## Screens and input
 
 | Address | Function | What it does | Evidence | Tag |
 |---|---|---|---|---|
@@ -21,7 +35,7 @@ This page covers the front end / Road To The Show range of the 1.0.20 `main` ima
 | 0x70004c1048 | deleting destructor | Calls 0x70004c0eac, then `operator delete`; 0x70005b19d0 has the symbol `operator delete(void*)`, 7741 callers | `musttail return f_70005b19d0` after f_70004c0eac | C |
 | 0x70004c1e9c | builds the tutorial XML path | Picks one of two formats for a screen's tutorial file | two format strings: `"Frontend/Tutorial/%s.xml"` and `"Frontend/Tutorial/InGame/%s.xml"` | C |
 
-## Element properties and data binding
+## Data binding
 
 | Address | Function | What it does | Evidence | Tag |
 |---|---|---|---|---|
@@ -33,7 +47,7 @@ This page covers the front end / Road To The Show range of the 1.0.20 `main` ima
 | 0x7000822820 | uiElementDataHorizontalList update | The horizontal-list case of the same family; sibling of 0x700085cb60 | `"uiElementDataHorizontalList Mask 0x%lx"`; 534 lines | C |
 | 0x700086f8f0 | uiElementDataTextBox update | The text-box case of the same data-binding family | `"uiElementDataTextBox Mask 0x%lx"`; 292 lines | C |
 
-## Per-screen descriptor tables
+## Screen descriptors
 
 | Address | Function | What it does | Evidence | Tag |
 |---|---|---|---|---|
@@ -89,7 +103,7 @@ This page covers the front end / Road To The Show range of the 1.0.20 `main` ima
 | 0x70018286f0 | user/franchise saved-settings block | Stores the settings block names | stores `"D_CSTM_SETTINGS"`, `"D_USER_SETTINGS"`, `"D_FRANOPTIONS"`, `"D_ORTCOUNTERS"`, `"D_INBOX"` | C |
 | 0x700183af10 | loads/copies a player profile (D_PLR_PROFILE) | Fills the stack records, then hands the block name to the loader | passes `"D_PLR_PROFILE"` to f_7000df2818 after a fill loop that writes 0x80000000 at offsets +0x1f5c/+0x1f7c of each 0x40-byte stack record | C |
 
-## Substitution in the same range
+## Substitution
 
 | Address | Function | What it does | Evidence | Tag |
 |---|---|---|---|---|
@@ -97,7 +111,7 @@ This page covers the front end / Road To The Show range of the 1.0.20 `main` ima
 | 0x7001870ca0 | dumps the player-evaluation inputs used for a substitution | Prints the nine position values and each candidate's playable positions with its position/role pair | `"P/C/1B/2B/3B/SS/LF/CF/RF: %d %d %d %d %d %d %d %d %d, %..."`, `"Canplay P: %d, %s %s (Pos/Role: %d/%d)\n"` | C |
 | 0x700185b630 | roster/lineup substitution with an error log | Swaps the players in the lineup and logs a failure with both ids; 5 callers | `"Error: pos %d team %d player out %d (%s), player in %d ..."` | C |
 
-## Not mapped
+## Open questions
 
 | Topic | Addresses | What is known | Why open |
 |---|---|---|---|
@@ -108,4 +122,4 @@ This page covers the front end / Road To The Show range of the 1.0.20 `main` ima
 | Up-grade handlers' command names and field meanings | 0x7000bd1a4c..0x7000bd35e0 | The in-game command names of the 12 up-grade handlers and the meaning of this+0x108/+0x98/+0x9e/+0x12e were not proven | 0x7000bd1f64, 0x7000bd20cc and 0x7000bd3088 are inferred from their callees only; the four column vectors at +0xa8/+0xc0/+0xd8/+0xf0 are assumed to be the four up-grade categories (every handler walks them identically), and no string states the category names |
 | Further screen data classes | 0x7000ac0000-0x7000c00000 | Holds ~40 further screen data classes (RttsMessages, RttsMilestones, BpEquipment, PerksProgression, Relationships, StadiumAssign, ...) | only the ones named in the table were opened |
 | Telemetry and presentation code | 0x7001880000 | The Halyard/HalyardClient telemetry strings and the presentation/training code above 0x7001880000 (`SPresDataTrain.spf`, `TRAIN_STATE_*`, `ACT_EXIT`) are outside the stats/roster DB layer | it was not read |
-| Runtime input path | — | The runtime side (how `MLB_*` / hid input reaches f_70008bb110) is host code, not game code | it was not traced |
+| Runtime input path | | The runtime side (how `MLB_*` / hid input reaches f_70008bb110) is host code, not game code | it was not traced |

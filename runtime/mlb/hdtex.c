@@ -10,8 +10,14 @@
 // level's size in the rows at 0x1a0 (32 bytes each, size at +4, the bytes left after it at +0). Blocks sit in 64-byte
 // units along strips four block rows high: 2x4 blocks for 8-byte blocks, 1x4 for 16-byte ones.
 //
-// MLB_HD_TEXTURES: unset, the "hdtex" folder of the working directory when it has an index.txt; "off" or 0 none; else
-// the folder. index.txt: "root <PS5 app folder>", then "<hash> <width> <height> <levels> <drop> <PS5 file>" lines.
+// MLB_HD_TEXTURES: unset or 1, the "hdtex" folder of the working directory when it has an index.txt; "off" or 0 none;
+// else the folder. index.txt: "root <PS5 app folder>", then
+// "<hash> <width> <height> <levels> <drop> [=<full hash>/<bytes>] <PS5 file>" lines.
+//
+// Some players' Switch textures start with the same 16 KiB. Their lines carry a hash of the whole storage (the first
+// <bytes> of it, the file's decompressed size) as well. Where even that is the same (a few pairs of heads share a Switch
+// colour map and not a PS5 one), the candidate whose file the game has opened wins; with none or several opened, the
+// texture stays the Switch one.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,9 +30,16 @@
 struct MlbHdEntry {
     uint64_t hash;
     uint16_t w, h, levels, drop;
-    uint8_t queued;   // prefetch: this file was already handed to the reader thread
+    uint8_t queued;            // prefetch: this file was already handed to the reader thread
+    volatile uint8_t opened;   // the game has opened the Switch file of this name
+    uint32_t full_len;         // 0 when the first 16 KiB decide
+    uint64_t full;             // hash of the first full_len bytes of the storage
     char *path;
 };
+
+// The sizes and mip counts in the index (a handful), so that any other texture upload is turned away without a search.
+static struct { uint16_t w, h, levels; } shapes[16];
+static int nshapes;
 
 static MlbHdEntry *entries;
 static int nentries;
@@ -48,7 +61,7 @@ static void init(void *arg) {
     const char *v = cfg_get("MLB_HD_TEXTURES");
     if (v && (!strcmp(v, "off") || !strcmp(v, "0"))) return;
     char path[1100];
-    snprintf(path, sizeof path, "%s/index.txt", v && *v ? v : "hdtex");
+    snprintf(path, sizeof path, "%s/index.txt", v && *v && strcmp(v, "1") ? v : "hdtex");
     FILE *f = fopen(path, "r");
     if (!f) return;
     char line[1400];
@@ -64,11 +77,26 @@ static void init(void *arg) {
         unsigned w, ht, lv, drop;
         int off = 0;
         if (sscanf(line, "%llx %u %u %u %u %n", &h, &w, &ht, &lv, &drop, &off) < 5 || !off) continue;
+        unsigned long long full = 0;
+        unsigned full_len = 0;
+        if (line[off] == '=') {
+            int more = 0;
+            if (sscanf(line + off, "=%llx/%u %n", &full, &full_len, &more) < 2 || !more || !full_len) continue;
+            off += more;
+        }
+        int s = 0;
+        while (s < nshapes && (shapes[s].w != w || shapes[s].h != ht || shapes[s].levels != lv)) s++;
+        if (s == nshapes) {
+            if (s == (int)(sizeof shapes / sizeof *shapes)) continue;   // an index of head textures has two
+            shapes[s].w = (uint16_t)w, shapes[s].h = (uint16_t)ht, shapes[s].levels = (uint16_t)lv, nshapes++;
+        }
         if (nentries == cap) {
             cap = cap ? cap * 2 : 64;
             if (!(entries = realloc(entries, sizeof *entries * (size_t)cap))) rt_fatal("hdtex: out of memory");
         }
-        entries[nentries++] = (MlbHdEntry){h, (uint16_t)w, (uint16_t)ht, (uint16_t)lv, (uint16_t)drop, 0, _strdup(line + off)};
+        entries[nentries++] = (MlbHdEntry){.hash = h, .w = (uint16_t)w, .h = (uint16_t)ht, .levels = (uint16_t)lv,
+                                           .drop = (uint16_t)drop, .full_len = full_len, .full = full,
+                                           .path = _strdup(line + off)};
     }
     fclose(f);
     qsort(entries, (size_t)nentries, sizeof *entries, cmp_entry);
@@ -76,7 +104,10 @@ static void init(void *arg) {
         for (int i = 0; i < nentries; i++) byname[i] = &entries[i];
         qsort(byname, (size_t)nentries, sizeof *byname, cmp_name);
     }
-    rt_log("hdtex: %d PS5 textures indexed (%s), from %s", nentries, path, root);
+    int ncolor = 0;
+    for (int i = 0; i < nentries; i++) ncolor += strstr(entries[i].path, "-COLOR.TEX") != NULL;
+    rt_log("hdtex: %d PS5 textures indexed (%d colour, %d normal lines; %s), from %s", nentries, ncolor, nentries - ncolor,
+           path, root);
 }
 
 int mlb_hd_on(void) {
@@ -86,24 +117,51 @@ int mlb_hd_on(void) {
 
 int mlb_hd_shape(uint32_t w, uint32_t h, uint32_t levels) {
     if (!mlb_hd_on()) return 0;
-    for (int i = 0; i < nentries; i++)
-        if (entries[i].w == w && entries[i].h == h && entries[i].levels == levels) return 1;
+    for (int i = 0; i < nshapes; i++)
+        if (shapes[i].w == w && shapes[i].h == h && shapes[i].levels == levels) return 1;
     return 0;
+}
+
+static uint64_t fnv(const uint8_t *p, size_t n) {
+    uint64_t hash = 0xcbf29ce484222325ull;
+    for (size_t i = 0; i < n; i++) hash = (hash ^ p[i]) * 0x100000001b3ull;
+    return hash;
 }
 
 const MlbHdEntry *mlb_hd_find(const void *storage, size_t size, uint32_t w, uint32_t h, uint32_t levels) {
     if (!mlb_hd_on() || !storage) return NULL;
-    size_t n = size < 16384 ? size : 16384;
-    const uint8_t *p = storage;
-    uint64_t hash = 0xcbf29ce484222325ull;
-    for (size_t i = 0; i < n; i++) hash = (hash ^ p[i]) * 0x100000001b3ull;
-    MlbHdEntry key = {.hash = hash};
-    const MlbHdEntry *e = bsearch(&key, entries, (size_t)nentries, sizeof *entries, cmp_entry);
-    if (!e || e->w != w || e->h != h || e->levels != levels) return NULL;
-    return e;
+    uint64_t hash = fnv(storage, size < 16384 ? size : 16384);
+    int lo = 0, hi = nentries;
+    while (lo < hi) {   // the first entry of this hash
+        int mid = (lo + hi) / 2;
+        if (entries[mid].hash < hash) lo = mid + 1;
+        else hi = mid;
+    }
+    const MlbHdEntry *first = NULL, *opened = NULL;
+    int n = 0, nopened = 0;
+    uint64_t full = 0;
+    uint32_t full_len = 0;
+    for (; lo < nentries && entries[lo].hash == hash; lo++) {
+        const MlbHdEntry *e = &entries[lo];
+        if (e->w != w || e->h != h || e->levels != levels) continue;
+        if (e->full_len) {
+            if (e->full_len > size) continue;
+            if (e->full_len != full_len) full_len = e->full_len, full = fnv(storage, full_len);
+            if (e->full != full) continue;
+        }
+        if (!n++) first = e;
+        if (e->opened) opened = e, nopened++;
+    }
+    if (n <= 1) return first;
+    if (nopened == 1) return opened;
+    static volatile int32_t logged;
+    if (__atomic_add_fetch(&logged, 1, __ATOMIC_RELAXED) <= 8)
+        rt_log("hdtex: %d PS5 files fit one Switch texture (%s among them) and the game has opened %d of their files: "
+               "the Switch one stays", n, first->path, nopened);
+    return NULL;
 }
 
-uint64_t mlb_hd_hash(const MlbHdEntry *e) { return e->hash; }
+uint64_t mlb_hd_id(const MlbHdEntry *e) { return (uint64_t)(uintptr_t)e; }
 const char *mlb_hd_name(const MlbHdEntry *e) { return e->path; }
 
 static uint32_t rd32(const uint8_t *d, size_t o) { return d[o] | d[o + 1] << 8 | d[o + 2] << 16 | (uint32_t)d[o + 3] << 24; }
@@ -231,8 +289,8 @@ static void pf_main(void *arg) {
 }
 
 void rt_host_opened(const char *path) {
-    static int on = -1;
-    if (on < 0) on = mlb_hd_on() && cfg_bool("MLB_HD_PREFETCH") && byname;
+    static int on = -1, prefetch;
+    if (on < 0) prefetch = cfg_bool("MLB_HD_PREFETCH"), on = mlb_hd_on() && byname;
     if (!on || !path) return;
     const char *h = strstr(path, "CHARACTERS/HEADS/");
     if (!h || h < path + 5 || strncmp(h - 5, "/NSW/", 5)) return;
@@ -242,7 +300,12 @@ void rt_host_opened(const char *path) {
     if (snprintf(key, sizeof key, "PS5/%s", h) >= (int)sizeof key) return;
     MlbHdEntry kv = {.path = key}, *kp = &kv;
     MlbHdEntry **hit = bsearch(&kp, byname, (size_t)nentries, sizeof *byname, cmp_name);
-    if (!hit || __atomic_exchange_n(&(*hit)->queued, 1, __ATOMIC_RELAXED)) return;
+    if (!hit) return;
+    // every line of this file (a colour map has one for each of its Switch sizes) is now open
+    MlbHdEntry **p = hit;
+    while (p > byname && !strcmp(p[-1]->path, key)) p--;
+    for (; p < byname + nentries && !strcmp((*p)->path, key); p++) (*p)->opened = 1;
+    if (!prefetch || __atomic_exchange_n(&(*hit)->queued, 1, __ATOMIC_RELAXED)) return;
     plat_mutex_lock(&pf_lock);
     if (pf_tail - pf_head >= PF_QN) {
         (*hit)->queued = 0;

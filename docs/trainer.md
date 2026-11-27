@@ -17,7 +17,8 @@ F1 → Trainer → Trainer: On (or `MLB_TRAINER=1`, `--trainer 1`). Then, in a m
 | Move, press, close | arrows, Enter, Esc | D-pad, A, B |
 
 While the panel is up the game gets an idle controller. F1 closes it. The four keys can be changed in the Trainer tab
-(F2 to F7), as can the panel's corner and opacity. Each of the four ratings presets can also have a key (5 to 0,
+(F2 to F7), as can the panel's corner and opacity. In a development build F7 also opens the dev panel; a trainer
+key set to F7 takes it, and the dev panel is then opened from Settings > Dev. Each of the four ratings presets can also have a key (5 to 0,
 Insert, Delete, Home, End, Page Up or Page Down; none by default) that steps it through Normal, Best and Worst.
 So can each of the six guaranteed cheats: its key steps it through off, my side, their side and both.
 

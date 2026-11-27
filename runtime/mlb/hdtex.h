@@ -9,9 +9,10 @@ typedef struct MlbHdEntry MlbHdEntry;
 int mlb_hd_on(void);
 // 1 when a texture of this Switch shape is in the index: worth hashing its storage.
 int mlb_hd_shape(uint32_t width, uint32_t height, uint32_t levels);
-// The entry whose Switch texture the storage is (a hash of its first 16 KiB, as the game wrote it), NULL none.
+// The entry whose Switch texture the storage is (a hash of its first 16 KiB, as the game wrote it, and where the index
+// needs it one of all of it); NULL none, or several that cannot be told apart.
 const MlbHdEntry *mlb_hd_find(const void *storage, size_t storage_size, uint32_t width, uint32_t height, uint32_t levels);
-uint64_t mlb_hd_hash(const MlbHdEntry *e);
+uint64_t mlb_hd_id(const MlbHdEntry *e);   // one number for each entry
 const char *mlb_hd_name(const MlbHdEntry *e);
 
 // A PS5 texture read and rearranged into plain block rows, one level after another (16-byte aligned).

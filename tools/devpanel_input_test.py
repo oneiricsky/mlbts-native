@@ -76,7 +76,7 @@ def main():
             time.sleep(1)
             t = text()
             want = ["seed 4242 and fixed clock", "apply scenario 'Top 7, 1 out", "harness: marker marker frame",
-                    "frame log start", "menu: dev panel closed"]
+                    "harness: framelog started", "menu: dev panel closed"]
             bad = [w for w in want if w not in t]
             for line in t.splitlines():
                 if 'devpanel:' in line or 'dev panel' in line or 'harness:' in line:

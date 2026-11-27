@@ -1,12 +1,19 @@
 Before every pitch the game froze for 250 to 380 ms, and for longer at inning changes. Upstream fixed it in Fastball 0.2.0 with code patches; this page is the cause and the measurements, from the fork's notes.
 
-## In plain words
+## Overview
 
 The game lights each stadium for the time of day, and the clock moves during a match (about 17.5 s of game time per pitch, more per batter and inning). Each new time needs the lighting worked out again, which the game calls a bake.
 
-After every play the game bakes the next time into a spare lighting buffer, one step per frame for about 50 frames. That is fine. Then, when the next pitch starts, one function asks for the lighting again with a "force" flag set. The force flag makes the game ignore the finished spare buffer and bake the same time again, all in one frame: about 50 full scene passes, each followed by a GPU kick and a wait. That is the freeze.
+| When | Action |
+|---|---|
+| after every play | bakes the next time into a spare lighting buffer, one step per frame for about 50 frames; that part is fine |
+| when the next pitch starts | one function asks for the lighting again with a "force" flag set |
 
-## The code involved (1.0.20 addresses)
+The force flag makes the game ignore the finished spare buffer and bake the same time again, all in one frame: about 50 full scene passes, each followed by a GPU kick and a wait. That is where it freezes.
+
+## Functions
+
+Addresses are 1.0.20.
 
 | Function | Role |
 |---|---|
@@ -18,7 +25,7 @@ After every play the game bakes the next time into a spare lighting buffer, one 
 
 Logging the manager's fields while they change showed it before every pitch: the spare buffer already held 19.1882 h from the background bake, and the blocking bake made 19.1882 h again.
 
-## The patches
+## Patches
 
 Set `walkup_light` has six sites:
 
@@ -33,9 +40,11 @@ Set `walkup_leaders` has one site. At an inning change the game builds its broad
 
 Both are on by default with a settings row each (`MLB_WALKUP_LIGHT`, `MLB_WALKUP_LEADERS`); `=0` runs the game's own code.
 
-## Numbers
+## Measurements
 
 Road to the Show, Double-A starting pitcher, 1280x720, 60 fps limit, driven unattended, same exe with the switches off and on.
+
+Without the patches there were about 53 to 55 GPU waits per pitch, each about 4.4 ms.
 
 Slow counts frames over 100 ms.
 
@@ -48,10 +57,6 @@ Slow counts frames over 100 ms.
 
 A longer run, 40 pitches with four inning changes, had no frame over 100 ms with the lighting patch on; the slowest were three of 88 to 96 ms at inning changes, which was the league-leader work. With the leaders patch on too, the worst was 71 ms.
 
-## What the fork's earlier work got wrong
-
-An earlier report here, written before 0.2.0 was merged, called these waits inherent: about 53 to 55 GPU waits per pitch, each about 4.4 ms. We tried to make each wait cheaper and never asked why the game was doing 50 of them. Upstream asked, and found the redundant bake. That is why the fork's working rules now say to ask why the game does the work first.
-
-## Not seen
+## Open questions
 
 Neither an unpatched nor a patched game crossed 19.5 h at Hartford, which has no entry in the props table, so the prop switch itself was not seen in game.

@@ -1,6 +1,19 @@
 # MLB The Show 26 (1.0.20), audio map: stream engine, Scream DSP, PXP commentary
 
-Read-only analysis of `main` (base `0x7000000000`), game version 1.0.20: no repo file was edited and the game was not run. Everything below comes from `tools/map_find.py`, the generated C in `work/gen/main/`, `tools/disasm.py` / capstone on the shipped ARM64, the string blobs in `work/build/game/exefs/main`, the `sdk` symbol index, and the existing run log `work/build/logs/mlb.log`. The module carries Sony's **Scream / 989snd** engine statically, with full PS3-era source paths in its strings (`C:/MLBPS3/SRC/TnT_Audio/SCREAM/...`, `.../NCA/trunk/project/external/wws_gattaca/...`), so most SCREAM functions can be named from the file and message they embed. Tags: **[C]** string, symbol, or code read; **[I]** strong pattern; **[H]** guess. Two tools serve this: `tools/fnxref.py` (every string a function references, in code order; this is what ties a log line to the state store that follows it) and `tools/strdump.py` (the C string at a guest address).
+Read-only analysis of `main` (base `0x7000000000`), game version 1.0.20: no repo file was edited and the game was not run.
+
+| Source | Detail |
+|---|---|
+| Index | `tools/map_find.py` and the `sdk` symbol index |
+| Code | the generated C in `work/gen/main/`; `tools/disasm.py` / capstone on the shipped ARM64 |
+| Strings | the string blobs in `work/build/game/exefs/main` |
+| Run log | the existing `work/build/logs/mlb.log` |
+| `tools/fnxref.py` | every string a function references, in code order; this ties a log line to the state store that follows it |
+| `tools/strdump.py` | the C string at a guest address |
+
+The module carries Sony's Scream / 989snd engine statically, with full PS3-era source paths in its strings (`C:/MLBPS3/SRC/TnT_Audio/SCREAM/...`, `.../NCA/trunk/project/external/wws_gattaca/...`), so most SCREAM functions can be named from the file and message they embed.
+
+Tags: [C] string, symbol, or code read; [I] strong pattern; [H] guess.
 
 ## Summary
 
@@ -13,7 +26,7 @@ Read-only analysis of `main` (base `0x7000000000`), game version 1.0.20: no repo
 | Commentary ("PXP") | A per-pack object with a 129-entry vtable of play-event handlers; a handler copies an **event name string** (`PitchGetsAwayResult`, `PickoffStealResult`, `IntentionalWalk`, …) and calls vtable slot 9 (`+0x48`) with it, and the engine resolves that name to a sound in the pack's bank (`Audio\PXP.TBL/.MRK/.CTL/.SKX`), whose playlist picks a line and rejects ones in the recent history. | [C] |
 | Variants | Three full copies of the PXP engine and five `PlayByPlay*` pack names exist, so the game ships several commentary variants ("TV", "MiLB", "PG", "Griffey", "RF_RF") compiled separately. | [C] |
 
-## 1. The one PCM stream to audout
+## Audio output
 
 Where the mix is submitted (confirmed): one thread opens and feeds the audio device.
 
@@ -42,8 +55,8 @@ What the numbers say:
 |---|---|---|
 | Frame size | 3072 bytes / 256 frames = 12 bytes per frame = 6 channels × 16 bit, i.e. 5.1 PCM16 at 48 kHz. | [C] |
 | Session count | Only one 6-channel session exists; the 2-channel one starts with no buffers queued. | [C] |
-| Which session is the mix | Because there is exactly one `OpenAudioOut` call site in `main` (`0x70018cff0c`) and it is reached once per `DeviceOut` instance, I read the 6-channel instance as the game mix and the 2-channel instance as the headset/voice-chat feed; the code cluster around `0x70018ce000`–`0x70018d2000` is the headset library (`'Headset Thread'`, `'Microphone Thread'`, `LocalTalker`, `RemoteTalker`). | [I] |
-| Mix producer | Not pinned in code. The consumer side is proven (the ring read at `0x700153b95c`), but the producer that writes the summed 5.1 PCM into that ring is not identified; see "What is not mapped". | — |
+| Which session is the mix | Because there is exactly one `OpenAudioOut` call site in `main` (`0x70018cff0c`) and it is reached once per `DeviceOut` instance, I read the 6-channel instance as the game mix and the 2-channel instance as the headset/voice-chat feed; the code cluster around `0x70018ce000` to `0x70018d2000` is the headset library (`'Headset Thread'`, `'Microphone Thread'`, `LocalTalker`, `RemoteTalker`). | [I] |
+| Mix producer | Not pinned in code. The consumer side is proven (the ring read at `0x700153b95c`), but the producer that writes the summed 5.1 PCM into that ring is not identified; see "What is not mapped". | |
 
 The buffering state machine. `0x70003dde10` is the game's stream state machine, not the audout ring [C].
 
@@ -107,19 +120,19 @@ Slot layout read from the code [C]:
 | `+0x4d8` | cleared on fade | [C] |
 | `+0x4e0` | the stop-pending byte on the manager object | [C] |
 
-## 2. Playlist, music selection and the fade path
+## Music and fades
 
 The music path is the same stream engine plus a bank and a catalogue layer [C].
 
 | Address | Lines / callers | What it does | Strings | Tag |
 |---|---|---|---|---|
-| `0x70003d263c` | — | Loads a jukebox bank: formats the two strings and calls the Scream bank load `0x7001aa2990` (unload/load bank). | `'Jukebox_%02d'`, `'Audio\%s.bnk'` | [C] |
+| `0x70003d263c` | | Loads a jukebox bank: formats the two strings and calls the Scream bank load `0x7001aa2990` (unload/load bank). | `'Jukebox_%02d'`, `'Audio\%s.bnk'` | [C] |
 | `0x70003d45b0` | 4 callers | The jukebox song catalogue. | `'Music Genre'`, `'Jukebox Song'` | [C] |
-| `0x70003d4170` | — | Reads the per-song metadata fields. | `'SONG_NAME'`, `'ALBUM_NAME'`, `'ARTIST_NAME'`, `'LABEL_NAME'`, `'GENRE_NAME'`, `'LENGTH_STR'` | [C] |
+| `0x70003d4170` | | Reads the per-song metadata fields. | `'SONG_NAME'`, `'ALBUM_NAME'`, `'ARTIST_NAME'`, `'LABEL_NAME'`, `'GENRE_NAME'`, `'LENGTH_STR'` | [C] |
 | `0x70003d2ca4` | 445 lines, 6 callers | The music/PA director: it chooses banks, references the boost/boot strings, and calls the stream helpers `0x70003dfee4` / `0x70003dff38` / `0x70003dffac`. | `'PA Music Boost'`, `'WELCOME_BOOT'`, `'Jukebox_%02d'` | [C] |
-| `0x70003e8520` | — | Streams the front-end jukebox. | `'Mobile Song Buffer'`, `'Jukebox_%02d'` | [C] |
-| `0x70003e70fc` | — | Plays a sound by symbolic name — the same name-keyed style the commentary uses. | `'MUS_RTTS_Awards'`, `'QUEST_BB_INTRO'`, `'STOP_ALL_SCENE_MUSIC'` | [C] |
-| `0x70003f4e04` | — | A *playlist gate*: it refuses a playlist for camera/logic reasons and logs each reason (12 such strings). | `'Could not play playlist because the batter isn't right-handed'`, `'...because we aren't focused on first base'` | [C] |
+| `0x70003e8520` | | Streams the front-end jukebox. | `'Mobile Song Buffer'`, `'Jukebox_%02d'` | [C] |
+| `0x70003e70fc` | | Plays a sound by symbolic name, the same name-keyed style the commentary uses. | `'MUS_RTTS_Awards'`, `'QUEST_BB_INTRO'`, `'STOP_ALL_SCENE_MUSIC'` | [C] |
+| `0x70003f4e04` | | A *playlist gate*: it refuses a playlist for camera/logic reasons and logs each reason (12 such strings). | `'Could not play playlist because the batter isn't right-handed'`, `'...because we aren't focused on first base'` | [C] |
 
 Selection itself is inside Scream [C]: a sound is a list of grains (playlist items), `PlaylistProcessor` walks them and `PlaylistSection` picks the next stream, rejecting repeats.
 
@@ -128,7 +141,7 @@ Selection itself is inside Scream [C]: a sound is a list of grains (playlist ite
 | `0x7001ad5610` | `PlaylistProcessor::AddPlaylistItem` | `'PlaylistProcessor::AddPlaylistItem(): Cannot add a %s grain before a Start Stream Playlist grain.'` | [C] |
 | `0x7001ad5e98` | `PlaylistProcessor::Start` | `'PlaylistProcessor::Start(): Cannot find starting marker or section '%s' in playlist '%s'.'` | [C] |
 | `0x7001ad69c4` | `PlaylistSection` rejecting a stream | `'(%d) PlaylistSection '%s' rejecting stream '%s' because it is in the global history.'` | [C] |
-| `0x7001ad59f0` | — | `'(%d) Playlist Loop End grain in playlist '%s' has no matching Playlist Loop Start!'` | [C] |
+| `0x7001ad59f0` | | `'(%d) Playlist Loop End grain in playlist '%s' has no matching Playlist Loop Start!'` | [C] |
 | `0x7001ae097c` | `TransitionMgr::BeginPlaylistDefinition` | `'TransitionMgr::BeginPlaylistDefinition(): Cannot begin playlist definition for '%s' at this time.'` | [C] |
 | `0x7001ae0a48` | `TransitionMgr::AddPlaylistItem` | `'TransitionMgr::AddPlaylistItem(): Cannot add %s (grain #%d) in Sound '%s'.'` | [C] |
 | `0x7001ab6110` | `snd_TestStreamPlaylist` | `'snd_TestStreamPlaylist(): More than %d unique active playlists found!'` | [C] |
@@ -156,9 +169,11 @@ Fade. `0x70003df4b8` (95 lines, 48 callers) is the shared "manual fade this slot
 | Live handle | `0x70003df4b8` → `0x7001aa3ba0` | Loads the word at `+0x4c4` into `x0`, sets `x1 = 1`, `v0 = 0, v1 = 8, v2 = 0`, logs the fade request, and calls Scream `snd_AutoGain` (`0x7001aa3ba0`, whose own string is `'snd_AutoGain'`) as `(slot+0x4c4, 1, 0.0f, 8, 0)`: the ramp is issued on the voice, not on a mix bus. | `'%010d, Manual fade: Issuing fade request to audio system.\n'` | [C] |
 | No live handle | `0x70003df4b8` | Otherwise it logs the fade-pending line, stores state **6**, sets the stop-pending byte at `[manager+0x4e0] = 1`, and returns 0. | `'%010d, Manual fade: Moving to STATE_WAITING_TO_ISSUE_STOP\n'` | [C] |
 | Hard stop sibling | `0x70003ddcb4`, `0x70003ddaf0` | `0x70003ddcb4` (83 lines, 50 callers) issues the stop request; `0x70003ddaf0` drives the state machine directly. | `'%010d, Manual Stop: Issuing stop request to audio system.\n'` | [C] |
-| Conclusion | — | A fade is a gain ramp on the 989snd voice followed by the same stop handshake; there is no separate mix-level fade bus. | — | [C] |
+| Conclusion | | A fade is a gain ramp on the 989snd voice followed by the same stop handshake; there is no separate mix-level fade bus. | | [C] |
 
-## 3. The commentary event path (PXP)
+## Commentary events
+
+The PXP path.
 
 Dispatch is by vtable slot, not by string, but the event name is passed as data [C]. The commentary engine is one class with a **129-entry vtable**; each play event is a virtual method.
 
@@ -173,15 +188,15 @@ The event name is the selector. In `DoPickoffResultPXP` (`0x7000e37630`) the str
 
 | Address | Instruction | Note |
 |---|---|---|
-| `0xe37a10` | `adrp x1, #0x1c43000` | — |
+| `0xe37a10` | `adrp x1, #0x1c43000` | |
 | `0xe37a14` | `add x1, x1, #0x36d` | "PitchGetsAwayResult" |
-| `0xe37a18` | `add x0, sp, #0x330` | — |
-| `0xe37a1c` | `mov w2, #0xff` | — |
+| `0xe37a18` | `add x0, sp, #0x330` | |
+| `0xe37a1c` | `mov w2, #0xff` | |
 | `0xe37a20` | `bl #0x1c1fbe0` | plt strncpy |
-| `0xe37a2c` | `fmov s0, #0.50000000` | — |
+| `0xe37a2c` | `fmov s0, #0.50000000` | |
 | `0xe37a30` | `add x1, sp, #0x330` | x1 = the copied event name |
 | `0xe37a34` | `mov x0, x19` | x0 = the commentary engine |
-| `0xe37a38` | `mov w2, wzr` | — |
+| `0xe37a38` | `mov w2, wzr` | |
 | `0xe37a3c` | `ldr x8, [x8, #0x48]` | vtable slot 9 |
 | `0xe37a40` | `blr x8` | the call with the event name |
 | `0xe37a44` | `ldr x0, [x19, #0x18]` | engine+0x18 holds the sound-system pointer |
@@ -217,22 +232,22 @@ Several commentary packs ship side by side [C]:
 | Engine body, copy 1 | 1415 lines | `0x7000e472cc` | [C] |
 | Engine body, copy 2 | 7517 lines | `0x7000fd9d44` | [C] |
 | Engine body, copy 3 | 8574 lines | `0x700102b87c` | [C] |
-| Shared strings | `'[Pitcher Intro: Clear Script Phrases]'` and `'[DefensiveLineup: Clear Script Phrases]'` each appear in more than one of those copies, which is what a separately-compiled variant looks like. | — | [C] |
+| Shared strings | `'[Pitcher Intro: Clear Script Phrases]'` and `'[DefensiveLineup: Clear Script Phrases]'` each appear in more than one of those copies, which is what a separately-compiled variant looks like. | | [C] |
 
 End to end (each hop is [C] at the address given):
 
 | Hop | Address | Tag |
 |---|---|---|
-| Play event handler | — | [C] |
-| vtable `+0x48` with the event name | — | [C] |
-| PXP bank sound | — | [C] |
-| Playlist section picks a line | — | [C] |
+| Play event handler | | [C] |
+| vtable `+0x48` with the event name | | [C] |
+| PXP bank sound | | [C] |
+| Playlist section picks a line | | [C] |
 | Game stream start | `0x70003d95f0` | [C] |
 | SKAT play, which fills `SndFileParams` and satisfies `SndFileInterface` (open/seek/read/close) for `snd_stream.cpp` (`0x7001b30a90`) | `0x70003e0960` | [C] |
-| 989snd/Scream voice | — | [C] |
-| Master mix | — | [C] |
+| 989snd/Scream voice | | [C] |
+| Master mix | | [C] |
 | `DeviceOut` pump | `0x70018d00e0` | [C] |
-| `AppendAudioOutBuffer` | — | [C] |
+| `AppendAudioOutBuffer` | | [C] |
 
 ## Function table
 
@@ -299,16 +314,16 @@ End to end (each hop is [C] at the address given):
 | `0x7000e4ae90` | kills a commentary conversation | `'[KillConversation: '`, `'[KillConversation: Cleared Event Buffer]'` | [C] |
 | `0x7000fad808` | commentary pack `PlayByPlayMiLB` | string `'PlayByPlayMiLB'` | [C] |
 
-## What is not mapped
+## Open questions
 
 | # | Not mapped | What is known | Next step | Tag |
 |---|---|---|---|---|
-| 1 | The mix producer | The consumer side of the PCM ring is proven (`0x700153b740`/`0x700153b95c` read into the audout buffer), but I did not find the function that writes the summed 5.1 PCM into that ring, so "where the mix is produced" stops at "inside Scream's master/submix path" (`snd_SynthAllocSubmixVoice` `0x7001b0b090` and the DSP graph are the visible evidence). | A write-watchpoint on the ring during a run, or `MLB_FNTRACE` over the Scream range. | — |
-| 2 | Which audout session carries what | The 6-channel/2-channel split is inferred from channel counts and from the headset code cluster around `0x70018ce000`; no run was traced, so "6ch = game mix, 2ch = voice chat" is [I], not [C]. | — | [I] |
-| 3 | The target of commentary vtable slot 9 (`+0x48`) | The call with the event name is proven at `0xe37a40`, but the slot is filled at runtime, so the resolving function (name → bank entry) is not identified statically; same for the other 128 slots of `0x70021e07d8` and `0x70021e0bf0`. | — | — |
-| 4 | Pack identity and count | Five `PlayByPlay*` names and three engine-body copies are confirmed, but which pack a given vtable instance points at is not established, and the earlier reading call at `0x7000f64e84` (`'PlayByPlay_RF_RF'`) is not tied to a specific team or mode. | — | — |
-| 5 | Thread ownership and clock | Which thread ticks the stream state machine and Scream's render is not established; `0x70003dde10` is called from two sites and the audio threads visible here (`0x70018cfd10`) are the last hop only. | — | — |
-| 6 | DSP graph content | Processor nodes are identified only by embedded source paths (`processor_input.cpp`, `processor_output.cpp`, `processor_delay.cpp`, `processor_lfo.cpp`, `processor_envelope*.cpp`, `processor_oscillator.cpp`, `processor_saturator.cpp`, `processor_param_eq.cpp`, `processor_trigger_filter.cpp`, `processor_hex_wave.cpp`, `wws_dsp_flt.cpp`); the patch/preset file format and which graph the game builds are not mapped. | — | — |
-| 7 | Method caveat | `tools/map_find.py str` attributes a string to every function whose pool references it, and can over-attribute when a large string blob is shared. Example found and discarded here: `0x7000590ce0` looks like `snd_SynthAllocSubmixVoice` from the `str` search but its own strings are a ZLS/bank-transition loader. Row evidence above therefore comes from `fnxref.py` (per-function, in code order) or from the function's own message, not from `str` alone. | — | — |
-| 8 | No runtime cross-check | Nothing here was confirmed by a run, an audio capture, or a breakpoint; the only runtime artefact used is the existing `work/build/logs/mlb.log`. | — | — |
-| 9 | Quotation kept whole | The prose original breaks one sentence across a line, so a line-by-line quote scan reads the fragment " stops at " on its own; the chain is one phrase and is kept whole in row 1. | — | — |
+| 1 | The mix producer | The consumer side of the PCM ring is proven (`0x700153b740`/`0x700153b95c` read into the audout buffer), but I did not find the function that writes the summed 5.1 PCM into that ring, so "where the mix is produced" stops at "inside Scream's master/submix path" (`snd_SynthAllocSubmixVoice` `0x7001b0b090` and the DSP graph are the visible evidence). | A write-watchpoint on the ring during a run, or `MLB_FNTRACE` over the Scream range. | |
+| 2 | Which audout session carries what | The 6-channel/2-channel split is inferred from channel counts and from the headset code cluster around `0x70018ce000`; no run was traced, so "6ch = game mix, 2ch = voice chat" is [I], not [C]. | | [I] |
+| 3 | The target of commentary vtable slot 9 (`+0x48`) | The call with the event name is proven at `0xe37a40`, but the slot is filled at runtime, so the resolving function (name → bank entry) is not identified statically; same for the other 128 slots of `0x70021e07d8` and `0x70021e0bf0`. | | |
+| 4 | Pack identity and count | Five `PlayByPlay*` names and three engine-body copies are confirmed, but which pack a given vtable instance points at is not established, and the earlier reading call at `0x7000f64e84` (`'PlayByPlay_RF_RF'`) is not tied to a specific team or mode. | | |
+| 5 | Thread ownership and clock | Which thread ticks the stream state machine and Scream's render is not established; `0x70003dde10` is called from two sites and the audio threads visible here (`0x70018cfd10`) are the last hop only. | | |
+| 6 | DSP graph content | Processor nodes are identified only by embedded source paths (`processor_input.cpp`, `processor_output.cpp`, `processor_delay.cpp`, `processor_lfo.cpp`, `processor_envelope*.cpp`, `processor_oscillator.cpp`, `processor_saturator.cpp`, `processor_param_eq.cpp`, `processor_trigger_filter.cpp`, `processor_hex_wave.cpp`, `wws_dsp_flt.cpp`); the patch/preset file format and which graph the game builds are not mapped. | | |
+| 7 | Method caveat | `tools/map_find.py str` attributes a string to every function whose pool references it, and can over-attribute when a large string blob is shared. Example found and discarded here: `0x7000590ce0` looks like `snd_SynthAllocSubmixVoice` from the `str` search but its own strings are a ZLS/bank-transition loader. Row evidence above therefore comes from `fnxref.py` (per-function, in code order) or from the function's own message, not from `str` alone. | | |
+| 8 | No runtime cross-check | Nothing here was confirmed by a run, an audio capture, or a breakpoint; the only runtime artefact used is the existing `work/build/logs/mlb.log`. | | |
+| 9 | Quotation kept whole | The prose original breaks one sentence across a line, so a line-by-line quote scan reads the fragment " stops at " on its own; the chain is one phrase and is kept whole in row 1. | | |

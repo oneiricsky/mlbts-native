@@ -3,7 +3,7 @@
 Per-region detail with evidence and tags: `docs/map/regions/*.md` (A to F, one file per address region). This file is the overview. Tags: [C] confirmed from a
 string/symbol/measurement, [I] inferred, [H] guess. Addresses are `main` virtual addresses (`main` base `0x7000000000`).
 
-## Facts about the program [C]
+## Program facts
 
 | Topic | Fact |
 |---|---|
@@ -17,7 +17,9 @@ string/symbol/measurement, [I] inferred, [H] guess. Addresses are `main` virtual
 | RomFS (1.0.20) | 86,235 files, 37.9 GB: `NSW/` (Switch assets: textures `.TEX`, models `.MOD`, shaders `NSW/SHADERS/*.FXBNVN`, audio `.SKX`), `PS4/` (shared animation `.xbn`), `PS5/`, `CROSS/` (movies, stadium audio), `FRONTEND/`, `BOOT/CONFIG_MAIN.TXT` |
 | Formats | textures are `TX12NSW` containers (LZ4 blocks of block-linear data), PS5 files `TX12PS5` (raw); UI screens are movies (`.webp` art), logged as `uiEngine: Entering screen: [...]` |
 
-## Address map of `main` (windows of 256 KB = 0x40000)
+## Address map
+
+`main`, in windows of 256 KB (0x40000).
 
 Where the linker placed things. Boundaries are approximate (to the window) unless a specific address is given. Functions per region and detail are in the region notes.
 
@@ -52,13 +54,25 @@ Where the linker placed things. Boundaries are approximate (to the window) unles
 Data: vtables of the game-state classes at `0x70021d7400`-`0x70021e3538`; class-broker/boilerplate vtables near `0x700223a550`; a 1025-slot vtable at `0x700215c000` unidentified (region C);
 stadium props table `0x70021edca0`; import table `0x70022ab000`; globals pointer to universal profile `0x7003abfa98`; match settings pointer `0x7004651350`; pad records `0x70045aef28`.
 
-## `sdk` module groups (named functions, from region F) [C]
+## SDK module groups
 
-nn::audio 1,427; nn::fs / file system 1,300; input (nn::hid and related) 1,351; accounts/network/crypto 3,238; SDK core 2,448; C++ runtime 1,465; NVIDIA GPU driver layer 790. NVN is only a handful of
-named entry points around `0x70050b0000`-`0x70050f0bb0`; the rest are unnamed, so which game code calls which NVN function is not mapped. `main` looks procs up by name through
-`nvnBootstrapLoader` (the table of 536 proc names is in `main`; 534 match TotK's list), so the port's `nvn_procs.c` hands out host functions by name. `0x700059a690` holds NVN entry-point names [I].
+Named functions, from region F [C].
 
-## How the game is organised
+| Group | Named functions |
+|---|---|
+| `nn::audio` | 1,427 |
+| `nn::fs` / file system | 1,300 |
+| input (`nn::hid` and related) | 1,351 |
+| accounts, network, crypto | 3,238 |
+| SDK core | 2,448 |
+| C++ runtime | 1,465 |
+| NVIDIA GPU driver layer | 790 |
+
+- NVN is only a handful of named entry points around `0x70050b0000`-`0x70050f0bb0`; the rest are unnamed, so which game code calls which NVN function is not mapped.
+- `main` looks procs up by name through `nvnBootstrapLoader` (the table of 536 proc names is in `main`; 534 match TotK's list), so the port's `nvn_procs.c` hands out host functions by name.
+- `0x700059a690` holds NVN entry-point names [I].
+
+## Game structure
 
 What the strings and vtables prove:
 
@@ -70,10 +84,10 @@ What the strings and vtables prove:
 | Data | player, team and league data in named tables (`D_PLR_PROFILE`, `D_PLYR_CONTRACT`, `LG_STATS_DATA`, `D_SINGLE_G_DATA`), serialized through Flux archives and JSON |
 | Commentary | play-by-play `PXP` events pick phrases per play; audio banks `PXP.SKX` (3.9 GB) on disk; text generators for records and awards; Sony SCREAM mixes in software and sends one 5.1 stream |
 | Online | `ol*`, `CNet*` and `CPlugin*` classes over libcurl, OpenSSL and nifm; offline play follows the "no network" paths; a few online-profile behaviours leak into offline play (tutorials list, hub upgrade autosave, cache storage) |
-| Config | `BOOT/CONFIG_MAIN(_USER).TXT` bare lines turn options on, matched by 32-bit hash (`AIvAI` 0xAA21F9C5 with `GameOnly` 0xC6F7ECA5 starts an AI match with no input; 27 of 109 queried hashes are named); three config-query functions, 319 call sites |
+| Config | `BOOT/CONFIG_MAIN(_USER).TXT` bare lines turn options on, matched by 32-bit hash (`AIvAI` 0xAA21F9C5 with `GameOnly` 0xC6F7ECA5 starts an AI match with no input; 33 of 132 read hashes are named); two tables, number and text; `tools/config_options.py` lists them |
 | Time of day | advances per pitch; stadium lighting is re-baked per new time into one of two buffers; stadium props flip at 19.5 h |
 | Coverage | about 12,800 of 94,991 `main` functions reference a string; the rest are known by neighbours, vtable slots, callers and size |
 
-## What is not mapped
+## Open questions
 Contents of the import table `0x70022ab000` (which libc/SDK function each thunk reaches); NVN call sites; the 1,025-slot vtable at `0x700215c000`; meaning of `s9Amp`; the gameplay physics/AI internals (no strings);
 class names (no RTTI). Region notes list their own "Unknown / not examined" sections.

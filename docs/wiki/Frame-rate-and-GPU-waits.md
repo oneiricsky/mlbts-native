@@ -1,8 +1,15 @@
 Two questions: how the port can run the game above 60 fps without making it run fast, and why heavy scenes are slower than lighter ones that look the same.
 
-## Running at other frame rates
+## Other frame rates
 
-The game does not count frames. Its frame timer (1.0.20 `main+0x58a9f0`) runs once a frame. It is given the number of 60 Hz vsyncs a frame should last, an int the game keeps in its data (`main+0x22ad028`, where 1 means 60 fps). It sleeps until that many vsyncs have passed, then measures how long the frame really took and sets the game's time step (`main+0x22c90c4`, copied into a global that about 200 places read). Normally the step is the average of the last 15 measured frame times, never less than vsyncs / 60 s.
+The game does not count frames. Its frame timer (1.0.20 `main+0x58a9f0`) runs once a frame:
+
+1. It is given the number of 60 Hz vsyncs a frame should last, an int the game keeps in its data (`main+0x22ad028`, where 1 means 60 fps).
+2. It sleeps until that many vsyncs have passed.
+3. It measures how long the frame really took.
+4. It sets the game's time step (`main+0x22c90c4`, copied into a global that about 200 places read).
+
+Normally the step is the average of the last 15 measured frame times, never less than vsyncs / 60 s.
 
 So the game already moves by real time. With the vsync count at 0 it does not sleep, and the step is the average real frame time. The port's `framerate.c` writes 0 into the count at every present when the limit is not 60, and its present pacer holds the limit. No game code is patched. Choices in the F1 menu run from 30 to 240 or the monitor's rate.
 
@@ -17,17 +24,22 @@ The game's variables (1.0.20):
 | Mode event | `main+0xd514e0` | event 0x220 turns averaging off; 0x61, 0x11c and 0x213 turn it on |
 | Timer carry | `main+0x2cb6150` | frame time left over from whole vsyncs |
 
-Two guards. In the game's whole-vsync mode (switched by event 0x220 at `main+0xd514e0`; 0x61, 0x11c and 0x213 switch it back) a frame shorter than 1/60 s would step the game by 0, so there the port hands the game its own count back and the game holds 60. The game switches to that mode right before its timer runs, so the port also fills the timer's carry (`main+0x2cb6150`) with 1/60 s at every unlocked present; otherwise one frame could step by exactly 0 and anything dividing by the step would get an invalid number. Loading loops pass 1 themselves, so loading screens stay at 60.
+Two guards keep that safe.
+
+- In the game's whole-vsync mode (switched by event 0x220 at `main+0xd514e0`; 0x61, 0x11c and 0x213 switch it back) a frame shorter than 1/60 s would step the game by 0. There the port hands the game its own count back and the game holds 60.
+- The game switches to that mode right before its timer runs, so the port also fills the timer's carry (`main+0x2cb6150`) with 1/60 s at every unlocked present. Otherwise one frame could step by exactly 0, and anything dividing by the step would get an invalid number.
+
+Loading loops pass 1 themselves, so loading screens stay at 60.
 
 Check: `MLB_TRACE=perf` logs game time against wall time every 600 frames. 1.00 means normal speed. At a limit of 144, 123 to 141 fps and 0.99 to 1.02.
 
 Which game screens use whole-vsync timing is not known, and neither is the lowest safe step. An unexplained report (no ball in one batting-cage mode above 60 fps) may involve this; see [Upstream bug research](Upstream-bug-research).
 
-## Why heavy scenes are slow
+## Heavy scenes
 
 Measured on 2026-11-22 with upstream's setup (Ryzen 5 5600X, RTX 3060 Ti, DLAA on). Scenes like the outfield fan cam run at about 78 fps while similar-looking ones run much faster.
 
-The frame is a sum, not an overlap. The game submits a frame (`nvnQueueSubmitCommands`) and right away waits for that frame's GPU work: its main thread polls an event word (`f_70005a1a90`) until the GPU signal arrives, and only then starts the next frame. On a Switch that wait is just the GPU's time. Here it is everything the port does after the submit.
+The parts of a frame run one after another. The game submits a frame (`nvnQueueSubmitCommands`) and right away waits for that frame's GPU work: its main thread polls an event word (`f_70005a1a90`) until the GPU signal arrives, and only then starts the next frame. On a Switch that wait is just the GPU's time. Here it is everything the port does after the submit.
 
 | Step | Ms |
 |---|---|
@@ -36,7 +48,15 @@ The frame is a sum, not an overlap. The game submits a frame (`nvnQueueSubmitCom
 | the GPU reaches the signal | +9.3 to +12.2 |
 | the game sees it and goes on | +9.6 to +12.2 |
 
-Then the game's own code for the next frame takes 5.3 to 6.8 ms. A heavy frame costs roughly game code (5 to 7 ms) plus replay (7 to 10 ms) plus the GPU's tail after the replay (about 2 ms), one after another. The GPU itself is busy about 3.7 ms a frame. In the fan cam (about 3,000 draws) the replay alone is 8.2 ms of a 12.7 ms frame. Choosing a pitch removes the pitch overlay's draws and raises the frame rate about 10 fps every time.
+Then the game's own code for the next frame takes 5.3 to 6.8 ms. A heavy frame costs these, one after another:
+
+| Part | Time |
+|---|---|
+| game code | 5 to 7 ms |
+| replay | 7 to 10 ms |
+| the GPU's tail after the replay | about 2 ms |
+
+The GPU itself is busy about 3.7 ms a frame. In the fan cam (about 3,000 draws) the replay alone is 8.2 ms of a 12.7 ms frame. Choosing a pitch removes the pitch overlay's draws and raises the frame rate about 10 fps every time.
 
 Where the replay's time goes, in the attract match:
 
@@ -67,7 +87,7 @@ Not taken:
 | let the game start the next frame before the GPU finishes | frames would overlap, but input delay grows about 2 ms and the game may read GPU results after its wait |
 | start the replay while the game is still recording | same ordering problem; the game writes uniform data up to the submit |
 
-## Other dips found along the way
+## Other dips
 
 | Dip | Cause | Result |
 |---|---|---|
@@ -75,6 +95,6 @@ Not taken:
 | compute descriptor bind-skip | no effect (4.70 against 4.69 ms per wait) | dropped |
 | early-signal knob `MLB_EVENT_GPU` | once crashed in a draft cutscene (unbounded apply loop) | fixed; the knob stays off by default |
 
-## Not measured
+## Open questions
 
 Other GPUs and machines, per-frame percentiles above the 1 percent low, whether the lineup-card frames are read back by the CPU.

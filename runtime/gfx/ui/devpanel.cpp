@@ -37,7 +37,7 @@ static struct {
     int home = 2, away = 1, scenario = 0;
     uint32_t seed = 1;
     char clock[40] = "";
-    char marker[48] = "marker", tex[48] = "tex", shot[48] = "ref";
+    char marker[48] = "marker", tex[64] = "texture:fmt=0x25,size=512x512", shot[48] = "ref";
     char status[200] = "";
     uint64_t status_until = 0;
     bool ready = false;

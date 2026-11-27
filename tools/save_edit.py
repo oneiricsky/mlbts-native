@@ -58,9 +58,10 @@ def set_field(raw, cls, field, string=None, uint=None):
         if f["name"] == field:
             size = f["desc"][1] * f["desc"][2]
             if string is not None:
-                if len(string) + 1 > size:
-                    raise SystemExit(f"{field} holds {size} bytes; the string is too long")
-                patch = string.encode() + b"\0" * (size - len(string))
+                text = string.encode("utf-8")
+                if len(text) + 1 > size:
+                    raise SystemExit(f"{field} holds {size} bytes; the string needs {len(text) + 1}")
+                patch = text.ljust(size, b"\0")
             elif uint is not None:
                 if size >= 4:
                     patch = struct.pack("<I", uint) + b"\0" * (size - 4)
@@ -134,12 +135,12 @@ def main():
                 back = zlib.decompress(open(f"{d}/SAVE_000", "rb").read())
                 print(f"  written; archive re-read identical: {back == new}; hash updated")
         if a.cmd == "rename":
-            if not a.name or len(a.name) >= NAME_LEN:
+            text = (a.name or "").encode("utf-8")
+            if not text or len(text) >= NAME_LEN:
                 sys.exit(f"name must be 1..{NAME_LEN - 1} bytes")
             print(f"{fam}: {name!r} -> {a.name!r}")
             if a.write:
-                info = info[:NAME_LEN] + info[NAME_LEN:]
-                info = a.name.encode("utf-8").ljust(NAME_LEN, b"\0") + info[NAME_LEN:]
+                info = text.ljust(NAME_LEN, b"\0") + info[NAME_LEN:]
                 open(f"{d}/SAVEINFO", "wb").write(info)
                 print("  written")
         if a.cmd == "rehash":

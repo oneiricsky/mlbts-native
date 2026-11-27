@@ -149,6 +149,20 @@ void rt_boot(void) {
     net_box_apply();   // net_box.c: the host function of patch set no_net_box, before hostfn_seal
     void trainer_hooks_switch(int on);
     trainer_hooks_switch(cfg_bool("MLB_TRAINER"));   // off, or on a build without the hooks, the sites stay original
+    // fastball: boot_teams, the GameOnly boot's matchup. The patched site in f_7000ecb164 calls the menu's
+    // game-entry builder with the away and home team ids read from the patch page, before the match state is
+    // copied. The presentation reads the settings block separately, so a run sets those two bytes too.
+    if (rt_patch_enabled(rt_patch_set("boot_teams"))) {
+        uint32_t *pp = (uint32_t *)rt_patch_page();
+        const char *a = cfg_get("MLB_BOOT_AWAY"), *h = cfg_get("MLB_BOOT_HOME");
+        if (pp) {
+            pp[24] = (uint32_t)(a && *a ? atoi(a) : 0);   // patch page +96: the away team id
+            pp[25] = (uint32_t)(h && *h ? atoi(h) : 0);   // patch page +100: the home team id
+            rt_log("boot_teams: away %u home %u", pp[24], pp[25]);
+        }
+    }
+    void boot_teams_apply(void);
+    boot_teams_apply();   // boot_teams.c: the chosen matchup's settings bytes and the match player table
     res_apply();   // fastball, resolution.c: MLB_RENDER_SCALE rewrites the scene size table before the game reads it
     cb_addr[0] = hostfn_register("<rtld loader_ready>", cb_loader_ready);
     cb_addr[1] = hostfn_register("<rtld module_inits>", cb_module_inits);

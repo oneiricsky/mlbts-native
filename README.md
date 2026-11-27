@@ -1,37 +1,16 @@
 # MLB The Show 26: native Windows port (fork)
 
-A personal fork of [sam110411/fastball](https://github.com/sam110411/fastball) (formerly mlbts-native), a static
-recompilation of MLB The Show 26 (Nintendo Switch) into a native Windows program. The upstream README is in the collapsed section
-below, unchanged. Its download links and release instructions point to upstream, not to this fork.
-
-## What this fork is for
-
-Making the game run and look better on an AMD Radeon RX 6700 XT, and mapping enough of it to work on: a function
-map, the save format, and test runs that need nobody at the PC. Changes so far:
-
-| Feature | Behavior | Usage | Depends On |
-| --- | --- | --- | --- |
-| Background pipeline builds | Shader pipelines build on background workers and at boot, so a draw does not wait on a compile. | Built-In | Nothing |
-| Skip boot intro | Skips the two boot movies, so the loading screen goes straight to the title. | `MLB_SKIP_INTRO`, or F1 → Game → Skip intro logos | Nothing |
-| Dev options | The game's hidden dev options work, so `AIvAI` with `GameOnly` boots straight into an AI-vs-AI game. | Option table and hashes: [docs/dev-config.md](docs/dev-config.md) | Nothing |
-| PS5 face normal maps | Replaces each player's face normal map with the PS5 one, for 2,370 heads. | Build an index with `tools/make_hd_index.py`; `MLB_HD_TEXTURES=off` turns it off | A PS5 dump |
-| PS5 face colour maps | Does the same for colour maps, off by default because only a few faces have been checked. | Add `--color` when building the index | A PS5 dump |
-| Run summary | Turns one run's log into a JSON summary of frame rate, slow frames and PS5 texture loads. | `python -I tools/perf_summary.py <log>` | A run log |
-| Shorter match-start freeze | Skips the empty-space pixels in the match-start field pass, cutting that step from about 0.7 s to about 0.2 s with the same finished picture on the two stadiums tested. | `MLB_MSDF_SKIP` (on by default); settings menu, Shorter freeze at match start; game 1.0.20 only so far; branch `research/msdf-skip`; report: [docs/reports/2026-11-23-msdf-skip.md](docs/reports/2026-11-23-msdf-skip.md) | Nothing |
-| Function map | Indexes every recompiled function and reads 47,308 of them into one-line roles, with a per-class field index and a generated wiki. | `python -I tools/map_find.py fn 0xADDR` (also `str "text"`, `callers 0xADDR`, `role 0xADDR`); [wiki](https://github.com/oneiricsky/mlbts-native/wiki) | Nothing |
-| Save files | Decodes the save container and class schema, and edits a field by name, recompresses and rewrites the hash. | `python -I tools/save_schema.py`; `python -I tools/save_edit.py info` (also `verify`, `rename`, `rehash`, `set-field`) | Your save files |
-| In-game trainer | A panel over the match that sets the count, outs and score, jumps to a later inning, saves and replays situations, edits ratings and pitcher energy, runs slow motion and has guaranteed cheats (contact, home run, miss, perfect aim, called strikes, wild throws scored as errors). Off by default. | F1 → Trainer, or `MLB_TRAINER=1`; F2 in a match. Details: [docs/trainer.md](docs/trainer.md) | Game 1.0.20; the two readout pages need code generated with the patch file |
-| Headless test runs | Runs the game with its window hidden, a fake audio device and scripted buttons. | `TOTK_HIDDEN_WINDOW=1`, `TOTK_AUDIO=paced`, `MLB_HARNESS_PAD=1`, `MLB_SHOT=<frame>`; details: [docs/dev-config.md](docs/dev-config.md#headless-test-runs) | A Vulkan-capable GPU |
-| Exhibition on demand | Starts a match between two chosen teams by pressing the menus and rewriting the match-settings block before the lineups are built. | `python -I tools/exhibition.py --exe mlb_sonnet --log RUN.out --away 1 --home 0` | `MLB_HARNESS_PAD=1`, and a run that goes through the menus (not the AIvAI autostart) |
-| Dev harness (in progress) | A scenario file per run makes a test repeatable and runnable with nobody at the PC. | `MLB_HARNESS=<scenario file>` in dev builds; plan and status: [docs/dev-config.md](docs/dev-config.md) | Nothing with `TOTK_AUDIO=paced` |
-
-In six 400-second test runs on an RX 6700 XT the game ran at about 59 fps with and without PS5 textures, memory did not
-grow, and loading the faces took 0.5 to 0.8 seconds once per match. The textures are read from your dump and are not
-part of any release. Details and numbers: [docs/ps5-textures.md](docs/ps5-textures.md) and [docs/reports](docs/reports/).
+This is a personal fork of [sam110411/fastball](https://github.com/sam110411/fastball) (formerly mlbts-native).
+Fastball is a static recompilation of MLB The Show 26 for Nintendo Switch: the game's code is translated ahead of
+time into a native Windows program. The upstream README is in the collapsed section at the end, unchanged. Its
+download links and release instructions point to upstream, not to this fork.
 
 ## Mods
 
 Optional changes to how the game plays. Each can be turned on or off, and none changes your installed game files.
+
+<details>
+<summary>Mods table</summary>
 
 | Mod | What it changes | How to use | Depends On |
 | --- | --- | --- | --- |
@@ -39,21 +18,56 @@ Optional changes to how the game plays. Each can be turned on or off, and none c
 | [Offline main menu](docs/menu-offline-panel.md) (built into the port) | Removes the "You are currently disconnected" panel, scrolls the menu to the mode tiles at start, and removes the "Network Error" box. The game's other message boxes still appear. | On by default. F1 → Game → Hide the offline panel and Skip the network error box, or `MLB_HIDE_OFFLINE_BANNER=0` and `MLB_NO_NETWORK_ERROR=0` to turn them off | Game 1.0.20; removing the box needs code generated with the patch file |
 | [In-game trainer](docs/trainer.md) (built into the port) | Sets the match situation, edits ratings and pitcher energy, runs slow motion and has guaranteed cheats. | `MLB_TRAINER=1` or F1 → Trainer; F2 in a match | Game 1.0.20 |
 
+</details>
+
 Make the starting-token override, here with 60000 tokens:
 
 ```
 python -I mods/rtts-start-tokens/rtts_start_tokens.py 60000 --romfs work/build/game/romfs --out work/mods/rtts_tokens
 ```
 
-The override is a changed copy of a game file, so keep it under `work/`, which git ignores. The game reads one
-override folder at a time. Only the mod's script belongs in `mods/`.
+The override is a changed copy of a game file, so keep it under `work/`, which git ignores. Only the mod's script
+belongs in `mods/`. The game reads one override folder at a time.
+
+## What this fork is for
+
+The fork aims to make the game run and look better on an AMD Radeon RX 6700 XT. It also maps enough of the game to
+work on it, which so far covers a function map, the save format and test runs that need nobody at the PC. The table
+lists the changes.
+
+<details>
+<summary>Feature table</summary>
+
+| Feature | Behavior | Usage | Depends On |
+| --- | --- | --- | --- |
+| Background pipeline builds | Shader pipelines (the compiled graphics programs) build on background workers and at boot, so drawing does not stop to wait for a compile. | Built-In | Nothing |
+| Skip boot intro | Skips the two boot movies, so the loading screen goes straight to the title. | `MLB_SKIP_INTRO`, or F1 → Game → Skip intro logos | Nothing |
+| Dev options | The game's hidden dev options work, so `AIvAI` with `GameOnly` boots straight into an AI-vs-AI game. | Option table and hashes: [docs/dev-config.md](docs/dev-config.md) | Nothing |
+| PS5 face textures | Replaces each player's face colour map and normal map (the texture that carries surface detail for lighting) with the PS5 ones: 2,409 heads' colour maps and 2,411 heads' normal maps. | Build an index with `tools/make_hd_index.py --all-heads`; F1 → Graphics → PS5 face textures, or `MLB_HD_TEXTURES=0` to turn them off | A PS5 dump |
+| Run summary | Turns one run's log into a JSON summary of frame rate, slow frames and PS5 texture loads. | `python -I tools/perf_summary.py <log>` | A run log |
+| Shorter match-start freeze | Skips the empty-space pixels in the match-start field pass, cutting that step from about 0.7 s to about 0.2 s with the same finished picture on the two stadiums tested. | `MLB_MSDF_SKIP` (on by default); settings menu, Shorter freeze at match start; game 1.0.20 only so far; report: [docs/reports/2026-11-23-msdf-skip.md](docs/reports/2026-11-23-msdf-skip.md) | Nothing |
+| Idle sound thread | Stops a sound file thread's 100 µs sleep loop from spinning a processor core, cutting that thread from 97-99 % of a core to about 7 % with no measurable change in frame rate. Sound has not been checked by ear. | Built-In; details: [docs/sound-thread-spin.md](docs/sound-thread-spin.md) | Nothing |
+| Function map | Indexes every recompiled function and gives 47,308 of them a one-line role. Includes a per-class field index and a generated wiki. | `python -I tools/map_find.py fn 0xADDR` (also `str "text"`, `callers 0xADDR`, `role 0xADDR`); [wiki](https://github.com/oneiricsky/mlbts-native/wiki) | Nothing |
+| Save files | Decodes the save container and class schema. Editing a field by name also recompresses the save and rewrites its hash. | `python -I tools/save_schema.py`; `python -I tools/save_edit.py info` (also `verify`, `rename`, `rehash`, `set-field`) | Your save files |
+| In-game trainer | A panel over the match that sets the count, outs and score, jumps to a later inning, saves and replays situations, edits ratings and pitcher energy, runs slow motion and has guaranteed cheats (contact, home run, miss, perfect aim, called strikes, wild throws scored as errors). Off by default. | F1 → Trainer, or `MLB_TRAINER=1`; F2 in a match. Details: [docs/trainer.md](docs/trainer.md) | Game 1.0.20; the two readout pages need code generated with the patch file |
+| Headless test runs | Runs the game with its window hidden, a fake audio device and scripted buttons. | `TOTK_HIDDEN_WINDOW=1`, `TOTK_AUDIO=paced`, `MLB_HARNESS_PAD=1`, `MLB_SHOT=<frame>`; details: [docs/dev-config.md](docs/dev-config.md#headless-test-runs) | A Vulkan-capable GPU |
+| Exhibition on demand | Starts a match between two chosen teams by pressing the menus and rewriting the match-settings block before the lineups are built. | `python -I tools/exhibition.py --exe mlb_sonnet --log RUN.out --away 1 --home 0` | `MLB_HARNESS_PAD=1`, and a run that goes through the menus (not the AIvAI autostart) |
+| Dev harness (in progress) | Each test run follows a scenario file, so it can be repeated with nobody at the PC. | `MLB_HARNESS=<scenario file>` in dev builds; plan and status: [docs/dev-config.md](docs/dev-config.md) | Nothing with `TOTK_AUDIO=paced` |
+
+</details>
+
+In short runs on an RX 6700 XT the game held about 59 fps with PS5 textures on and off. One played match with them
+on ran at a median of about 44 fps, with no run to compare it with, and stadiums turned black now and then in it; the
+cause of neither is known. The textures are read from your dump and are not part of any release. Details and numbers
+are in [docs/ps5-textures.md](docs/ps5-textures.md) and the
+[2026-11-27 report](docs/reports/2026-11-27-ps5-all-face-textures.md).
 
 ## Research and the wiki
 
-The function map, the read roles, the per-class field index and the save schema are published on the fork's wiki:
-<https://github.com/oneiricsky/mlbts-native/wiki>. Those pages are generated from `work/map/` by `tools/map_roles.py`
-and `tools/wiki_build.py`, so they can be rebuilt from the generated C at any time. The code map behind them is
-explained in [docs/map/README.md](docs/map/README.md).
+The fork's wiki publishes the function map, the function roles, the per-class field index and the save schema:
+<https://github.com/oneiricsky/mlbts-native/wiki>. `tools/map_roles.py` and `tools/wiki_build.py` generate those
+pages from `work/map/`, so they can be rebuilt from the generated C at any time.
+[docs/map/README.md](docs/map/README.md) explains the code map behind them.
 
 
 <details>
@@ -130,6 +144,9 @@ full list is the table in [`runtime/mlb/cfg.c`](runtime/mlb/cfg.c).
 
 ## System requirements
 
+<details>
+<summary>System requirements table</summary>
+
 | | Minimum |
 |---|---|
 | OS | Windows 10/11, 64-bit |
@@ -137,6 +154,8 @@ full list is the table in [`runtime/mlb/cfg.c`](runtime/mlb/cfg.c).
 | GPU | Vulkan 1.3 capable (an NVIDIA RTX card is needed for DLSS) |
 | RAM | 16 GB recommended; the page file should be large (RenderDoc captures need much more) |
 | Disk | About 40 GB for the extracted game data, plus the build |
+
+</details>
 
 ## Game files
 
@@ -179,12 +198,17 @@ Details, including how the boot sequence was brought up: [docs/runtime-port.md](
 
 ## Where files live
 
+<details>
+<summary>Where files live table</summary>
+
 | What | Where |
 |---|---|
 | Executable and settings | `work/build/mlb.exe`, `work/build/mlb.cfg` |
 | Log (replaced at each start) | `work/build/logs/mlb.log` |
 | Saves and captures | `work/profile/` |
 | Extracted game data | `work/romfs/`, `work/update/exefs/` |
+
+</details>
 
 Attach `mlb.log` to bug reports. Lines starting with `[lm 0]` are the game's own log, `[host]` lines are ours. A crash
 prints `FATAL:` with host frames that can be symbolized with `llvm-symbolizer`.
@@ -198,6 +222,9 @@ prints `FATAL:` with host frames that can be symbolized with `llvm-symbolizer`.
 
 ## Repository layout
 
+<details>
+<summary>Repository layout table</summary>
+
 | Path | What |
 |---|---|
 | `recomp/` | ARM64 to C generator |
@@ -207,6 +234,8 @@ prints `FATAL:` with host frames that can be symbolized with `llvm-symbolizer`.
 | `tools/` | Build, extraction and analysis scripts |
 | `mods/` | Optional gameplay mods, one folder each ([Mods](#mods)) |
 | `docs/` | Binary reconnaissance, runtime notes, graphics plan |
+
+</details>
 
 Changes to vendored upstream files are marked `fastball` in the source with a comment explaining the case that
 needed them.
