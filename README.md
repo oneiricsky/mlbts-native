@@ -4,6 +4,30 @@ A personal fork of [sam110411/fastball](https://github.com/sam110411/fastball) (
 recompilation of MLB The Show 26 (Nintendo Switch) into a native Windows program. The upstream README is in the collapsed section
 below, unchanged. Its download links and release instructions point to upstream, not to this fork.
 
+## Mods
+
+Optional changes to how the game plays. Each can be turned on or off, and none changes your installed game files.
+
+<details>
+<summary>Mods table</summary>
+
+| Mod | What it changes | How to use | Depends On |
+| --- | --- | --- | --- |
+| [Starting tokens](mods/rtts-start-tokens/rtts_start_tokens.py) | A new Road to the Show player starts with the token count you choose, 0 to 60000, instead of 50 or 75. A career past player creation keeps its count. | Make the override with the command below, then run the game with `MLB_ROMFS_OVERRIDE=<full path of the override folder>` | Your own RomFS; tried on game 1.0.20 |
+| [Offline main menu](docs/menu-offline-panel.md) (built into the port) | Removes the "You are currently disconnected" panel, scrolls the menu to the mode tiles at start, and removes the "Network Error" box. The game's other message boxes still appear. | On by default. F1 → Game → Hide the offline panel and Skip the network error box, or `MLB_HIDE_OFFLINE_BANNER=0` and `MLB_NO_NETWORK_ERROR=0` to turn them off | Game 1.0.20; removing the box needs code generated with the patch file |
+| [In-game trainer](docs/trainer.md) (built into the port) | Sets the match situation, edits ratings and pitcher energy, runs slow motion and has guaranteed cheats. | `MLB_TRAINER=1` or F1 → Trainer; F2 in a match | Game 1.0.20 |
+
+</details>
+
+Make the starting-token override, here with 60000 tokens:
+
+```
+python -I mods/rtts-start-tokens/rtts_start_tokens.py 60000 --romfs work/build/game/romfs --out work/mods/rtts_tokens
+```
+
+The override is a changed copy of a game file, so keep it under `work/`, which git ignores. The game reads one
+override folder at a time. Only the mod's script belongs in `mods/`.
+
 ## What this fork is for
 
 Making the game run and look better on an AMD Radeon RX 6700 XT, and mapping enough of it to work on: a function
@@ -34,30 +58,6 @@ map, the save format, and test runs that need nobody at the PC. Changes so far:
 In six 400-second test runs on an RX 6700 XT the game ran at about 59 fps with and without PS5 textures, memory did not
 grow, and loading the faces took 0.5 to 0.8 seconds once per match. The textures are read from your dump and are not
 part of any release. Details and numbers: [docs/ps5-textures.md](docs/ps5-textures.md) and [docs/reports](docs/reports/).
-
-## Mods
-
-Optional changes to how the game plays. Each can be turned on or off, and none changes your installed game files.
-
-<details>
-<summary>Mods table</summary>
-
-| Mod | What it changes | How to use | Depends On |
-| --- | --- | --- | --- |
-| [Starting tokens](mods/rtts-start-tokens/rtts_start_tokens.py) | A new Road to the Show player starts with the token count you choose, 0 to 60000, instead of 50 or 75. A career past player creation keeps its count. | Make the override with the command below, then run the game with `MLB_ROMFS_OVERRIDE=<full path of the override folder>` | Your own RomFS; tried on game 1.0.20 |
-| [Offline main menu](docs/menu-offline-panel.md) (built into the port) | Removes the "You are currently disconnected" panel, scrolls the menu to the mode tiles at start, and removes the "Network Error" box. The game's other message boxes still appear. | On by default. F1 → Game → Hide the offline panel and Skip the network error box, or `MLB_HIDE_OFFLINE_BANNER=0` and `MLB_NO_NETWORK_ERROR=0` to turn them off | Game 1.0.20; removing the box needs code generated with the patch file |
-| [In-game trainer](docs/trainer.md) (built into the port) | Sets the match situation, edits ratings and pitcher energy, runs slow motion and has guaranteed cheats. | `MLB_TRAINER=1` or F1 → Trainer; F2 in a match | Game 1.0.20 |
-
-</details>
-
-Make the starting-token override, here with 60000 tokens:
-
-```
-python -I mods/rtts-start-tokens/rtts_start_tokens.py 60000 --romfs work/build/game/romfs --out work/mods/rtts_tokens
-```
-
-The override is a changed copy of a game file, so keep it under `work/`, which git ignores. The game reads one
-override folder at a time. Only the mod's script belongs in `mods/`.
 
 ## Research and the wiki
 
