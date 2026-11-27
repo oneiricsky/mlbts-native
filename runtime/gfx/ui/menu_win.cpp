@@ -49,13 +49,6 @@ extern "C" int menu_window_msg(HWND h, UINT m, WPARAM w, LPARAM l, LRESULT *res)
             *res = 0;
             return 1;
         }
-#ifdef MLB_DEV_HARNESS
-        if (w == VK_F7) {   // the dev harness panel; F7 is free (F1 menu, F8 state dump, F9 / F12 capture, F10 overlay, F11)
-            if (!(l & (1 << 30))) menu_dev_toggle();
-            *res = 0;
-            return 1;
-        }
-#endif
         if (w == VK_F10) {   // a system key: handled here, Windows would otherwise move the focus to the menu bar
             if (!(l & (1 << 30))) menu_perf_cycle();
             *res = 0;
@@ -67,6 +60,15 @@ extern "C" int menu_window_msg(HWND h, UINT m, WPARAM w, LPARAM l, LRESULT *res)
             *res = 0;
             return 1;
         }
+#ifdef MLB_DEV_HARNESS
+        // the dev harness panel, after the trainer: one of the trainer's keys may be F7. With a panel or the menu open
+        // the trainer takes no key, so F7 still closes the dev panel.
+        if (w == VK_F7) {
+            if (!(l & (1 << 30))) menu_dev_toggle();
+            *res = 0;
+            return 1;
+        }
+#endif
         [[fallthrough]];
     case WM_KEYUP:
     case WM_SYSKEYUP:

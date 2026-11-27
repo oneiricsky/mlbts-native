@@ -1051,8 +1051,9 @@ static void tab_dev(float scale) {
     if (opt_toggle("DEV_MODE", "Dev mode",
                    "Turns on the dev harness panel: match setup (teams, seed, fixed clock), scenario drop-in, recorder "
                    "controls (markers, texture dump, reference screenshot, frame log) and live readouts. It opens as "
-                   "soon as you turn this on; F7 opens and closes it afterwards. Keyboard and mouse only. This is a "
-                   "development build feature and is not in release builds.") &&
+                   "soon as you turn this on; F7 opens and closes it afterwards, unless the trainer uses F7 for one "
+                   "of its keys (then open it here). Keyboard and mouse only. This is a development build feature and is "
+                   "not in release builds.") &&
         cfg_bool("DEV_MODE")) {
         change_open(0);
         change_dev(1);
