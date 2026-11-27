@@ -179,6 +179,47 @@ def codeify(text):
     return "\n".join(out)
 
 
+TAG = re.compile(r"\[(?:C/I|C|I|H)(?:[,; ][^\[\]\n]{0,80})?\](?![(\[])")
+# a tag used as a word ("are [I]", "tagged [I] or [H]") or being defined ("[C] confirmed ...") stays on the line
+TAG_AS_WORD = re.compile(r"\b(?:a|an|are|is|or|and|not|tagged|marked)$", re.I)
+TAG_DEFINED = re.compile(r"\s*(?:=|(?:confirmed|inferred|guess|hypothesis|means|strings?|strong|symbol|the|when|what|"
+                         r"where|for|pattern|role|names?)\b)", re.I)
+
+
+def superscript_tags(text):
+    """Raise a C/I/H tag that annotates a claim: `interface [C, vtables]` -> `interface<sup>[C, vtables]</sup>`.
+
+    A tag that is a whole table cell or starts one (the Tag columns), starts a line, is used as a word or is being
+    defined in a legend is left as it is, and so is anything in a code span or a fenced block.
+    """
+    out, fence = [], False
+    for line in text.split("\n"):
+        if line.startswith("```"):
+            fence = not fence
+        if fence or line.startswith("```"):
+            out.append(line)
+            continue
+        spans = []
+
+        def mask(m):
+            spans.append(m.group(0))
+            return "\x01%d\x02" % (len(spans) - 1)
+
+        masked = re.sub(r"`[^`]*`", mask, line)
+        pos, parts = 0, []
+        for m in TAG.finditer(masked):
+            before = masked[pos:m.start()]
+            lead = masked[:m.start()].rstrip()
+            if (not lead or lead[-1] in "|*>" or TAG_AS_WORD.search(lead)
+                    or TAG_DEFINED.match(masked, m.end())):
+                continue
+            parts += [before.rstrip(" "), "<sup>" + m.group(0) + "</sup>"]
+            pos = m.end()
+        masked = "".join(parts) + masked[pos:]
+        out.append(re.sub("\x01([0-9]+)\x02", lambda m: spans[int(m.group(1))], masked))
+    return "\n".join(out)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=ROOT + "/work/wiki")
@@ -393,7 +434,7 @@ def main():
         if not page.endswith(".md"):
             continue
         path = f"{a.out}/{page}"
-        t = codeify(read(path))
+        t = superscript_tags(codeify(read(path)))
         open(path, "w", encoding="utf-8", newline="\n").write(t)
     # every [text](Page) link must point at a page we wrote
     names = set(pages) | {"Home"}
