@@ -12,7 +12,7 @@ The game has no symbols for its own code, so understanding comes from several in
 | Calls | `map_find.py fn <addr>`, `callers <addr>` | direct callees (named when they have strings or SDK names) and callers | indirect branches (`rt_dispatch`, 31,920 functions) are not in the graph; PLT stubs near `0x7001c1fb50` fan out to libc and the SDK |
 | SDK names | `map_find.py name <text>` (19,260 named `sdk` functions) | `main` calls them through the PLT, so a game function calling `nn::fs::ReadFile`, `nvnQueueSubmitCommands` or `nn::hid::GetNpadState` is that kind of code | only the SDK is named, not the game's own code |
 | Disassembly | `python -I tools/disasm.py work/build/game/exefs/main <addr> <len>` | the original ARM64, PLT targets named | offsets are module-relative in some tools (`sdk+0x13e700`; for `main` subtract `0x7000000000`) |
-| Option names | `BOOT/CONFIG_MAIN.TXT` options are matched by a 32-bit hash (ELF-style hash, then `h*0x9E3779B7 + ~h*0x61C88641`; `docs/dev-config.md`) | names of boot options | only 32 of 132 hashes are named (`tools/config_options.py --names`) |
+| Option names | `BOOT/CONFIG_MAIN.TXT` options are matched by a 32-bit hash (ELF-style hash, then `h*0x9E3779B7 + ~h*0x61C88641`; `docs/dev-config.md`) | names of boot options | only 33 of 132 hashes are named (`tools/config_options.py --names`, `tools/config_guess.py`); the hash is 28 bits, so read the code behind any match |
 | Generated C | the file:line `fn` prints (`work/gen/main/main_NNNN.c`) | the most detail | noisy; use the clues above first |
 
 ### Reading generated C

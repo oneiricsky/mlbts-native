@@ -6,7 +6,7 @@ bare line turns a boolean option on (case-insensitive). `KEY=VALUE` lines set va
 matched by a 32-bit hash (an ELF-style hash over the upper-cased name, then
 `h*0x9E3779B7 + ~h*0x61C88641`), so most names appear nowhere in the game.
 
-**Not all of them are named: 32 of 132.** `python -I tools/config_options.py --names --check` (1.0.20)
+**Not all of them are named: 33 of 132.** `python -I tools/config_options.py --names --check` (1.0.20)
 finds every call to the functions that read the options and prints each hash, its call count and any
 name it can recover. Rechecked 2026-11-27:
 
@@ -15,7 +15,8 @@ name it can recover. Rechecked 2026-11-27:
 | Distinct option hashes the code reads | 132 |
 | Named below by name and hash | 25 |
 | Names found as words in the executable, matching a hash | 7 |
-| Not named | 100 |
+| Guessed from joined words and borne out by the code that uses it | 1 |
+| Not named | 99 |
 
 Options are stored in two tables, numbers (`0x7002ca5ff8`) and text (`0x7002ca6010`). Only these
 functions touch them: `has` `f_70005398c0` (392 calls), `equals` `f_7000539920` (10), `get`
@@ -73,8 +74,8 @@ the behavior descriptions are readings of the option names, not verified in-game
 
 ## Names found in the executable
 
-Each word hashes to a value the code reads. About 0.03 such matches would be expected by chance over
-the 812,521 words tried, but short words collide more than that. What the options do is read from the
+Each word hashes to a value the code reads. The hash is only 28 bits wide, so about 0.4 such matches
+would be expected by chance over the 812,521 words tried, and short words collide more than that. What the options do is read from the
 names, not tested. [I]
 
 | Name | Hash | Kind | Note |
@@ -89,6 +90,30 @@ names, not tested. [I]
 
 `0x8D9D830D` was listed here as `AlwaysDelayService`. That name hashes to `0xD4751CAD`, so the option
 is read (2 calls) but not named.
+
+## Guessed names
+
+`python -I tools/config_guess.py` joins words from the functions that check an option with common
+switch words (about 228 million candidates, about 0.9 matches expected by chance if hashes were
+random). On 2026-11-27 it hit 8 options; the same search for hashes of random letters
+(`--control`) hit 0. The hash collides in patterns, so each hit was read against its code.
+
+| Name | Hash | Verdict |
+|---|---|---|
+| `CloudSaveUrl` | `0x5CA2C3E7` | Fits: `f_7000c6257c` uses the text value as the URL in the cloud-save upload, and builds one when the option is absent. [I] |
+
+Not accepted (the hash matches, the code does not bear it out):
+
+- `NewDevice`, 0xBAA694ED: possible. A one-time flag in the device login path, erased after use. [H]
+- `ForceRttsAllstar` / `SkipRttsAllstar`, 0xB496F24B / 0xD7C0ABEB: the pair sets one 16-bit value to
+  10000 or to 0 when setting 0x13 is 4 (`f_70006fe8d0`). Nothing there points to all-star. [H]
+- `ForceK`, 0xE0515C31 (a word in the PS5 executable): the code swaps a pointer in a large display
+  routine; no strikeout logic seen. [H]
+- `DisableTextureCache` (the result of that lookup is unused), `PrintNetMarketplace`, `AllowCeBalks`
+  and `DoUiAssert`: do not fit the functions that check them.
+
+The PS5 build's `CONFIG_MAIN.TXT` matches the Switch one apart from line endings, and its executable
+holds 130 of the hashes as constants. Its words added only the `ForceK` candidate.
 
 ## Named in CONFIG_MAIN.TXT but compiled out
 

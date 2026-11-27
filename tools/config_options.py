@@ -29,6 +29,7 @@ WRITERS = {0x5399f0: 'set', 0x539af0: 'erase'}
 BY_HAND = {0x400c: 0x8D669109, 0x21bc68: 0x21108949, 0xbafe9c: 0x21108949, 0xb38abc: 0x21108949,
            0xdcd3cc: 0xD24CB85D, 0xf30498: 0xBBBDD089, 0xf306ec: 0xBBBDD089}
 BY_NAME = 0x4a7990   # hashes a string handed in at run time
+HASH_BITS = 28       # the inner ELF hash is 28 bits; the final multiply adds no more
 DATA_EXT = {'TXT', 'XML', 'JSON', 'SCR', 'CB', 'TBL', 'CSV', 'INI', 'CFG', 'FSO', 'XBN', 'KEY', 'CTL', 'BIN', 'PLB',
             'DAT', 'FBN', 'MG', 'EN_SRT', 'LANG_EN'}
 
@@ -97,7 +98,7 @@ def scan():
     md = capstone.Cs(capstone.CS_ARCH_ARM64, capstone.CS_MODE_ARM)
     sites = collections.Counter()
     used = collections.defaultdict(set)
-    per_hash = collections.Counter()
+    per_hash = collections.defaultdict(list)
     unresolved = []
     for i, w in enumerate(struct.unpack_from('<%dI' % (text_size // 4), img, text_off)):
         if (w & 0x7C000000) != 0x14000000:
@@ -112,7 +113,7 @@ def scan():
             unresolved.append(at)
         elif h > 1:   # 0 is the by-name lookup with no name; two calls pass a plain 1
             used[h].add(fn)
-            per_hash[h] += 1
+            per_hash[h].append(at)
     return sites, used, unresolved, per_hash
 
 
@@ -141,7 +142,7 @@ def recover(wanted):
         h = option_hash(u)
         if h in wanted:
             found[h].append(f'{p.decode()} ({src})')
-    print(f'{len(words)} words hashed; about {len(words) * len(wanted) / 2 ** 32:.2f} matches expected by chance')
+    print(f'{len(words)} words hashed; about {len(words) * len(wanted) / 2 ** HASH_BITS:.2f} matches expected by chance')
     return found
 
 
@@ -162,7 +163,7 @@ def main():
     found = recover(set(used)) if a.names else {}
     for h in sorted(used):
         name = doc.get(h, '') if h not in wrong else ''
-        print(f'0x{h:08X}  {per_hash[h]:3} {",".join(sorted(used[h])):14} {name or "; ".join(found.get(h, [])[:3])}')
+        print(f'0x{h:08X}  {len(per_hash[h]):3} {",".join(sorted(used[h])):14} {name or "; ".join(found.get(h, [])[:3])}')
     if a.check and (wrong or missing or unresolved != [BY_NAME]):
         sys.exit(1)
 
