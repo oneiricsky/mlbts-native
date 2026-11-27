@@ -9,6 +9,9 @@ below, unchanged. Its download links and release instructions point to upstream,
 Making the game run and look better on an AMD Radeon RX 6700 XT, and mapping enough of it to work on: a function
 map, the save format, and test runs that need nobody at the PC. Changes so far:
 
+<details>
+<summary>Feature table</summary>
+
 | Feature | Behavior | Usage | Depends On |
 | --- | --- | --- | --- |
 | Background pipeline builds | Shader pipelines build on background workers and at boot, so a draw does not wait on a compile. | Built-In | Nothing |
@@ -25,6 +28,8 @@ map, the save format, and test runs that need nobody at the PC. Changes so far:
 | Exhibition on demand | Starts a match between two chosen teams by pressing the menus and rewriting the match-settings block before the lineups are built. | `python -I tools/exhibition.py --exe mlb_sonnet --log RUN.out --away 1 --home 0` | `MLB_HARNESS_PAD=1`, and a run that goes through the menus (not the AIvAI autostart) |
 | Dev harness (in progress) | A scenario file per run makes a test repeatable and runnable with nobody at the PC. | `MLB_HARNESS=<scenario file>` in dev builds; plan and status: [docs/dev-config.md](docs/dev-config.md) | Nothing with `TOTK_AUDIO=paced` |
 
+</details>
+
 In six 400-second test runs on an RX 6700 XT the game ran at about 59 fps with and without PS5 textures, memory did not
 grow, and loading the faces took 0.5 to 0.8 seconds once per match. The textures are read from your dump and are not
 part of any release. Details and numbers: [docs/ps5-textures.md](docs/ps5-textures.md) and [docs/reports](docs/reports/).
@@ -33,11 +38,16 @@ part of any release. Details and numbers: [docs/ps5-textures.md](docs/ps5-textur
 
 Optional changes to how the game plays. Each can be turned on or off, and none changes your installed game files.
 
+<details>
+<summary>Mods table</summary>
+
 | Mod | What it changes | How to use | Depends On |
 | --- | --- | --- | --- |
 | [Starting tokens](mods/rtts-start-tokens/rtts_start_tokens.py) | A new Road to the Show player starts with the token count you choose, 0 to 60000, instead of 50 or 75. A career past player creation keeps its count. | Make the override with the command below, then run the game with `MLB_ROMFS_OVERRIDE=<full path of the override folder>` | Your own RomFS; tried on game 1.0.20 |
 | [Offline main menu](docs/menu-offline-panel.md) (built into the port) | Removes the "You are currently disconnected" panel, scrolls the menu to the mode tiles at start, and removes the "Network Error" box. The game's other message boxes still appear. | On by default. F1 → Game → Hide the offline panel and Skip the network error box, or `MLB_HIDE_OFFLINE_BANNER=0` and `MLB_NO_NETWORK_ERROR=0` to turn them off | Game 1.0.20; removing the box needs code generated with the patch file |
 | [In-game trainer](docs/trainer.md) (built into the port) | Sets the match situation, edits ratings and pitcher energy, runs slow motion and has guaranteed cheats. | `MLB_TRAINER=1` or F1 → Trainer; F2 in a match | Game 1.0.20 |
+
+</details>
 
 Make the starting-token override, here with 60000 tokens:
 
@@ -130,6 +140,9 @@ full list is the table in [`runtime/mlb/cfg.c`](runtime/mlb/cfg.c).
 
 ## System requirements
 
+<details>
+<summary>System requirements table</summary>
+
 | | Minimum |
 |---|---|
 | OS | Windows 10/11, 64-bit |
@@ -137,6 +150,8 @@ full list is the table in [`runtime/mlb/cfg.c`](runtime/mlb/cfg.c).
 | GPU | Vulkan 1.3 capable (an NVIDIA RTX card is needed for DLSS) |
 | RAM | 16 GB recommended; the page file should be large (RenderDoc captures need much more) |
 | Disk | About 40 GB for the extracted game data, plus the build |
+
+</details>
 
 ## Game files
 
@@ -179,12 +194,17 @@ Details, including how the boot sequence was brought up: [docs/runtime-port.md](
 
 ## Where files live
 
+<details>
+<summary>Where files live table</summary>
+
 | What | Where |
 |---|---|
 | Executable and settings | `work/build/mlb.exe`, `work/build/mlb.cfg` |
 | Log (replaced at each start) | `work/build/logs/mlb.log` |
 | Saves and captures | `work/profile/` |
 | Extracted game data | `work/romfs/`, `work/update/exefs/` |
+
+</details>
 
 Attach `mlb.log` to bug reports. Lines starting with `[lm 0]` are the game's own log, `[host]` lines are ours. A crash
 prints `FATAL:` with host frames that can be symbolized with `llvm-symbolizer`.
@@ -198,6 +218,9 @@ prints `FATAL:` with host frames that can be symbolized with `llvm-symbolizer`.
 
 ## Repository layout
 
+<details>
+<summary>Repository layout table</summary>
+
 | Path | What |
 |---|---|
 | `recomp/` | ARM64 to C generator |
@@ -207,6 +230,8 @@ prints `FATAL:` with host frames that can be symbolized with `llvm-symbolizer`.
 | `tools/` | Build, extraction and analysis scripts |
 | `mods/` | Optional gameplay mods, one folder each ([Mods](#mods)) |
 | `docs/` | Binary reconnaissance, runtime notes, graphics plan |
+
+</details>
 
 Changes to vendored upstream files are marked `fastball` in the source with a comment explaining the case that
 needed them.
