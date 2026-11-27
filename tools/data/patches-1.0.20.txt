@@ -65,3 +65,27 @@ site walkup_light  main  108bbc0  52828408  b94d3c09  12167929  b90d3c09  528284
 #   bl f_7000e54c00   ->   nop
 set  walkup_leaders  MLB_WALKUP_LEADERS  1
 site walkup_leaders  main  e53808  940004fe  d503201f
+
+# Set no_net_box: the "NETWORK ERROR" box after a failed login, offline.
+#
+# The online-status handler f_7000ad07e0 (vtable 0x70021a4770 slot 20) runs once per frame from the game-modes screen's
+# update (f_7000bb3a38 -> f_7000ace9d0). When the account is offline (f_70009d5330 false, or the state flags say so) it
+# takes a slot of the selection box's message queue (f_70008898c4) and pushes the message with f_7000889c18, which
+# copies the title "Network Error" and the body "A network communications error has occurred. ..." into the generic
+# selection box (vtable 0x700218f080) and opens it with an Ok button. The game then waits for that button.
+# Found by write-watching the box's text: the queued item (heap) is written by f_7000889c18's memcpy under this handler.
+#
+# Site: the tbz at main+0xad0c64 that skips the block (slot, push, notify through the object at sp+0x18) when the
+# condition does not hold becomes an unconditional branch to the same target, main+0xad0c94.
+#   tbz w8, #0, 0xad0c94   ->   b 0xad0c94
+# A second route reaches the push: tbnz w8, #0, 0xad0c68 at main+0xad0c2c (w8 = flag & f_70009d5330) jumps to it directly,
+# so that branch becomes a nop and the guarded path above decides (and skips it).
+#   tbnz w8, #0, 0xad0c68   ->   nop
+set  no_net_box  MLB_NO_NETWORK_ERROR  1
+site no_net_box  main  ad0c2c  370001e8  d503201f
+site no_net_box  main  ad0c64  36000188  1400000c
+# A third caller shows the same box: f_7000aa6ea8, run every frame, asks f_70008898c4 whether an error is pending and, if so,
+# calls f_7000889978 (a sibling of f_7000889c18) with it. Found with the dev control channel (tools/ctl.py): a first-call
+# trace from the title screen to the menu lists f_7000889978 from main+0xaa6f10, and the box stays with the two sites above.
+#   bl f_7000889978   ->   nop
+site no_net_box  main  aa6f0c  97f78a9b  d503201f

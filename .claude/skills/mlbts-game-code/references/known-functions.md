@@ -264,3 +264,7 @@ Detail on [Lighting](Lighting) (which covers the animation core it found next do
 | `0x70002e9dc4` (`RolePitcher::PitchStoreFatigue`), third argument P | pitcher state: floats `P+0x20` stamina, `+0x0c/+0x10/+0x14` H/K/BB, `+0xf4` energy, `+0xf8` confidence | C offsets, not read live | the two "PITCH DIAGNOSTICS" printf argument loads |
 | `0x700167bb7c` contact model, result struct R | floats `R+0x40` incline, `+0x44` azimuth (radians), `+0x48` exit scalar, `+0x34/38/3c` spin; ints `R+8` hit type, `+0xc` hit direction | I | the "AUTO HIT" and "Hit Type" printf argument loads |
 | `[main+0x227e6e0]` W | `W+0x28` flag, `W+0x64/68/6c` floats printed as "AUTO WIND x y z": looks like a wind override | H | same function |
+- `f_7000847a90` applies a signed row step then refreshes the list; first called after the Down press on the main menu. [I, trace 2026-11-26]
+- `f_700084ebb0` the UI message handler for table events (8912 lines); `f_7000888fa8` the selection box constructor. [I]
+- `f_7000ad07e0` online-status handler (vtable 0x70021a4770 slot 20): runs `f_70009d56f8` which calls `f_7000a49f9c` ("Setting Online to ONLINE_NOT"). [C]
+- The game's generic selection box (vtable `0x700218f080`; ctor `f_7000888fa8` from main+0x8a7224; `f_7000889060` = SelBoxComplete handler; `f_7000889190` finds a SelBoxComplete item by name). The offline "Network Error" box is this object with title text at +0x20 and body at +0x60. [C, memory dump 2026-11-26]

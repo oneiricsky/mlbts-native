@@ -28,6 +28,7 @@ static const CfgMeta metas[] = {
     {"SKIP_INTRO", "0", "0|1", RESTART},   // fs_host.c: the boot logos (SCE legal screen, Sony Studio and MLB intro
                                            // movies) answered as not found; the game-modes menu follows directly
     {"HIDE_OFFLINE_BANNER", "1", "0|1", RESTART},   // menu_offline.c: the main menu shows no "you are currently disconnected" panel
+    {"NO_NETWORK_ERROR", "1", "0|1", LIVE},   // hid.c: the "NETWORK ERROR" box after a tile that needs the network is dismissed
     {"HD_PREFETCH", "1", "0|1", RESTART},   // hdtex.c: a head file the game opens makes a background thread read its PS5 file
                                             // (the hard disk's cold read, about 15 ms each, no longer lands in the upload)
     {"OFFLINE_PACKAGES", "0", "0|1", RESTART},   // packages.c: Road to the Show's Packages from a server on this PC

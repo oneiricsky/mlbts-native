@@ -272,6 +272,13 @@ void fnprof_hit(uint64_t addr, uint64_t lr, uint64_t x0) {
     }
 }
 
+void fnprof_set(const uint64_t *addrs, int n, uint64_t lo, uint64_t hi) {   // dev control channel (ctl.c)
+    if (n > 16) n = 16;
+    for (int i = 0; i < n; i++) fn_addr[i] = addrs[i], fn_hits[i] = 0;
+    fn_n = n, fn_lo = lo, fn_hi = hi;
+    g_fnprof = n > 0 || hi > lo;
+}
+
 static void parse_fntrace(void) {
     const char *pk = getenv("MLB_FNTRACE_PEEK");
     for (const char *p = pk; p && *p && fn_npeek < 4;) {

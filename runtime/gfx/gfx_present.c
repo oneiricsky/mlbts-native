@@ -591,6 +591,18 @@ void gfx_fit_rect(int cw, int ch, int dw, int dh, int out[4]) {
     out[0] = (dw - out[2]) / 2, out[1] = (dh - out[3]) / 2;
 }
 
+// fastball (hid.c nne_log, MLB_NO_NETWORK_ERROR and MLB_HIDE_OFFLINE_BANNER): until this time the window shows black instead of
+// the game's picture (the port's own menu still draws over it), so the steps the port takes at the start of the main menu
+// (the network error box closing, the page scrolling to the tile row) happen out of sight.
+static volatile uint64_t g_hold_until_ns;
+static char g_shot_req[300], g_shot_cur[300];   // dev control channel (ctl.c): save the next presented picture here
+void gfx_shot_request(const char *path) { snprintf(g_shot_req, sizeof g_shot_req, "%s", path); }
+void gfx_present_hold(uint64_t until_ns) { __atomic_store_n(&g_hold_until_ns, until_ns, __ATOMIC_RELEASE); }
+int gfx_present_held(void) {
+    uint64_t u = __atomic_load_n(&g_hold_until_ns, __ATOMIC_ACQUIRE);
+    return u && kern_now_ns() < u;
+}
+
 static void present_image(VkImage src, VkImageLayout layout, VkFormat fmt, int w, int h, const int crop[4], int defer) {
     int general = layout == VK_IMAGE_LAYOUT_GENERAL;
     gfx_window_start();
@@ -608,6 +620,7 @@ static void present_image(VkImage src, VkImageLayout layout, VkFormat fmt, int w
     }
     if (wsys_minimized() || !g_sc) goto out;
 
+    int held = gfx_present_held();
     unsigned slot = g_frame % FRAMES;
     if (vkWaitForFences(c->device, 1, &g_fence[slot], VK_TRUE, 5000000000ull) != VK_SUCCESS) {
         rt_log("gfx: present fence wait timed out");
@@ -644,6 +657,11 @@ static void present_image(VkImage src, VkImageLayout layout, VkFormat fmt, int w
                      g_sc_ext.height, cw, ch, g_scaler};
     int overlay = g_sc_view[idx] &&
                   menu_overlay_frame(__atomic_load_n(&gfx_counters.frames, __ATOMIC_RELAXED), &mt, &menu_shot);
+    if (!menu_shot && g_shot_req[0]) {
+        memcpy(g_shot_cur, g_shot_req, sizeof g_shot_cur);
+        g_shot_req[0] = 0;
+        menu_shot = g_shot_cur;
+    }
     int cap = (g_capture || menu_shot) && ensure_capture_buffer();
     int thumb = g_th_n && ensure_thumbs();
 
@@ -664,7 +682,7 @@ static void present_image(VkImage src, VkImageLayout layout, VkFormat fmt, int w
         for (int i = 0; i < 4; i++) g_pic[i] = (float)to[i] / (float)(i & 1 ? g_sc_ext.height : g_sc_ext.width);
         __atomic_store_n(&g_pic_ok, 1, __ATOMIC_RELEASE);
     }
-    if (to[2] != (int)g_sc_ext.width || to[3] != (int)g_sc_ext.height) {   // black bars beside or above and below it
+    if (held || to[2] != (int)g_sc_ext.width || to[3] != (int)g_sc_ext.height) {   // black bars beside or above and below it; or all black
         VkClearColorValue black = {.float32 = {0, 0, 0, 1}};
         VkImageSubresourceRange all = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1};
         vkCmdClearColorImage(cb, dst, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, &black, 1, &all);
@@ -674,16 +692,16 @@ static void present_image(VkImage src, VkImageLayout layout, VkFormat fmt, int w
     }
     // Colour adjustment (TOTK_COLOR_*, vk_color.c), or on an HDR10 swapchain the PQ encode (vk_hdr.c; the adjustment is
     // for SDR): a copy of the crop takes the game image's place below
-    VkImage graded = !general ? VK_NULL_HANDLE : g_sc_hdr ? vk_hdr_encode(cb, slot, src, fmt, rect)
+    VkImage graded = !general || held ? VK_NULL_HANDLE : g_sc_hdr ? vk_hdr_encode(cb, slot, src, fmt, rect)
                                                          : vk_color_record(cb, slot, src, fmt, rect);
     const int grect[4] = {0, 0, cw, ch};
     VkImage psrc = graded ? graded : src;
     VkFormat pfmt = graded ? VK_FORMAT_R16G16B16A16_SFLOAT : fmt;
     const int *prect = graded ? grect : rect;
     // FSR (TOTK_UPSCALER) when the picture's rectangle is larger than the crop; else the bilinear blit
-    int fsr = general && vk_fsr_record(cb, slot, psrc, pfmt, graded ? cw : w, graded ? ch : h, prect, dst, to);
+    int fsr = general && !held && vk_fsr_record(cb, slot, psrc, pfmt, graded ? cw : w, graded ? ch : h, prect, dst, to);
     g_scaler = fsr ? 2 : cw != to[2] || ch != to[3];
-    if (!fsr) {
+    if (!fsr && !held) {
         if (general)   // a GENERAL source (vk_texture.c images): earlier submissions' writes become visible to the blit here
             sync_barrier(cb, psrc, VK_IMAGE_LAYOUT_GENERAL, VK_IMAGE_LAYOUT_GENERAL, VK_PIPELINE_STAGE_2_ALL_COMMANDS_BIT,
                          VK_ACCESS_2_MEMORY_WRITE_BIT, VK_PIPELINE_STAGE_2_TRANSFER_BIT, VK_ACCESS_2_TRANSFER_READ_BIT);
