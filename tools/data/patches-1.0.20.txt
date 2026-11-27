@@ -65,3 +65,99 @@ site walkup_light  main  108bbc0  52828408  b94d3c09  12167929  b90d3c09  528284
 #   bl f_7000e54c00   ->   nop
 set  walkup_leaders  MLB_WALKUP_LEADERS  1
 site walkup_leaders  main  e53808  940004fe  d503201f
+
+# Set no_net_box: the "NETWORK ERROR" box after a failed login, offline.
+#
+# The online-status handler f_7000ad07e0 (vtable 0x70021a4770 slot 20) runs once per frame from the game-modes screen's
+# update (f_7000bb3a38 -> f_7000ace9d0). When the account is offline (f_70009d5330 false, or the state flags say so) it
+# takes a slot of the selection box's message queue (f_70008898c4) and pushes the message with f_7000889c18, which
+# copies the title "Network Error" and the body "A network communications error has occurred. ..." into the generic
+# selection box (vtable 0x700218f080) and opens it with an Ok button. The game then waits for that button.
+# Found by write-watching the box's text: the queued item (heap) is written by f_7000889c18's memcpy under this handler.
+#
+# Site: the tbz at main+0xad0c64 that skips the block (slot, push, notify through the object at sp+0x18) when the
+# condition does not hold becomes an unconditional branch to the same target, main+0xad0c94.
+#   tbz w8, #0, 0xad0c94   ->   b 0xad0c94
+# A second route reaches the push: tbnz w8, #0, 0xad0c68 at main+0xad0c2c (w8 = flag & f_70009d5330) jumps to it directly,
+# so that branch becomes a nop and the guarded path above decides (and skips it).
+#   tbnz w8, #0, 0xad0c68   ->   nop
+set  no_net_box  MLB_NO_NETWORK_ERROR  1
+site no_net_box  main  ad0c2c  370001e8  d503201f
+site no_net_box  main  ad0c64  36000188  1400000c
+# A third caller shows the same box: f_7000aa6ea8, run every frame, asks f_70008898c4 whether an error is pending and, if so,
+# calls f_7000889978 (a sibling of f_7000889c18) with it. Found with the dev control channel (tools/ctl.py): a first-call
+# trace from the title screen to the menu lists f_7000889978 from main+0xaa6f10, and the box stays with the two sites above.
+# f_7000889978 opens the next queued box whatever it says, so the call cannot simply go: with it removed the game's own
+# boxes never opened and it waited for their answer forever. It goes to a host function (runtime/mlb/net_box.c) that
+# takes "Network Error" entries off the queue and then makes the call.
+#   bl f_7000889978   ->   bl patch page + 0x8a0
+site no_net_box  main  aa6f0c  97f78a9b  95023665
+
+# Sets trainer_contact and trainer_pitch (runtime/mlb/trainer_hooks.c, setting MLB_TRAINER, off by default): the in-game
+# trainer sees two calculations as they happen. Each site's call is replaced by a call to an unused word of the patch
+# page, where a host function is registered; it calls the original function and reads (or changes) what it was given or
+# what it made. Off, each site runs its own call.
+#
+# The batted ball: both callers of f_7001679cdc, which clears a result struct (x0) and fills it from the swing (x1).
+#   bl f_7001679cdc   ->   bl patch page + 0x800
+set  trainer_contact  MLB_TRAINER  0
+site trainer_contact  main  28b50c  944fb9f4  9522a4bd
+site trainer_contact  main  28d3d0  944fb243  95229d0c
+# The pitcher: both callers of f_70002e9dc4 (RolePitcher::PitchStoreFatigue), whose third argument is the pitcher's
+# state (stamina, energy, confidence).
+#   bl f_70002e9dc4   ->   bl patch page + 0x810
+set  trainer_pitch  MLB_TRAINER  0
+site trainer_pitch  main  2e9d74  94000014  95212aa7
+site trainer_pitch  main  2ec99c  97fff50a  95211f9d
+
+# The swing's outcome class: the contact model's one call to f_700167fe28, which returns the hit type; types 0 to 2 and
+# 14 to 16 are misses. The trainer's "batters always miss" answers with one of those.
+#   bl f_700167fe28   ->   bl patch page + 0x830
+set  trainer_swing  MLB_TRAINER  0
+site trainer_swing  main  167c084  94000f69  94d2e1eb
+# The pitch's placement: both callers of f_7000247214, which leaves the aim point at +0x38 of its object and the miss
+# at +0x100..+0x108. The trainer's "perfect control" clears the miss and has the game place the pitch again.
+#   bl f_7000247214   ->   bl patch page + 0x840
+set  trainer_aim  MLB_TRAINER  0
+site trainer_aim  main  246fe0  9400008d  9523b618
+site trainer_aim  main  248a5c  97fff9ee  9523af79
+# The umpire's call: f_7001673894's one call to f_7001687dd8, which says whether the pitch was in the strike zone; the
+# game stores the answer and counts a taken pitch by it. The trainer's "called strike" answers yes.
+#   bl f_7001687dd8   ->   bl patch page + 0x850
+set  trainer_call  MLB_TRAINER  0
+site trainer_call  main  1673908  94005134  94d303d2
+# A fielder's throw being set up (f_7000389da4): the one call of f_700038a4c0, whose yes marks the throw as a wild
+# one (an error, and "wild" in the throw request). The trainer's "wild throws" answers yes; the game does the rest.
+#   bl f_700038a4c0   ->   bl patch page + 0x860
+set  trainer_wild  MLB_TRAINER  0
+site trainer_wild  main  38a0e0  940000f8  951ea9e0
+# The same setup, later: it may swap the wild throw for a clean one (f_7000389c00's low byte, or a motion that is not
+# the ordinary kind), marked in the throw plan at byte +0x32 (written at main+0x38a460), and the receiver then catches
+# it. The one call that takes the plan on:
+#   bl f_7000378c64   ->   bl patch page + 0x890
+site trainer_wild  main  38a4a0  97ffb9f1  951ea8fc
+
+# Set trainer_speed: slow motion. The game steps by the figure f_700058a9e0 returns after the frame timer; these two
+# calls (the main frame function f_7000d50ac8, and the one that also applies the game's own time scale) go to the host
+# function at patch page + 0x820, which calls it and multiplies the result.
+#   bl f_700058a9e0   ->   bl patch page + 0x820
+set  trainer_speed  MLB_TRAINER  0
+site trainer_speed  main  d50af4  97e0e7bb  94f78f4b
+site trainer_speed  main  d4f4a8  97e0ed4e  94f794de
+
+# Set msdf_skip: the match-start distance-field clean-up skips pixels that are infinite.
+#
+# At match start the game builds a 512x512 distance picture of the field's edges (msdfgen). Only about 3 % of its
+# pixels are near an edge and hold distances; the rest hold +-infinity in all three channels (inside or outside, no
+# distance). Its error-correction pass (f_7000030ec0, msdfgen's findErrors) then visits every pixel and compares it with
+# its neighbours by t = (a - 0.5) / (a - b), which is NaN or zero whenever a texel is infinite, and a t outside
+# (0.01, 0.99) means "no artefact here"; the pass flags only the pixel it is looking at. About 67 million NaN results
+# per match start, all of them ending in "no artefact". Site: at the check of the pixel's stencil flag
+# (main+0x311a0, `tbnz w9, #0, 0x31180`: skip a pixel that is already flagged) also skip a pixel whose three channels
+# are all +-infinity. x10-x13 are free here (the pixel pointer x26 and the registers the loop keeps are not touched),
+# w9 (the flag byte) is read again from memory at main+0x311f8, no word sets flags.
+#   tbnz w9, #0, 0x31180   ->   w10 = 3 * (width * row + column); x11 = data + 4 * w10; w12, w13, w10 = the three
+#       channels with the sign cleared and 0x7f800000 xored in (zero for +-infinity); w10 = w10 | w12 | w13;
+#       w9 = (w9 ^ 1) & 1; w10 = w10 * w9; cbz w10, 0x31180   (the branch is encoded relative to the site)
+set  msdf_skip  MLB_MSDF_SKIP  1
+site msdf_skip  main  311a0  3707ff09  1b16650a  0b0a054a  f940028b  8b2ac96b  2940356c  b940096a  1200798c  120079ad  1200794a  52091d8c  52091dad  52091d4a  2a0d018c  2a0c014a  52000129  12000129  1b097d4a  34ffff0a

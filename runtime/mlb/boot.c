@@ -143,6 +143,12 @@ void rt_boot(void) {
     void cache_storage_apply(void);
     cache_storage_apply();   // cache_storage.c: MLB_CACHE_STORAGE, <profile>/cache/0 for the game's FS_GameData
     rt_patches_init();
+    void trainer_hooks_apply(void);
+    trainer_hooks_apply();   // trainer_hooks.c: host functions for the trainer's patch sites, before hostfn_seal
+    void net_box_apply(void);
+    net_box_apply();   // net_box.c: the host function of patch set no_net_box, before hostfn_seal
+    void trainer_hooks_switch(int on);
+    trainer_hooks_switch(cfg_bool("MLB_TRAINER"));   // off, or on a build without the hooks, the sites stay original
     res_apply();   // fastball, resolution.c: MLB_RENDER_SCALE rewrites the scene size table before the game reads it
     cb_addr[0] = hostfn_register("<rtld loader_ready>", cb_loader_ready);
     cb_addr[1] = hostfn_register("<rtld module_inits>", cb_module_inits);

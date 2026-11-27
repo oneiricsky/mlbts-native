@@ -5,7 +5,8 @@
 
 theming-<hash>.svg:        progress across the 200-function sample, the vtable experiment and the continuation.
 theming-aspects-<hash>.svg: the accepted labels by aspect of the game, measured per function, beside the window-based
-                           chart on the home page.
+                           chart on the home page. It includes the labels in `tools/data/theme-findings.jsonl`:
+                           functions this project identified by tracing, counted apart from the double read.
 
 The numbers live in `tools/data/theming-pilot.json` so a checkout without `work/` can still rebuild the wiki. The two
 hand audits are constants below because they are a person's verdicts, not something the reads can produce; each is
@@ -25,8 +26,10 @@ from collections import Counter
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))).replace("\\", "/")
 sys.path.insert(0, ROOT + "/tools")
 from wiki_completeness import LEFT, BW, head, bar, legend
+from theme_aspects import ASPECTS
 
 DATA = ROOT + "/tools/data/theming-pilot.json"
+FINDINGS = ROOT + "/tools/data/theme-findings.jsonl"
 
 # verdicts of the two hand audits, each on a fixed sheet: 18 rows from the 200-function sample, 12 from the vtable
 # experiment. "right" and "wrong" are decided rows; "unsure" are labels the dossier does not settle either way.
@@ -43,6 +46,17 @@ def load_jsonl(path):
             line = line.strip()
             if line:
                 rows.append(json.loads(line))
+    return rows
+
+
+def load_findings(path=FINDINGS):
+    """Labels from the project's own tracing: one aspect per function, never part of the double-read numbers."""
+    rows = load_jsonl(path)
+    seen = set()
+    for r in rows:
+        if r["aspect"] not in ASPECTS or r["basis"] not in ("live", "code") or r["addr"] in seen:
+            raise SystemExit(f"bad or repeated findings row: {r['addr']}")
+        seen.add(r["addr"])
     return rows
 
 
@@ -188,14 +202,17 @@ def svg_aspects(d):
     counts = Counter(d["aspects"])
     counts.update(d["vtable_aspects"])
     counts.update(d["continuation"]["aspects"])
+    read = sum(counts.values())
+    findings = load_findings()
+    counts.update(r["aspect"] for r in findings)
     items = sorted(counts.items(), key=lambda kv: -kv[1])
     total = sum(n for _, n in items) or 1
     w, top, rowh = 1000, 128, 32
     h = top + rowh * len(items) + 34
     out = head(w, h, "Aspects measured per function",
-               [f"{total} accepted labels across the pilot, vtable experiment and continuation.",
-                "Each label applies to one function and is backed by evidence from its body or class."],
-               "Accepted theme labels by aspect of the game, measured per function")
+               [f"{total} labels: {read} accepted from the double read, {len(findings)} from the project's own tracing.",
+                "Each label applies to one function and is backed by evidence about that function."],
+               "Theme labels by aspect of the game, measured per function")
     for pct in (0, 25, 50, 75, 100):
         x = LEFT + BW * pct / 100
         out.append(f'<line class="grid" x1="{x:.1f}" y1="{top - 8}" x2="{x:.1f}" y2="{h - 26}"/>')

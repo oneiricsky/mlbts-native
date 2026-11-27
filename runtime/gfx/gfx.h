@@ -162,3 +162,7 @@ typedef struct { uint64_t frames, nvn_calls, nvn_distinct, unimplemented, valida
 GfxStats gfx_stats(void);
 void rt_frame_presented(const tex_t *t, uint64_t n);       // boot.c: --frames N ends the run after the Nth present
                                                            // (saves --shot first through read_texels)
+void gfx_present_hold(uint64_t until_ns);   // gfx_present.c: black window until this kern_now_ns time (0 ends it)
+int gfx_present_held(void);
+void gfx_shot_request(const char *path);   // gfx_present.c, dev: the next presented picture goes to this file
+

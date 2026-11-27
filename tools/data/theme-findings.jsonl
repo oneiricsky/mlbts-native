@@ -1,0 +1,48 @@
+{"addr": "0x70000b5cf8", "aspect": "Gameplay: fielding", "basis": "code", "evidence": "per-fielder forced-error flag read by the throwing-error decision"}
+{"addr": "0x700017df20", "aspect": "Gameplay: fielding", "basis": "code", "evidence": "error roll: fielding or throwing error chance scaled by the error sliders"}
+{"addr": "0x700018949c", "aspect": "Gameplay: fielding", "basis": "code", "evidence": "decides a throwing error, by the forced flag or the error roll"}
+{"addr": "0x70001a5cb0", "aspect": "Gameplay: fielding", "basis": "live", "evidence": "picks a fielder's throwing or catching motion for a request"}
+{"addr": "0x70001dd438", "aspect": "Stats and records", "basis": "code", "evidence": "official scorer's play-event handler: error and play-record bits"}
+{"addr": "0x70001e4500", "aspect": "Stats and records", "basis": "live", "evidence": "scores the finished play, for example as reached on error"}
+{"addr": "0x7000247214", "aspect": "Gameplay: pitching", "basis": "live", "evidence": "places the pitch: aim, miss and break offset; changing its miss moved pitches"}
+{"addr": "0x7000249cc8", "aspect": "Gameplay: pitching", "basis": "live", "evidence": "adds the miss and break offset to the aim point of a pitch"}
+{"addr": "0x7000249e38", "aspect": "Gameplay: pitching", "basis": "code", "evidence": "sets the pitch's miss from the aim, for computer and analog pitching"}
+{"addr": "0x700024b6a8", "aspect": "Gameplay: pitching", "basis": "code", "evidence": "sets the break offset used when the pitch is placed"}
+{"addr": "0x70002e9dc4", "aspect": "Gameplay: pitching", "basis": "live", "evidence": "pitcher fatigue update: reads stamina, energy and confidence each pitch"}
+{"addr": "0x70002ed9a4", "aspect": "Gameplay: pitching", "basis": "live", "evidence": "stores the pitcher's energy into the player record"}
+{"addr": "0x7000378c64", "aspect": "Gameplay: fielding", "basis": "live", "evidence": "takes on a fielder's throw plan; its clean-throw byte undoes a wild throw"}
+{"addr": "0x7000389c00", "aspect": "Gameplay: fielding", "basis": "live", "evidence": "decides during throw setup whether a clean throw replaces the planned one"}
+{"addr": "0x7000389da4", "aspect": "Gameplay: fielding", "basis": "live", "evidence": "sets up a fielder's throw"}
+{"addr": "0x700038a4c0", "aspect": "Gameplay: fielding", "basis": "live", "evidence": "answers whether a throw is to be wild; answering yes produced wild throws"}
+{"addr": "0x7000d1cd98", "aspect": "Gameplay: in-play", "basis": "code", "evidence": "gives the team that is fielding"}
+{"addr": "0x7000d413bc", "aspect": "Gameplay: in-play", "basis": "live", "evidence": "rules handler that counts a ball"}
+{"addr": "0x7000d41660", "aspect": "Stats and records", "basis": "live", "evidence": "appends to the play's list of fielder actions used to judge errors"}
+{"addr": "0x7000d4256c", "aspect": "Stats and records", "basis": "live", "evidence": "charges an error to a fielder"}
+{"addr": "0x7000d42f20", "aspect": "Stats and records", "basis": "code", "evidence": "asks whether a runner gained from a listed fielder action"}
+{"addr": "0x7000d43ce0", "aspect": "Stats and records", "basis": "code", "evidence": "end-of-play error judge over the fielder actions"}
+{"addr": "0x7000d45cb0", "aspect": "Stats and records", "basis": "code", "evidence": "appends to the put-out list where an out is counted"}
+{"addr": "0x7000d467c8", "aspect": "Gameplay: in-play", "basis": "code", "evidence": "rules handler beside the ball and strike counters, apparently a foul strike"}
+{"addr": "0x7000d493a0", "aspect": "Gameplay: in-play", "basis": "code", "evidence": "appends to the scored list, adds a run and logs the score"}
+{"addr": "0x7000d4c210", "aspect": "Gameplay: in-play", "basis": "live", "evidence": "rules handler that counts a strike or resets the count"}
+{"addr": "0x70013fad18", "aspect": "Gameplay: fielding", "basis": "live", "evidence": "receiver's catch motion re-aims a ball in flight at the glove"}
+{"addr": "0x7001657330", "aspect": "Gameplay: in-play", "basis": "code", "evidence": "gives the ball's flight path object"}
+{"addr": "0x700165ca58", "aspect": "Gameplay: in-play", "basis": "code", "evidence": "builds the ball's flight path from a launch record"}
+{"addr": "0x7001665090", "aspect": "Gameplay: in-play", "basis": "live", "evidence": "switches the ball to the live state and clears its receiver"}
+{"addr": "0x7001665d60", "aspect": "Gameplay: fielding", "basis": "code", "evidence": "re-times or drops a fielder's scheduled catch of the ball"}
+{"addr": "0x70016671a0", "aspect": "Gameplay: in-play", "basis": "live", "evidence": "releases the ball for pitches and throws and sets the ball's state"}
+{"addr": "0x7001668ba0", "aspect": "Gameplay: in-play", "basis": "live", "evidence": "rebuilds the ball's path from a launch record and makes it live"}
+{"addr": "0x700166b0b8", "aspect": "Gameplay: fielding", "basis": "live", "evidence": "schedules a fielder getting the ball, with the time until it arrives"}
+{"addr": "0x700166b264", "aspect": "Gameplay: in-play", "basis": "code", "evidence": "deflection: sends the ball on from a new launch record"}
+{"addr": "0x700166b51c", "aspect": "Gameplay: in-play", "basis": "live", "evidence": "re-aims a ball in flight at a new point"}
+{"addr": "0x700166f6d0", "aspect": "Gameplay: in-play", "basis": "live", "evidence": "raises the pitch-result event with ball or strike"}
+{"addr": "0x7001673894", "aspect": "Gameplay: in-play", "basis": "live", "evidence": "ends a pitch: takes the strike-zone answer and decides ball or strike"}
+{"addr": "0x700167823c", "aspect": "Gameplay: batting", "basis": "live", "evidence": "builds the batted ball from an override block of azimuth, launch and speed"}
+{"addr": "0x7001679cdc", "aspect": "Gameplay: batting", "basis": "live", "evidence": "runs the bat-on-ball result: bunt model or contact model into one result struct"}
+{"addr": "0x7001679d18", "aspect": "Gameplay: batting", "basis": "code", "evidence": "bunt model, chosen by the swing's bunt flags"}
+{"addr": "0x700167bb7c", "aspect": "Gameplay: batting", "basis": "live", "evidence": "contact model: launch angle, direction and exit speed of a batted ball"}
+{"addr": "0x700167fe28", "aspect": "Gameplay: batting", "basis": "live", "evidence": "the swing's hit type from its timing; forcing a miss type made batters miss"}
+{"addr": "0x7001680870", "aspect": "Gameplay: batting", "basis": "code", "evidence": "handles the miss hit types of the contact model"}
+{"addr": "0x7001687dd8", "aspect": "Gameplay: pitching", "basis": "live", "evidence": "answers whether a pitch was a strike by location; answering yes called balls strikes"}
+{"addr": "0x700181a6bc", "aspect": "Franchise, league and roster", "basis": "live", "evidence": "looks a player object up by id in the match's player table"}
+{"addr": "0x700183bb94", "aspect": "Franchise, league and roster", "basis": "code", "evidence": "reads one of a player's rating bytes"}
+{"addr": "0x7001868fd4", "aspect": "Franchise, league and roster", "basis": "live", "evidence": "reads a player rating as a fraction for play code"}

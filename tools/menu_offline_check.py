@@ -1,13 +1,17 @@
 """Checks the main-menu screenshots of two runs: the offline panel is there with MLB_HIDE_OFFLINE_BANNER=0 and gone with 1.
 
-  python -I tools/menu_offline_check.py CONTROL.png FIXED.png
+  python -I tools/menu_offline_check.py CONTROL.png FIXED.png [SCROLLED.png]
 
-Both are 1280x720 shots of the same menu frame (MLB_SHOT). The panel sits at x 62..1220, y 152..573. Four checks:
-  1. control: the panel region is busy (the picture has text, icons and a bright frame): standard deviation of its
-     luminance above 15, and at least 500 yellow pixels (the "YOU ARE CURRENTLY DISCONNECTED!" line, about 255,235,0).
-  2. fixed: the same region is nearly flat (standard deviation below 8) with no yellow pixels.
-  3. fixed: no bright teal frame line along the panel's top edge (a row of pixels close to 90,225,190).
-  4. both: the strip under the panel (the mode buttons, y 640..720) is the same, mean absolute difference below 6.
+All are 1280x720 shots of the main menu (MLB_SHOT). The panel sits at x 62..1220, y 152..573. Checks:
+  1. control (MLB_HIDE_OFFLINE_BANNER=0): the panel region is busy (the picture has text, icons and a bright frame):
+     standard deviation of its luminance above 15, and at least 500 yellow pixels (the "YOU ARE CURRENTLY
+     DISCONNECTED!" line, about 255,235,0).
+  2. FIXED, a frame before the page scrolls (the first seconds after the menu loads): no yellow pixels, the region is
+     nearly flat (standard deviation below 8), no bright teal frame line along the panel's top edge (a row of pixels
+     close to 90,225,190), and the strip under the panel (the mode buttons, y 640..720) is the same as the control's,
+     mean absolute difference below 6.
+  3. SCROLLED, a later frame of the fixed run (optional): the page has scrolled to the tile row, so the same region
+     holds the mode's hero art (standard deviation above 25) and has no yellow pixels.
 Needs Pillow (python -I -m pip install pillow --target work/pylib). Exit code 0 when all pass.
 """
 import sys
@@ -42,7 +46,7 @@ def teal_edge(img):
 
 
 def main():
-    if len(sys.argv) != 3:
+    if len(sys.argv) not in (3, 4):
         sys.exit(__doc__)
     ctl, fix = (Image.open(p).convert("RGB") for p in sys.argv[1:3])
     cp, fp = region(ctl, PANEL), region(fix, PANEL)
@@ -59,6 +63,12 @@ def main():
         ("fixed has no teal frame edge (< 20 px)", fe < 20, f"{fe} px, control {ce} px"),
         ("mode-button strip unchanged (diff < 6)", diff < 6, f"mean abs diff {diff:.2f}"),
     ]
+    if len(sys.argv) == 4:
+        sc = Image.open(sys.argv[3]).convert("RGB")
+        sp = region(sc, PANEL)
+        rows.append(("scrolled: the region shows the hero art (std > 25)", stdev([luma(p) for p in sp]) > 25,
+                     "std %.1f" % stdev([luma(p) for p in sp])))
+        rows.append(("scrolled: no yellow (0 px)", yellow(sp) == 0, "%d px" % yellow(sp)))
     for name, ok, val in rows:
         print(("PASS " if ok else "FAIL ") + name + ": " + val)
     sys.exit(0 if all(r[1] for r in rows) else 1)

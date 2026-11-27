@@ -20,6 +20,7 @@
 #include "platform/platform.h"
 #include "sha256.h"
 #include "harness.h"
+#include "harness_det.h"
 
 // ---- log: stderr, plus logs/mlb.log next to mlb.exe once log_open ran (MLB_LOG=<file> names another file). Lines
 // before log_open (mem_init runs first, so the CRT heap does not land in the guest address space) wait in a static buffer.
@@ -195,6 +196,8 @@ const RtConfig *rt_config(void) { return &cfg; }
 // caller and x0. Every generated function checks g_fnprof on entry (FN_ENTER), so it stays 0 unless this is set: the
 // game runs measurably slower while it is on. Used to follow the audio engine's stream threads (Scream snd_stream).
 volatile int g_fnprof = 0;
+// fastball: see runtime/core/simd.h. MLB_FP_FIXUP=0 sets it to 0.
+uint64_t rt_fp_fix_lim = 1;
 static uint64_t fn_addr[16];
 static uint64_t fn_hits[16];
 static int fn_n;
@@ -272,6 +275,13 @@ void fnprof_hit(uint64_t addr, uint64_t lr, uint64_t x0) {
     }
 }
 
+void fnprof_set(const uint64_t *addrs, int n, uint64_t lo, uint64_t hi) {   // dev control channel (ctl.c)
+    if (n > 16) n = 16;
+    for (int i = 0; i < n; i++) fn_addr[i] = addrs[i], fn_hits[i] = 0;
+    fn_n = n, fn_lo = lo, fn_hi = hi;
+    g_fnprof = n > 0 || hi > lo;
+}
+
 static void parse_fntrace(void) {
     const char *pk = getenv("MLB_FNTRACE_PEEK");
     for (const char *p = pk; p && *p && fn_npeek < 4;) {
@@ -318,7 +328,12 @@ void rt_udf(Cpu *c, uint64_t pc) {
 // CNTPCT_EL0: the Switch counter runs at 19.2 MHz.
 static PlatScale tick_scale;
 __attribute__((constructor)) static void tick_scale_init(void) { tick_scale = plat_scale(19200000u, plat_counter_hz()); }
-uint64_t rt_ticks(void) { return plat_scaled(tick_scale, plat_counter()); }
+uint64_t rt_ticks(void) {
+#ifdef MLB_DEV_HARNESS
+    if (HD_TICKS_FIXED()) return hd_ticks();
+#endif
+    return plat_scaled(tick_scale, plat_counter());
+}
 
 // ---- crash reporter
 typedef struct { uintptr_t host; uint64_t guest; } FnRev;
@@ -608,6 +623,7 @@ int main(int argc, char **argv) {
         if (!cfg_get("MLB_SAMPLER_SLOW")) cfg_set("SAMPLER_SLOW", "19");
     } else if (smp && *smp && strcmp(smp, "off") && strcmp(smp, "0")) cfg_set("SAMPLER_OUT", smp);
     prof_start();   // perf.c: the frame-time summary, MLB_TRACE=perf, MLB_SAMPLER
+    if (!cfg_bool("MLB_FP_FIXUP")) rt_fp_fix_lim = 0;   // read once, at start
     playtime_init();   // playtime.c: the settings menu's play time, in <profile>/playtime.txt
     rt_boot();
     return 0;

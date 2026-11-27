@@ -8,6 +8,10 @@
 // in a focus frame (FRONTEND.TEX dynamictile_home_offline). Setting the bytes for good made the game think it was
 // online (a "NETWORK ERROR" box); setting them only while slot 8 runs gives the menu script a true SHOW_DYNAMIC_PANELS
 // and leaves every other reader of the bytes alone. The panels list is then empty, so no tile is drawn.
+//
+// The menu page is taller than the screen and starts unscrolled, with the tile row (Road to the Show, Diamond Dynasty,
+// ...) below the place of the panel, cut off at the bottom of the screen; hid.c presses Down once after the start so
+// the page scrolls to the tiles, as it does when the first tile is focused by hand (nne_log in hid.c).
 #include <stdint.h>
 #include <string.h>
 
@@ -19,6 +23,9 @@ static const struct { const char *build; uint64_t slot, fn; } k_builds[] = {
     {"1.0.20", 0x70021bd438ull + 8 * 8, 0x7000c0dc6cull},
 };
 static uint64_t g_prev;
+static volatile int g_active;
+
+int menu_offline_active(void) { return g_active; }
 
 static void get_hook(Cpu *c) {
     uint64_t obj = c->x[0];
@@ -63,5 +70,6 @@ void menu_offline_apply(void) {
         rt_log("menu offline: could not write slot %#llx; the offline panel stays", (unsigned long long)k_builds[b].slot);
         return;
     }
+    g_active = 1;
     rt_log("menu offline: the main menu shows no offline panel");
 }

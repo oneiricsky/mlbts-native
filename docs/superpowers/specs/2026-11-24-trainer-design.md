@@ -1,6 +1,7 @@
 # In-game trainer: design
 
-2026-11-24. For game version 1.0.20. Status: waiting for the owner's approval; nothing is built.
+2026-11-24. For game version 1.0.20. Status: approved and built the same day. Stage 1 works; stages 2 and 3 ship as
+readouts; stage 4 and the writes of stages 2 and 3 are not built. What happened to each is in `docs/trainer.md`.
 
 Tags: **[C]** read from the code or seen live, **[I]** inferred, **[H]** guess. "My call" marks a choice the owner has
 not made and can overrule.

@@ -41,12 +41,15 @@
 #include <SDL3/SDL.h>   // types and constants only: the functions come from SDL3.dll (sdl_load)
 
 #include "cfg.h"
+#include "gfx.h"
 #include "host.h"
 #include "platform/platform.h"
 #include "prompts.h"
 #include "swkbd.h"
 int menu_is_open(void);   // ui/menu.cpp (ui/menu.h pulls in Vulkan)
 void menu_toggle(void);
+void trainer_toggle(void);   // trainer.c
+int trainer_visible(void);
 
 // ---- libnx layouts
 typedef struct { uint64_t sampling, buttons; int32_t lx, ly, rx, ry; uint32_t attributes, reserved; } NpadState;
@@ -179,7 +182,115 @@ static int movie_is(const char *m, int n, const char *const *list) {
     return 0;
 }
 
+// fastball (MLB_NO_NETWORK_ERROR, MLB_HIDE_OFFLINE_BANNER): offline, the game tries to log in when it starts (screen
+// ol_OnlineEntry (0)) and again after a tile that needs the network (ol_OnlineEntry (1)). The attempt ends in "Setting
+// Online to ONLINE_NOT" and a return to GameModesMain, and about half a second after the menu's selection box enters, a
+// "NETWORK ERROR" box with an Ok button appears. The port has no network, so the box is only in the way: the port
+// presses A, which is the box's Ok, 0.3 s after that selection box. Seen in game 2026-11-26 on both paths [C]; what
+// raises the box in the game's code was not found. The game's log lines are the signal: the steps must come in this
+// order, each within 20 s of the first.
+// At start, with the offline panel hidden, the menu page also begins unscrolled (an empty gap, the tile row cut off): a
+// Down press 1.0 s later scrolls it to the tile row (menu_offline.c).
+// While this happens at start the window shows black (gfx_present_hold) and the player's own input is ignored: from the first
+// GameModesMain until 0.7 s after the last press (after a tile press: from the online entry until 0.7 s after the Ok). The presses and that
+// end are timed on a clock that counts only while the game polls its input, because the game pauses without the focus; a wall
+// time limit of 12 s ends the black in any case.
+#define NNE_DELAY_NS 300000000ull
+#define NNE_HOLD_NS 100000000ull
+#define NNE_GAP_NS 1000000000ull
+#define NNE_TAIL_NS 700000000ull
+#define NNE_WINDOW_NS 20000000000ull
+#define NNE_LIMIT_NS 12000000000ull
+int menu_offline_active(void);   // menu_offline.c
+static volatile uint64_t g_nne_start_ns, g_synth_from_ns, g_synth_to_ns, g_gap_from_ns, g_gap_to_ns;
+static volatile uint64_t g_focus_clk_ns, g_hold_end_clk_ns;   // the running-game clock; when it passes the second, the black ends
+static volatile int g_nne_step;   // 0 idle, 1 online entry seen, 2 offline seen, 3 menu entered again
+static int g_nne_boot;   // the online entry in progress is the one at start, ol_OnlineEntry (0)
+static int log_has(const char *t, int n, const char *s) {
+    int k = (int)strlen(s);
+    for (int i = 0; i + k <= n; i++)
+        if (!memcmp(t + i, s, (size_t)k)) return 1;
+    return 0;
+}
+static volatile uint64_t g_ctl_bits, g_ctl_until_ns;
+static uint64_t synth_press(void) {
+    uint64_t c = g_focus_clk_ns;
+    return (kern_now_ns() < g_ctl_until_ns ? g_ctl_bits : 0) | (c >= g_synth_from_ns && c < g_synth_to_ns ? BIT(B_A) : 0) |
+           (c >= g_gap_from_ns && c < g_gap_to_ns ? BIT(B_DOWN) : 0);
+}
+#ifdef MLB_DEV_HARNESS
+void ctl_start(void);   // ctl.c
+#endif
+void hid_ctl_press(uint64_t mask, unsigned ms) {   // dev control channel: hold these Switch buttons for ms
+    g_ctl_bits = mask, g_ctl_until_ns = kern_now_ns() + (uint64_t)ms * 1000000ull;
+}
+static void focus_clock_tick(void) {
+#ifdef MLB_DEV_HARNESS
+    {   // the dev control channel (ctl.c, MLB_CTL=<folder>) starts on the first poll
+        static int ctl_started;
+        if (!ctl_started) ctl_started = 1, ctl_start();
+    }
+#endif
+    static uint64_t last;
+    uint64_t now = kern_now_ns(), dt = last ? now - last : 0;
+    last = now;
+    g_focus_clk_ns += dt > 100000000ull ? 100000000ull : dt;   // polls stop while the game is paused: that time is not counted
+    uint64_t end = g_hold_end_clk_ns;
+    if (end && g_focus_clk_ns >= end) {
+        g_hold_end_clk_ns = 0;
+        gfx_present_hold(0);
+        rt_log("hid: black hold ends at frame %llu", (unsigned long long)gfx_stats().frames);
+    }
+}
+static void nne_finish(void);
+static int nne_patched(void) { return cfg_bool("MLB_NO_NETWORK_ERROR") && rt_patch_enabled(rt_patch_set("no_net_box")); }
+
+static void nne_log(const char *t, int n) {
+    if (n < 12) return;
+    uint64_t now = kern_now_ns();
+    if (g_nne_step && now - g_nne_start_ns > NNE_WINDOW_NS) g_nne_step = 0;
+    if (log_has(t, n, "Entering screen: [TitleLoadingScreen->GameModesMain (59)]")) {
+        if (cfg_bool("MLB_NO_NETWORK_ERROR")) gfx_present_hold(now + NNE_LIMIT_NS), rt_log("hid: black hold starts (menu) at frame %llu", (unsigned long long)gfx_stats().frames);
+    } else if (log_has(t, n, "Entering screen: [TitleLoadingScreen->ol_OnlineEntry (")) {
+        g_nne_step = 1, g_nne_start_ns = now, g_nne_boot = log_has(t, n, "ol_OnlineEntry (0)");
+        if (cfg_bool("MLB_NO_NETWORK_ERROR")) gfx_present_hold(now + NNE_LIMIT_NS);
+    } else if (g_nne_step == 1 && log_has(t, n, "Setting Online to ONLINE_NOT")) {
+        g_nne_step = 2;
+    } else if (g_nne_step == 2 && log_has(t, n, "Entering screen: [TitleLoadingScreen->GameModesMain (")) {
+        g_nne_step = 3;
+        if (nne_patched()) nne_finish();   // the code patch leaves no box screen to wait for
+    } else if (g_nne_step == 3 && log_has(t, n, "Entering screen: [Selection Box 2->Selection Box 2")) {
+        nne_finish();
+    }
+}
+
+static void nne_finish(void) {
+    {
+        g_nne_step = 0;
+        uint64_t c = g_focus_clk_ns, end = 0;
+        if (cfg_bool("MLB_NO_NETWORK_ERROR") && !nne_patched()) {   // the code patch leaves no box to press
+            g_synth_from_ns = c + NNE_DELAY_NS;
+            g_synth_to_ns = g_synth_from_ns + NNE_HOLD_NS;
+            end = g_synth_to_ns + NNE_TAIL_NS;
+            rt_log("hid: the network error box is dismissed with A in 0.3 s (MLB_NO_NETWORK_ERROR)");
+        }
+        // The page starts unscrolled and, with the offline panel hidden, shows an empty gap above a cut-off tile row; a
+        // Down once the box is gone scrolls it to the tiles (seen 2026-11-26 [C]). Only at start: after a tile press the
+        // page is already scrolled to that tile.
+        if (g_nne_boot && menu_offline_active()) {
+            g_gap_from_ns = c + NNE_GAP_NS;
+            g_gap_to_ns = g_gap_from_ns + NNE_HOLD_NS;
+            end = g_gap_to_ns + NNE_TAIL_NS;
+            rt_log("hid: Down in 1.0 s scrolls the menu to the tile row (MLB_HIDE_OFFLINE_BANNER)");
+        }
+        if (end) g_hold_end_clk_ns = end, rt_log("hid: black hold will end 1.8 s of play from now (frame %llu)", (unsigned long long)gfx_stats().frames);
+    }
+}
+
 void hid_game_log(const char *text, int n) {
+    nne_log(text, n);
+    void trainer_game_log(const char *text, int n);
+    trainer_game_log(text, n);   // trainer.c: Quick Manage freezes the match data
     static const char pre[] = "uiEngine: Entering screen: [";
     enum { PRE = sizeof pre - 1 };
     if (n <= PRE || memcmp(text, pre, PRE)) return;
@@ -612,15 +723,22 @@ static void poll(NpadState *st) {
     const uint64_t combo = BIT(B_MINUS) | BIT(B_PLUS);
     int typing = __atomic_load_n(&text_entry_open, __ATOMIC_ACQUIRE);
     if (!typing && (((b & combo) == combo && (prev & combo) != combo) || (guide && !prev_guide))) menu_toggle();
+    // fastball: both stick clicks going down together open or close the trainer panel (nothing while it is off:
+    // trainer_toggle ignores it, and the clicks reach the game as always). The panel takes the controller as the menu does.
+    const uint64_t sticks = BIT(B_LSTICK) | BIT(B_RSTICK);
+    if (!typing && !menu_is_open() && (b & sticks) == sticks && (prev & sticks) != sticks) trainer_toggle();
     prev = b, prev_guide = guide;
-    int open = menu_is_open() || typing;
+    int open = menu_is_open() || trainer_visible() || typing;
     if (open) hidden = ~0ull;
     else if (was_open) hidden = b;
     was_open = open;
     hidden &= b;   // a released button counts again
     b &= ~hidden;
     if (open) lx = ly = rx = ry = 0;
+    focus_clock_tick();
+    if (gfx_present_held()) b = 0, lx = ly = rx = ry = 0;   // the black window: no stray press reaches the menu
     b |= harness_auto_press();
+    b |= synth_press();
     st->buttons = b;
     st->lx = lx, st->ly = ly, st->rx = rx, st->ry = ry;
 }
