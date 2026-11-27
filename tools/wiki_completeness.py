@@ -100,9 +100,8 @@ def svg_coverage(rs):
     w, top, rowh = 1000, 96, 50
     h = top + rowh * len(rs) + 42
     out = head(w, h, "Function map coverage",
-               ["Top bar: evidence behind each role (C string, symbol or import, I inferred from shape or call graph,",
-                "H inferred from neighbours). Bottom bar: bodies that were read."],
-               "Function map coverage by region")
+               ["Top bar: Evidence behind each role",
+                "Bottom bar: Bodies that were read"], "Function map coverage by region")
     for pct in (0, 25, 50, 75, 100):
         x = LEFT + BW * pct / 100
         out.append(f'<line class="grid" x1="{x:.1f}" y1="{top - 10}" x2="{x:.1f}" y2="{h - 34}"/>')
@@ -203,8 +202,8 @@ def svg_aspects(counts, themed, total):
     h = top + rowh * len(items) + 16
     share = 100.0 * themed / (total or 1)
     out = head(w, h, "Functions by aspect of the game",
-               ["Grouped by the theme the region pages give each 256 KB window, not by anything read in the",
-                f"function itself. {themed:,} of {total:,} functions sit in a themed window ({share:.1f}%)."],
+               ["Grouped by the theme the region pages give each 256 KB window.\n"
+                f" {themed:,} of {total:,} functions."],
                "Functions grouped by aspect of the game")
     sy = 70
     out.append(f'<text x="{LEFT - 12}" y="{sy + 12}" font-size="11" class="f1" text-anchor="end">Map coverage</text>')

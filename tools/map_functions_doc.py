@@ -312,7 +312,12 @@ def overview(rows, summary):
 
 
 def read_pages(rows, limit=3500):
-    """Pages for the functions whose role was read from the body (the overlay). Chunked so no page is unreadable."""
+    """Pages for the functions whose role was read from the body (the overlay).
+
+    One page per region when the region fits, split into parts when it does not. GitHub stops rendering a wiki page
+    past roughly a megabyte of HTML: a single Read-B with 21,726 rows (2 MB of Markdown) came back without its last
+    address 0x7000bffff0, and a 5,922-row Read-F was cut too, while the 3,500-row pages render whole.
+    """
     read = sorted([r for r in rows if r.get("read")], key=lambda r: int(r["addr"], 16))
     if not read:
         return {}
@@ -320,6 +325,9 @@ def read_pages(rows, limit=3500):
                         "The evidence for each row is in `work/map/index/roles_read.jsonl`; the per-region register "
                         "on [Functions A](Functions-A) to [Functions F](Functions-F) lists the ones with a symbol, "
                         "import or string.", "",
+                        "A page holds up to 3,500 rows: GitHub stops rendering a wiki page past roughly a megabyte, "
+                        "and a whole region in one page came back cut off in testing. A region that fits is one page.",
+                        "",
                         "These roles are unverified. They were written by a model reading each function's "
                         "normalised body in batches. In a 10-function audit, 6 were right, 1 was incomplete and 3 "
                         "carried a wrong specific detail (a count, a polarity or an offset, sometimes borrowed from "
@@ -351,10 +359,9 @@ def read_pages(rows, limit=3500):
             ])
         tab.append(f"| [{'Read ' + letter}](Read-{letter}{'' if len(parts) == 1 else '-1'}) | {len(rs):,} | "
                    f"{hex(int(rs[0]['addr'], 16))} to {hex(int(rs[-1]['addr'], 16))} |")
-        if len(parts) > 1:
-            for n in range(2, len(parts) + 1):
-                tab.append(f"| [Read {letter} part {n}](Read-{letter}-{n}) | {len(parts[n-1])} | "
-                           f"{hex(int(parts[n-1][0]['addr'], 16))} to {hex(int(parts[n-1][-1]['addr'], 16))} |")
+        for n in range(2, len(parts) + 1):
+            tab.append(f"| [Read {letter} part {n}](Read-{letter}-{n}) | {len(parts[n-1])} | "
+                       f"{hex(int(parts[n-1][0]['addr'], 16))} to {hex(int(parts[n-1][-1]['addr'], 16))} |")
     index += tab
     pages["Read-roles"] = "\n".join(index)
     return pages

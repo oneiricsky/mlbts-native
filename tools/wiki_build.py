@@ -15,6 +15,7 @@ Publishing is separate and manual (see the wiki section of `.claude/skills/mlbts
 only writes files.
 """
 import argparse, os, re, shutil, sys
+from collections import defaultdict
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__))).replace("\\", "/")
 SK = ROOT + "/.claude/skills/mlbts-game-code"
@@ -74,6 +75,7 @@ CODE_TOKEN = re.compile(
     r"\bmain\+0x[0-9a-f]{1,6}\b"
     r"|\b(?:LD|ST)(?:8|16|32|64|128)\[[^\]\n]{1,48}\]"
     r"|\b[wx]\d{1,2} [+-] 0x[0-9a-f]{1,6}\b"
+    r"|[+\-]0x[0-9a-f]{1,8}\b"                                       # +0xd90, -0x20: the sign is part of it
     r"|\b0x[0-9a-fA-F]{2,}\b"
     r"|\bf_[0-9a-f]{6,}\b"
     r"|(?:MLB|TOTK)_[A-Z0-9_]{2,}"
@@ -85,10 +87,13 @@ CODE_TOKEN = re.compile(
     r"|\b(?:FN_ENTER|VSET|VS32|VS64|ROR64|ldx64|stx64|fadd32|fsub32|fadd64|fsub64|fc_[a-z0-9_]+)\b"
     r"|\b(?:u?int(?:8|16|32|64)_t|vreg)\b"
     r"|\bsvc #[0-9]+\b"
+    r"|\[[wx]\d{1,2}(?:\s*[+\-]\s*0x[0-9a-f]+)?\]"                    # [x0], [x8 + 0x20]
     r"|\b[xw](?:[0-9]|[12][0-9]|30)\b|\b(?:sp|pc|nzcv|fpcr)\b"
-    r"|\b[A-Z][A-Z0-9]{3,}(?:_[A-Z0-9]+)+\b"                        # TEAM_INDEX, CONFIG_MAIN_USER
-    r"|\b[A-Z]{5,}\b"                                               # ENTERING, EXITING: data, not an acronym
-    r"|(?<![\w./-])[\w./%_-]+\.(?:c|h|cpp|py|md|txt|json|cfg|log|rdc|nsp|bin|big|skx|BNK|dat|xml|csv|ini|sav)\b")
+    r"|\b[A-Z][a-z0-9]+(?:[A-Z][A-Za-z0-9]*)+\b"                      # GraphicsContext, PlayerObject
+    r"|\b[A-Z][A-Z0-9]{3,}(?:_[A-Z0-9]+)+\b"                          # TEAM_INDEX, CONFIG_MAIN_USER
+    r"|\b[A-Z]{5,}\b"                                                 # ENTERING, EXITING: data, not an acronym
+    r"|(?<![\w./-])[\w./%_-]+\.(?:c|h|cpp|py|md|txt|json|cfg|log|rdc|nsp|bin|big|skx|BNK|dat|xml|csv|ini|sav)\b"
+    r"|(?<![\w.])%(?:[-#0-9.]*)(?:l{1,2})?[diouxXscp](?![\w])")       # %s, %08x, %lx
 # a complete inline link or image: [text](dest). Its label is formatted like any text; its destination is left alone,
 # because a wrapped destination breaks the link.
 LABELSPLIT = re.compile(r"(!?\[)([^\]]*)(\]\([^)\s]*\))")
@@ -167,7 +172,10 @@ def codeify(text):
             pieces[i] = code_text(pieces[i], html, quotes_even)
             if i + 2 < len(pieces):
                 pieces[i + 2] = code_text(pieces[i + 2], html, quotes_even)
-        out.append("".join(pieces))
+        line = "".join(pieces)
+        while "``" in line:  # two spans whose ends touched (a span right before a token): merge them into one
+            line = line.replace("``", "")
+        out.append(line)
     return "\n".join(out)
 
 
@@ -227,17 +235,33 @@ def main():
         fm.append("Save-schema")
     if "Theming-progress" in pages:
         fm.append("Theming-progress")
+    # the read-role detail pages: every part of every region, each with the range its page actually covers
+    read_targets = []
+    for k, lo, hi in map_functions_doc.REGIONS:
+        read_targets += sorted((p for p in pages if re.match(rf"Read-{k}(-\d+)?$", p)),
+                               key=lambda p: int(p.rsplit("-", 1)[1]) if p[-1].isdigit() else 0)
+    read_targets += sorted((p for p in pages if re.match(r"Read-SDK(-\d+)?$", p)),
+                           key=lambda p: int(p.rsplit("-", 1)[1]) if p[-1].isdigit() else 0)
+    read_ranges = {}
+    for name in read_targets:
+        path = f"{a.out}/{name}.md"
+        if os.path.exists(path):
+            # the address cell has no code span yet: codeify runs at the end of the build
+            found = re.findall(r"(?m)^\| `?(0x[0-9a-f]+)`? \|", read(path))
+            if found:
+                read_ranges[name] = (int(found[0], 16), int(found[-1], 16) + 0x10)
     sections = [
         ("How the port works", ("How-the-port-works", "The-game-binary", "Known-game-functions", "Tracing-playbook",
                                 "Dev-harness-and-measuring")),
         ("Game flow", ("Game-state-machine", "Intro-states", "Batter-up-state", "Play-states", "End-states")),
-        ("Subsystems", ("Fielding", "Frontend", "Audio", "AI-actor-API", "Lighting", "Game-modes")),
+        ("Subsystems", ("Fielding", "Frontend", "Menu", "Audio", "AI-actor-API", "Lighting", "Game-modes")),
         ("Function map", tuple(fm)),
         ("Game binary regions", tuple(f"Region-{l}" for l in REGIONS)),
         ("Findings", ("Walk-up-freeze", "Match-start-freeze", "Load-stalls", "Frame-rate-and-GPU-waits",
-                      "PS5-textures", "Main-menu-offline-panel", "Upstream-bug-research")),
+                      "PS5-textures", "Upstream-bug-research")),
         ("Reference", ("History-and-open-questions", "Tools-and-the-code-map", "Reading-every-function-body",
                        "Start-here")),
+        ("Read roles", tuple(read_targets)),  # last: it is the longest section
     ]
 
     # the function-register pages are named by the address range they cover, not by a letter: a reader looking for
@@ -246,6 +270,7 @@ def main():
     ranges["Functions-SDK"] = map_functions_doc.SDK
     for k, lo, hi in map_functions_doc.REGIONS:
         ranges[f"Region-{k}"] = (lo, hi)
+    ranges.update(read_ranges)
 
     def label(p):
         if p in ranges:
@@ -253,33 +278,57 @@ def main():
             return f"`0x{lo:x}-0x{hi - 1:x}`"
         return p.replace("-", " ")
 
-    def address_line(p):
-        """An address-range page as a lettered entry, the owner's sidebar layout: `Functions: A. [0x…](Functions-A)`,
-        `Functions SDK: …`. The kind prefix keeps the two range sections (Functions pages, Region pages) from reading
-        as the same list twice."""
-        kind = "Functions" if p.startswith("Functions-") else "Regions"
+    def address_bullet(p):
+        """An address-range page as a bullet, the owner's layout: `A: 0x7000000000-0x70005fffff`, after the section
+        title that says which family it belongs to. The marker is `*` rather than `-`: a blank line between the range
+        block and the plain links would otherwise merge them into one loose list and space every entry out."""
+        m = re.match(r"Read-([A-F]|SDK)(?:-(\d+))?$", p)
+        if m:
+            letter, part = m.group(1), m.group(2)
+            head = f"{letter} part {part}" if part else letter
+            return f"* {head}: [{label(p)}]({p})"
         letter = p.rsplit("-", 1)[1]
-        if letter == "SDK":
-            return f"{kind} SDK: [{label(p)}]({p})"
-        return f"{kind}: {letter}. [{label(p)}]({p})"
+        return f"* {letter}: [{label(p)}]({p})"
 
-    # Sidebar layout (owner's): a section of address ranges opens with its title, then one lettered range per line
-    # (a trailing backslash is a hard line break, so the ranges stay tight under the title); the plain links of that
-    # section follow after a blank line. Other sections are title then bullets.
+    # Sidebar layout (owner's): every section is a title and a bullet list; an address-range bullet leads with the
+    # letter (or the read part) and links the range it covers. Only the range block gets air around it; its entries
+    # stay tight, and the plain links above and below stay tight too.
     side = ["[Home](Home)"]
     for title, ps in sections:
-        addr = [p for p in ps if p.startswith("Functions-") or p.startswith("Region-")]
-        rest = [p for p in ps if p not in addr]
         side.append("")
-        if not addr:
-            side.append(title)
-            side += [f"- [{label(p)}]({p})" for p in rest]
+        side.append(title)
+        if title == "Read roles":
+            # one subsection per region, its parts as a numbered list: the number is the part, the line is its range
+            groups = defaultdict(list)
+            for p in ps:
+                m = re.match(r"Read-([A-F]|SDK)(?:-(\d+))?$", p)
+                if m:
+                    groups[m.group(1)].append((int(m.group(2) or 0), p))
+            for letter in sorted(groups, key=lambda l: (l == "SDK", l)):
+                side.append("")
+                side.append(f"**{letter}**")
+                for n, (_, p) in enumerate(sorted(groups[letter]), 1):
+                    side.append(f"{n}. [{label(p)}]({p})")
             continue
-        side.append(title + "\\")
-        side += [address_line(p) + "\\" for p in addr[:-1]] + [address_line(addr[-1])]
-        if rest:
+        before, range_pages, after, seen = [], [], [], False
+        for p in ps:
+            if re.match(r"(?:Functions|Region|Read)-(?:[A-F]|SDK)(?:-\d+)?$", p):
+                range_pages.append(p)
+                seen = True
+            elif seen:
+                after.append(p)
+            else:
+                before.append(p)
+        # entries are alphabetical within their category (the range block keeps address order: A to F, then SDK)
+        before = sorted(before, key=lambda p: label(p).casefold())
+        after = sorted(after, key=lambda p: label(p).casefold())
+        side += [f"- [{label(p)}]({p})" for p in before]
+        if before and range_pages:
             side.append("")
-            side += [f"- [{label(p)}]({p})" for p in rest]
+        side += [address_bullet(p) for p in range_pages]
+        if range_pages and after:
+            side.append("")
+        side += [f"- [{label(p)}]({p})" for p in after]
     open(f"{a.out}/_Sidebar.md", "w", encoding="utf-8", newline="\n").write("\n".join(side) + "\n")
     # the home page's table of contents: every page, grouped the way the sidebar groups it, from the same lists. The
     # read-role detail pages are generated in bulk and kept off the sidebar; the table lists them too, so no page is
@@ -288,7 +337,7 @@ def main():
     for title, ps in sections:
         toc.append(f"| {title} | " + " \u00b7 ".join(f"[{label(p)}]({p})" for p in ps) + " |")
     listed = {p for _, ps in sections for p in ps}
-    read_rest = sorted(p for p in pages if p not in listed and re.match(r"Read-[A-F]-\d+$", p))
+    read_rest = sorted(p for p in pages if p not in listed and re.match(r"Read-(?:[A-F]|SDK)(?:-\d+)?$", p))
     other = sorted(p for p in pages if p not in listed and p not in read_rest and p != "Home")
     if read_rest:
         toc.append("| Read roles detail | " + " \u00b7 ".join(f"[Read {p[5:]}]({p})" for p in read_rest) + " |")
