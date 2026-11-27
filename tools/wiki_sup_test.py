@@ -38,9 +38,7 @@ ITALIC = [
 for s, want in ITALIC:
     if codeify(s) != want:
         bad.append((s, want, codeify(s)))
-        print(f"FAIL {s!r}
-  want {want!r}
-  got  {codeify(s)!r}")
+        print(f"FAIL {s!r}\n  want {want!r}\n  got  {codeify(s)!r}")
 RAISED += ITALIC
 print(f"{len(RAISED) + len(KEPT) - len(bad)} of {len(RAISED) + len(KEPT)} cases pass")
 sys.exit(1 if bad else 0)
