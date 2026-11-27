@@ -58,6 +58,9 @@ made an early version miss its presses in a real window), with a 12 s limit. Che
 3.5 s), then the scrolled menu; 0 box samples and 0 gap samples in 140 sampled frames. The same black covers a press on a tile that needs
 the network, from `ol_OnlineEntry (1)` until 0.7 s after the Ok: with an external pad driver (Right, then A on Diamond Dynasty)
 the samples were black x26 (start), menu x38, black x21 (the press), menu again, with 0 box and 0 gap samples.
+With the box patched out (`no_net_box`) there is no Ok to press, and after a tile press no Down either. The black then
+ends 0.7 s after the menu is back. Before 2026-11-27 it was only scheduled to end when there was a press, so those
+paths stayed black, input ignored, until the 12 s limit. `tools/nne_plan_test.c` checks the timing without the game.
 Check: `python -I tools/menu_offline_check.py CONTROL.png FIXED.png SCROLLED.png`; a control frame with the panel
 (`MLB_HIDE_OFFLINE_BANNER=0`) against a fixed frame before the scroll and one after it. Measured 2026-11-26: panel
 region std 56.1 with the panel (1896 yellow pixels), 5.9 in the gap, 44.1 after the scroll (hero art, no yellow); the
