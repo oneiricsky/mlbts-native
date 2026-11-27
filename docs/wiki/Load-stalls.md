@@ -1,6 +1,6 @@
 Where the time goes when the game loads something, measured on the 0.2.0 merge with the harness match (AI against AI, Toronto at Los Angeles), on one PC with the PS5 texture dump on an 8 TB hard disk and the repo and game files on an SSD.
 
-There are four separate stalls, not one, and only one is caused by the fork.
+There are four separate stalls, and only one is caused by the fork.
 
 | # | Stall | Size | Cause | State |
 |---|---|---|---|---|

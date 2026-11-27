@@ -1,4 +1,4 @@
-The game's top-level flow is a set of 12 state classes that share one interface, and each topic below is one table. Their function bodies were read by four agents, and each report was then spot-checked against the generated C (20 claims per report), so this page keeps what held up. The detail pages are [Intro states](Intro-states), [Batter up state](Batter-up-state), [Play states](Play-states) and [End states](End-states). Tags: C means the body shows it, I means inferred, H means a guess.
+The game's top-level flow is a set of 12 state classes that share one interface. Their function bodies were read by four agents, and each report was then spot-checked against the generated C (20 claims per report), so this page keeps what held up. The detail pages are [Intro states](Intro-states), [Batter up state](Batter-up-state), [Play states](Play-states) and [End states](End-states). Tags: C means the body shows it, I means inferred, H means a guess.
 
 ## The 12 classes
 

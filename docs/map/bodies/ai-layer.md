@@ -1,15 +1,15 @@
 # AI decision layer, 47×119 method-table family (main 1.0.20)
 
-Read-only analysis of `work/gen` (generated C) and `work/build/game/exefs/main`; no repo file was modified. It covers the 47×119 virtual method-table family in `0x7002164248`–`0x700216f3f0`: 47 implementations of one 119-method interface, their registry, the 119 public trampolines in front of them, and the game code that calls them. Tag meaning: **[C]** a string, symbol or code read proves it; **[I]** a strong pattern in the code suggests it; **[H]** a guess.
+Read-only analysis of `work/gen` (generated C) and `work/build/game/exefs/main`; no repo file was modified. It covers the 47×119 virtual method-table family in `0x7002164248` to `0x700216f3f0`: 47 implementations of one 119-method interface, their registry, the 119 public trampolines in front of them, and the game code that calls them. Tag meaning: **[C]** a string, symbol or code read proves it; **[I]** a strong pattern in the code suggests it; **[H]** a guess.
 
 ## Summary
 
 | # | Finding | Evidence | Tag |
 |---|---|---|---|
-| 1 | The family is one 119-method virtual interface with 47 implementations ("method tables") | all in `0x7002164248`–`0x700216f3f0`; there are no other 119-slot tables in the binary | C |
+| 1 | The family is one 119-method virtual interface with 47 implementations ("method tables") | all in `0x7002164248` to `0x700216f3f0`; there are no other 119-slot tables in the binary | C |
 | 2 | Each table is 119 function pointers (952 bytes) followed by 16 zero bytes of padding; an array of 47 pointers to the tables starts immediately after them | stride `0x3c8`; array at `0x700216f3f0` | C |
-| 3 | Every method also has a public trampoline (119 of them): check the object, resolve its canonical table through the registry, tail-call the method | `0x70000b4ad4`–`0x70000b7cc4`; resolution goes through `0x70000b4b4c` | C |
-| 4 | The base table is a pure default: its 119 entries are tiny stubs (`return;` or `return 0`); the other 45 tables override only what they need | base table `0x7002164248`; stubs at `0x70000b7d34`–`0x70000b8084` | C |
+| 3 | Every method also has a public trampoline (119 of them): check the object, resolve its canonical table through the registry, tail-call the method | `0x70000b4ad4` to `0x70000b7cc4`; resolution goes through `0x70000b4b4c` | C |
+| 4 | The base table is a pure default: its 119 entries are tiny stubs (`return;` or `return 0`); the other 45 tables override only what they need | base table `0x7002164248`; stubs at `0x70000b7d34` to `0x70000b8084` | C |
 | 5 | The overrides are small accessors: state predicates (`return x1 == 8`), float parameter writes (`0.2`, `0.35`, `0.56`, `90.0`), enum ids (`0x2d08`, `0x3600`, `0x36d2`) and "supported" flags returning 1 | no callee over 150 generated lines | C |
 | 6 | So this is the actor/play-control API the AI calls, not the scoring code itself | slot bodies are accessors, never large logic (see row 5) | I |
 | 7 | The role strings are decision-site labels passed to a gate function, not class names: the game has no RTTI (the 16 bytes before each table are zeros) | gate `0x70001c2384`; "ONLINE AI BATTER" at `main_0007.c:14607-14611` | C |
@@ -21,7 +21,7 @@ Read-only analysis of `work/gen` (generated C) and `work/build/game/exefs/main`;
 | Item | Address | Detail | Tag |
 |---|---|---|---|
 | Tables | `0x7002164248` + n×`0x3c8` | n = 0…46, last `0x700216f038`; last block ends `0x700216f3f0` | C |
-| Registry array | `0x700216f3f0`–`0x700216f568` | 47 pointers, module-relative addends. Raw read: `00700216f3f0: 0000000002164248` / `00700216f3f8: 0000000002164610` / `00700216f400: 00000000021649d8` | C |
+| Registry array | `0x700216f3f0` to `0x700216f568` | 47 pointers, module-relative addends. Raw read: `00700216f3f0: 0000000002164248` / `00700216f3f8: 0000000002164610` / `00700216f400: 00000000021649d8` | C |
 | Padding proof | `00700216f5f8: 00000000000b8084` | slot 118 of table 0; then `00700216f600: 0`, `00700216f608: 0`, `00700216f610: 00000000000b7d34` (slot 0 of table 1) | C |
 | Public trampolines | `0x70000b4ad4` … `0x70000b7cc4` | 119 functions, one per slot; each calls `f_70000b4b4c` (`map_find callers 0x70000b4b4c` reports "119 direct callers") | C |
 
@@ -52,7 +52,7 @@ Grouping by the set of slots a table overrides (base table excluded) gives these
 | Family | Tables | Evidence | Tag |
 |---|---|---|---|
 | all 47 tables | 47; 44 distinct contents | all in the one page group `0x7002160000` | C |
-| all-default | 2: `0x7002164248`, `0x7002165cc0` | zero overrides; every entry is a `0x70000b7d34`–`0x70000b8084` stub | C |
+| all-default | 2: `0x7002164248`, `0x7002165cc0` | zero overrides; every entry is a `0x70000b7d34` to `0x70000b8084` stub | C |
 | one-method tweaks | 8: `0x70021658f8`,`6450`,`6818`,`6fa8`,`8290`,`8658`,`9578`,`aff0` | a single override each, e.g. slot 112→`0x70000b8e90` (returns 1), slot 90→`0x70000b8efc` | C |
 | locomotion profiles | 6: `0x7002167370`,`7b00`,`8de8`,`9940`,`b3b8`,`c6a0` | extras `{0,1,4,5,6,8,9,33,43,50,113}`: speed/anim getters plus the slot-73 parameter block | C |
 | steal / runner | 3: `0x700216a498`,`b780`,`f038` (and `ac28`) | extras `{10,15,21,28,56,59,63,66,79,116}`; slot 56/59 are the steal-timing inputs | I |

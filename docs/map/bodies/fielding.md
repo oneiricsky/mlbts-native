@@ -102,9 +102,9 @@ callees; [H] guess.
 
 | Function | Lines | Callees | Code evidence | Role | Tag |
 |---|---|---|---|---|---|
-| 0x70002696a0 | — | — | callers include 0x7000266ad0 (`"SIT 2 STAND"`), 0x700027b420 (`"SIGNAL_TURN"`), 0x70002d6b30 (`"WATCH PLAY TURN"`) | Common "Working ring" state entry: each per-state function names its own state strings and then calls this shared base; 22 callers, all of them such state functions | [C] |
+| 0x70002696a0 | | | callers include 0x7000266ad0 (`"SIT 2 STAND"`), 0x700027b420 (`"SIGNAL_TURN"`), 0x70002d6b30 (`"WATCH PLAY TURN"`) | Common "Working ring" state entry: each per-state function names its own state strings and then calls this shared base; 22 callers, all of them such state functions | [C] |
 | 0x700026b5e0 | 5,520 | 126 (66 indirect) | a state at `[x0,#0x170]` and a second at `[x27,#0x174]` are each compared with 5 and the result short-circuits (`main_0019.c:159-178`), so two co-equal 5-valued enums gate the body; the dispatch is 66 indirect branches, so this is a ring pump, not an enumerated switch [I] | Catch / "working" ring update for a fielder going for the ball | [C] |
-| 0x70002af6c0 | 4,787 | 102 (30 indirect) | — | Fielder reaction / role ring for cover and tag plays: the "cover the base / back up" behaviour of a non-catcher fielder | [I] |
+| 0x70002af6c0 | 4,787 | 102 (30 indirect) | | Fielder reaction / role ring for cover and tag plays: the "cover the base / back up" behaviour of a non-catcher fielder | [I] |
 | 0x70002b8260 | 3,339 | 48 (22 indirect) | its 48 callees are stringless animation helpers | Catcher ring: force-to-stand, force-to-tag-setup and catch-ready states | [I] |
 | 0x70002dd390 | 385 | 13 (4 indirect) | the "watch play" ring: three-iteration loop (`x21` starts at 0, compared with 2 at `main_0023.c:46976`, incremented at 46979); per iteration a virtual call through `vtable+0xa8` with `c->x[1]=ring, c->x[2]=ring+0x190, c->x[3]=0, c->x[4]=0` (`main_0023.c:46983-46990`), so three slots or three players are pumped per update [C loop and dispatch, I for "three slots"] | "Watch play" ring | [C] |
 | 0x700032fd94 | 8,427 | 129 (1 indirect) | not a string-named ring: its strings are the decisions and their tuning prints; read by strings and callee list, not line by line | Runner decision "machine", the fair/foul advance and pickoff return-or-go | [C] strings, [I] role |

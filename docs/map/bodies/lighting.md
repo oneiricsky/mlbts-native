@@ -1,6 +1,6 @@
 # Stadium lighting and animation, MLB The Show 26 (Switch) 1.0.20, `main` base 0x7000000000
 
-Read-only analysis of the stadium lighting and the player animation in `main` 1.0.20 (base 0x7000000000): the lighting block 0x70012c0000-0x7001300000, the `LocoManager` cluster 0x700140e900-0x7001437e00, and `KineCore` just below it at 0x7001340000-0x70013b0000. Addresses are 1.0.20 (`f_<addr>` in `work/gen`), and each fact was read in the generated C at the quoted `file:line` or in the binary's strings and symbols. Tags: [C] = string, symbol or code read; [I] = strong pattern; [H] = guess; where a row's string is [C] but the role is an inference the tag says `C/I`, which the tables write [C/I]. The tables follow the order the code runs in: the manager and its two buffers, one bake step by step, then the functions of each half.
+Read-only analysis of the stadium lighting and the player animation in `main` 1.0.20 (base 0x7000000000): the lighting block 0x70012c0000-0x7001300000, the `LocoManager` cluster 0x700140e900-0x7001437e00, and `KineCore` just below it at 0x7001340000-0x70013b0000. Addresses are 1.0.20 (`f_<addr>` in `work/gen`), and each fact was read in the generated C at the quoted `file:line` or in the binary's strings and symbols. Tags: [C] = string, symbol or code read; [I] = strong pattern; [H] = guess; where a row's string is [C] but the role is an inference the tag says `C/I`, which the tables write [C/I].
 
 ## Summary
 

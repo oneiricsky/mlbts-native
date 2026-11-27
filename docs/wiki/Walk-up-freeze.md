@@ -4,7 +4,7 @@ Before every pitch the game froze for 250 to 380 ms, and for longer at inning ch
 
 The game lights each stadium for the time of day, and the clock moves during a match (about 17.5 s of game time per pitch, more per batter and inning). Each new time needs the lighting worked out again, which the game calls a bake.
 
-After every play the game bakes the next time into a spare lighting buffer, one step per frame for about 50 frames. That is fine. Then, when the next pitch starts, one function asks for the lighting again with a "force" flag set. The force flag makes the game ignore the finished spare buffer and bake the same time again, all in one frame: about 50 full scene passes, each followed by a GPU kick and a wait. That is the freeze.
+After every play the game bakes the next time into a spare lighting buffer, one step per frame for about 50 frames, and that part is fine. The freeze comes when the next pitch starts: one function asks for the lighting again with a "force" flag set. The force flag makes the game ignore the finished spare buffer and bake the same time again, all in one frame: about 50 full scene passes, each followed by a GPU kick and a wait.
 
 ## The code involved (1.0.20 addresses)
 
@@ -50,7 +50,7 @@ A longer run, 40 pitches with four inning changes, had no frame over 100 ms with
 
 ## What the fork's earlier work got wrong
 
-An earlier report here, written before 0.2.0 was merged, called these waits inherent: about 53 to 55 GPU waits per pitch, each about 4.4 ms. We tried to make each wait cheaper and never asked why the game was doing 50 of them. Upstream asked, and found the redundant bake. That is why the fork's working rules now say to ask why the game does the work first.
+An earlier report here, written before 0.2.0 was merged, called these waits inherent: about 53 to 55 GPU waits per pitch, each about 4.4 ms. We tried to make each wait cheaper and never asked why the game was doing 50 of them. Upstream did ask, and found the redundant bake, so the fork's working rules now say to ask why the game does the work first.
 
 ## Not seen
 

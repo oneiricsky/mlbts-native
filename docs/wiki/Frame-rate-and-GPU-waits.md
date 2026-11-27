@@ -27,7 +27,7 @@ Which game screens use whole-vsync timing is not known, and neither is the lowes
 
 Measured on 2026-11-22 with upstream's setup (Ryzen 5 5600X, RTX 3060 Ti, DLAA on). Scenes like the outfield fan cam run at about 78 fps while similar-looking ones run much faster.
 
-The frame is a sum, not an overlap. The game submits a frame (`nvnQueueSubmitCommands`) and right away waits for that frame's GPU work: its main thread polls an event word (`f_70005a1a90`) until the GPU signal arrives, and only then starts the next frame. On a Switch that wait is just the GPU's time. Here it is everything the port does after the submit.
+The parts of a frame run one after another. The game submits a frame (`nvnQueueSubmitCommands`) and right away waits for that frame's GPU work: its main thread polls an event word (`f_70005a1a90`) until the GPU signal arrives, and only then starts the next frame. On a Switch that wait is just the GPU's time. Here it is everything the port does after the submit.
 
 | Step | Ms |
 |---|---|

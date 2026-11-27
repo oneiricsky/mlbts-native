@@ -2,7 +2,7 @@
 
 Read-only pass over game 1.0.20 (`main` base 0x7000000000) using `tools/map_find.py`, `tools/disasm.py`, a
 string-reference scan (`tools/fnxref.py` gives the per-function, code-order version) and the generated C in
-`work/gen/`. The block it covers is summarised first, then each topic has its own table. Nothing in the repo was
+`work/gen/`. Nothing in the repo was
 changed and the game was not run. Every claim is tagged [C] (string, symbol or code read), [I] (strong pattern) or
 [H] (guess); generated-C line numbers are 1.0.20's.
 
@@ -37,12 +37,12 @@ changed and the game was not run. Every claim is tagged [C] (string, symbol or c
 | Local map | f_7000e0fb10 | main_0099.c:83 zeroes its header | Builds a local `std::map` at `x29-0x68`. | [C] |
 | Destroy | f_70000e895c | main_0099.c:21077 | Destroys the map with the recursive tree destructor f_70000e895c at the end. | [C] |
 | Node format | f_70000e8a00 | disasm 0xe8af4 `mov w1, #0x50` | Read from f_70000e8a00: nodes are 0x50 bytes, the key is a 24-byte libc++ `std::string` at node+0x20 and the value is another at node+0x38. | [C] |
-| Pair step 1 | f_70000e8a00 | main_0099.c:619 | `f_70000e8a00(c);` — map[key] node (returns node in x0). The function's pattern is always this pair of steps. | [C] |
-| Pair step 2 | — | main_0099.c:620 | `x0 = x0 + 0x38;` | [C] |
-| Pair step 3 | f_70000e3b50 | main_0099.c:622 | `f_70000e3b50(c);` — assign node+0x38 (the value string). | [C] |
+| Pair step 1 | f_70000e8a00 | main_0099.c:619 | `f_70000e8a00(c);`: map[key] node (returns node in x0). The function's pattern is always this pair of steps. | [C] |
+| Pair step 2 | | main_0099.c:620 | `x0 = x0 + 0x38;` | [C] |
+| Pair step 3 | f_70000e3b50 | main_0099.c:622 | `f_70000e3b50(c);`: assign node+0x38 (the value string). | [C] |
 | Inlining | f_70000e8a00 | 334 sequences | 334 such lookup+assign sequences are inlined. | [C] |
-| String table | — | 388 distinct strings | The string table behind them has 388 distinct strings (164 `stat_*`, 46 `pinpoint_*`, 12 `option_*`, plus `batter_*`, `pitcher_*`, `game_mode`, `play_mode`, `home_score`, …). | [C] |
-| Key building | — | main_0099.c:603-617 | Keys are built in place as libc++ short strings: e.g. `x9 = 0x1c` (28 = 14<<1) then the bytes of "pitches_played". | [C] |
+| String table | | 388 distinct strings | The string table behind them has 388 distinct strings (164 `stat_*`, 46 `pinpoint_*`, 12 `option_*`, plus `batter_*`, `pitcher_*`, `game_mode`, `play_mode`, `home_score`, …). | [C] |
+| Key building | | main_0099.c:603-617 | Keys are built in place as libc++ short strings: e.g. `x9 = 0x1c` (28 = 14<<1) then the bytes of "pitches_played". | [C] |
 
 ### One entry, end to end
 
@@ -53,7 +53,7 @@ changed and the game was not run. Every claim is tagged [C] (string, symbol or c
 | Build key | 0x7001c4ca29 | lines 603-617 | Build the key "pitches_played". | [C] |
 | Lookup | f_70000e8a00 | line 619 | `map[key]` node. | [C] |
 | Assign | f_70000e3b50 | line 622 | Assign the temporary. | [C] |
-| Free | — | line 622 | Free the temporary. | [C] |
+| Free | | line 622 | Free the temporary. | [C] |
 | Next key | `pitches_simmed` | `LD32(sp_ + 0x2a8)`, line 641, key at 0x7001d063f3 | The next key is the same block reading another stack slot. | [C] |
 | Bookkeeping | 0x70005b19d0 | 310 sites in this function | After each assign the code tests the temporary string's SSO flag and, if it owns heap memory, calls `operator delete`; that is why the function is so large: each field costs ~60 generated lines. | [C] |
 
@@ -94,7 +94,7 @@ After the ladder, the chosen name and the numeric mode ids go into their keys:
 | Item | Detail | Evidence | Tag |
 |---|---|---|---|
 | Chosen name | The chosen name is written as `map["game_mode_description"]` (key at 0x7001d1a92d). | main_0099.c:334-349 | [C] |
-| Other keys | Then `game_id` (0x7000e0ff78, 7 chars), `game_mode` (0x7000e100f8) and `play_mode` (0x7000e101e8) as numeric strings. | — | [C] |
+| Other keys | Then `game_id` (0x7000e0ff78, 7 chars), `game_mode` (0x7000e100f8) and `play_mode` (0x7000e101e8) as numeric strings. | | [C] |
 | Duplicate | The same ladder, with the same 19 names, is duplicated inside the end-of-game summary. | main_0096.c:8436-8620 | [C] |
 
 ### Emission
@@ -112,10 +112,10 @@ After the ladder, the chosen name and the numeric mode ids go into their keys:
 
 | Step | Function | Evidence | What it does | Tag |
 |---|---|---|---|---|
-| Shape | f_7000e03ea0 | — | Same shape: local map, ~40 fields, emit, destroy. | [C] |
+| Shape | f_7000e03ea0 | | Same shape: local map, ~40 fields, emit, destroy. | [C] |
 | Event name | f_70000a7fa0 | main_0096.c:4737-4745 | The event name is chosen at the top: `f_70000a7fa0()` false → "EndOfGameSummary" (0x7001c801cd), true → "MblEndOfGameSummary" (0x7001cad3ef). | [C] |
 | Key | f_70000a7fa0 | 0x7001c9a768, line 4749; main_0096.c:8416-8424 | Written as key "event_type" and reused as the section name at the end. | [C] |
-| Shipped name | f_70000a7fa0 | — | Since f_70000a7fa0 is a stub returning 0, the shipped build says "EndOfGameSummary". | [C] |
+| Shipped name | f_70000a7fa0 | | Since f_70000a7fa0 is a stub returning 0, the shipped build says "EndOfGameSummary". | [C] |
 
 ### Values
 
@@ -149,7 +149,7 @@ Each value is `std::to_string(...)` into the map; the row tag covers the whole e
 | Step | Function | Evidence | What it does | Tag |
 |---|---|---|---|---|
 | Only computation | `local_player_win` | key 7240; main_0096.c:7210-7213 | If `game_over` is 0 the answer is 0; otherwise it compares away score with home score to pick the winning team index (`CC_LE` → 0 else 1), walks to that team's record through the global at 0x700227e128, reads the team id at +0x128, and returns 0 only when that id is 4 or 5: the code computes `(id - 6) + 2` and maps the carry to 0. | [C] |
-| 4/5 exclusion | — | not known | The meaning of the 4/5 exclusion is not known; it is not a plain "id ≥ 6" test. | [H] |
+| 4/5 exclusion | | not known | The meaning of the 4/5 exclusion is not known; it is not a plain "id ≥ 6" test. | [H] |
 
 ### Text produced
 
@@ -164,21 +164,21 @@ Each value is `std::to_string(...)` into the map; the row tag covers the whole e
 
 | Field | Value | Evidence | Tag |
 |---|---|---|---|
-| Shape | Same shape as the other two builders | — | [C] |
+| Shape | Same shape as the other two builders | | [C] |
 | Event name | "EndPlateAppearanceSummary" (0x7001d5a250) or "MblEndPlateAppearanceSummary" (0x7001d06387) | main_0097.c:0x7000e079b8/0x7000e079c4 | [C] |
-| Shipped name | The Mbl choice is again behind the f_70000a7fa0 stub, so the shipped build uses the non-Mbl name. | — | [C] |
+| Shipped name | The Mbl choice is again behind the f_70000a7fa0 stub, so the shipped build uses the non-Mbl name. | | [C] |
 
 ### Fields
 
 | Field | Note | Tag |
 |---|---|---|
-| `play_mode`, `half_inning`, `event_type` | — | [C] |
+| `play_mode`, `half_inning`, `event_type` | | [C] |
 | `batter_interface` | enum→label switch; the scan finds "Directional", "Timing", "Zone", "Fixed Zone", "Big Zone", "CPU" and "None" in this function, more cases than in 0x7000e0fb10 | [C] |
-| `checksum_plateappearance_also_pitch` / `_swing` / `_intentionalwalk`, `checksum_plateappearance_inning` | — | [C] |
-| `at_bat_scored`, `runs_awarded`, `plate_appearance_id`, `bases_occupied_pre`/`_post`, `bear_down_pitching` | — | [C] |
-| `used_guess_type_pitch` / `used_guess_zone_pitch`, `guess_type_pitch_result` / `guess_zone_pitch_result`, `pci_*`, `ambush_hitting_*`, `swing_*`, `pitch_*`, `launch_angle`, `hit_distance`, `first_bounce_x/z` | — | [C] |
-| `local_control`/`remote_control`, `active_card_effects`, `leverage_index`, `win_expectancy`/`_post`, `count_*`, `total_swings` | — | [C] |
-| `batter_attribute_*`, `pitcher_attribute_*`, DD item/series ids, `is_online`, `hitting_difficulty`, `pitching_difficulty`, and the shared stat keys | — | [C] |
+| `checksum_plateappearance_also_pitch` / `_swing` / `_intentionalwalk`, `checksum_plateappearance_inning` | | [C] |
+| `at_bat_scored`, `runs_awarded`, `plate_appearance_id`, `bases_occupied_pre`/`_post`, `bear_down_pitching` | | [C] |
+| `used_guess_type_pitch` / `used_guess_zone_pitch`, `guess_type_pitch_result` / `guess_zone_pitch_result`, `pci_*`, `ambush_hitting_*`, `swing_*`, `pitch_*`, `launch_angle`, `hit_distance`, `first_bounce_x/z` | | [C] |
+| `local_control`/`remote_control`, `active_card_effects`, `leverage_index`, `win_expectancy`/`_post`, `count_*`, `total_swings` | | [C] |
+| `batter_attribute_*`, `pitcher_attribute_*`, DD item/series ids, `is_online`, `hitting_difficulty`, `pitching_difficulty`, and the shared stat keys | | [C] |
 
 ### Text produced
 
@@ -190,25 +190,25 @@ Each value is `std::to_string(...)` into the map; the row tag covers the whole e
 | Field | Values | Addresses | Tag |
 |---|---|---|---|
 | `ballpip_type` | "Popup", "Flyball", "Linedrive", "Groundball", "Drag Bunt", "Sacrifice", "Other" | 0x7001c49894, 0x7001d0de37, 0x7001cfb12d, 0x7001cd2fcb, 0x7001c7d1c7, 0x7001d0dfe8 | [C] |
-| `ballhitscored_type` | "Popup Hit", "Flyball Hit", "Linedrive Hit", "Groundball Hit", "Drag Bunt Hit", "Sacrifice Attempt Hit", "Other" | — | [C] |
+| `ballhitscored_type` | "Popup Hit", "Flyball Hit", "Linedrive Hit", "Groundball Hit", "Drag Bunt Hit", "Sacrifice Attempt Hit", "Other" | | [C] |
 
 ## League leaders (0x7000e54c00 / 0x7000e53654)
 
 | Item | Finding | Evidence | Tag |
 |---|---|---|---|
 | Lists | `f_7000e54c00` initialises **92 top-10 lists**: four consecutive loops with `x19 = 0x17` (23) and entries 0x1e0 bytes apart (main_0101.c:5358-5442), at bases this+0x1b0b8, +0x1dd88, +0x208a8 and +0x233c8. | main_0101.c:5358-5442 | [C] |
-| List layout | 4 × 23 = 92; each list is 0x1e0 = 10 × 0x30 bytes. Three gaps are 0x2b20 = 23 × 0x1e0; the first is 0x2cd0. | — | [C] |
+| List layout | 4 × 23 = 92; each list is 0x1e0 = 10 × 0x30 bytes. Three gaps are 0x2b20 = 23 × 0x1e0; the first is 0x2cd0. | | [C] |
 | Group stride | The collector's group stride is 0x2b20. | disasm 0xe5509c `mov w10, #0x2b20` | [C] |
 | Stat type | For each of the 23 stats it picks a stat type from a 23-byte table at 0x7001d96784 (`switch` at main_0101.c:5526; bytes 0x69,0x00,0x04,…,0x64 are jump-table offsets). | main_0101.c:5526 | [C] |
 | Collector call | Then calls f_70006753d0 with count 10 (`c->x[5] = 0xa`, main_0101.c:5660; call at 5666) and copies at most 10 entries back into the list (`cmp w21, #9`, main_0101.c:5673; stride 0x30 at 5808/5918). | main_0101.c:5660/5666/5673 | [C] |
 | Collector | `f_70006753d0` (main_0050.c:8687) is the collector: it accepts up to **1350 players** (`mov w9, #0x546` in main_0050.c:8713, compared with 0x546 at 8776/8842/8906/9039/9086), and sorts them with libc `qsort` (`bl #0x1c20160 ; plt qsort` at 0x67574c; generated main_0050.c:8940). | main_0050.c:8687/8713/8940; 0x67574c | [C] |
-| Groups | The 4 groups are the four leader boards the broadcast layer shows (the game keeps a "moments" top-10 list per stat per group). | — | [I] |
+| Groups | The 4 groups are the four leader boards the broadcast layer shows (the game keeps a "moments" top-10 list per stat per group). | | [I] |
 | Clear and build | `f_7000e53654` clears the object and builds the lists: the call to f_7000e54c00 is at main+0xe53808 and is **already patched in the generated code**: `if (rt_patch_on[1]) { /* hint */ } else { … f_7000e54c00(c); … }` (main_0101.c:4013). | main_0101.c:4013 | [C] |
 | Second build | `f_7000e543a4` (main_0101.c:4781) also calls f_7000e54c00. | main_0101.c:4781 | [C] |
 | Inning-change refresh | `f_7000e5640c` (the inning-change refresh, called only by the PXP driver 0x7000e59c50) calls f_7000e53654 at main_0101.c:7091 and f_7000e543a4 at 7095, i.e. it builds the lists twice. | main_0101.c:7091/7095 | [C] |
 | Patch | That double build is why 0.2.0 patches one call out. `tools/data/patches-1.0.20.txt`, set `walkup_leaders`: "The broadcast 'moments' system keeps top-10 lists for 23 stats in 4 groups (f_7000e54c00: 92 lists, each a pass over up to 1350 players and a qsort_r). Its full refresh f_7000e5640c … and its game-start sequence f_7000e53620 both call f_7000e53654, which clears the whole object and builds the lists (main+0xe53808), and then f_7000e543a4, which builds them again first thing (main+0xe543d0) … The site drops the first build." | `tools/data/patches-1.0.20.txt` | [C] |
 | Site | The site is `site walkup_leaders main e53808 940004fe d503201f` (bl → nop), setting `MLB_WALKUP_LEADERS`, default 1 (`runtime/mlb/cfg.c:37`). | `runtime/mlb/cfg.c:37` | [C] |
-| Unverified | I did not verify the claim that nothing reads the lists in between; the patch text says so, and the generated code shows the dropped call, but the read-range argument is the doc's, not re-derived here. | — | [C] |
+| Unverified | I did not verify the claim that nothing reads the lists in between; the patch text says so, and the generated code shows the dropped call, but the read-range argument is the doc's, not re-derived here. | | [C] |
 
 ## Functions
 

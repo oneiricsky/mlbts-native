@@ -116,7 +116,7 @@ def banded(head, rows, band=0x40000, col=0, unit="functions"):
     out = []
     for lo in sorted(groups):
         rs = groups[lo]
-        out.append(details(f"{lo:#x} – {lo + band - 1:#x} · {len(rs):,} {unit}", table(head, rs)))
+        out.append(details(f"{lo:#x} to {lo + band - 1:#x} · {len(rs):,} {unit}", table(head, rs)))
     return "\n".join(out)
 
 
@@ -389,11 +389,11 @@ def save_schema_page():
                ["Editing", "by class and field name; one edit proven to load in game"],
            ]), "",
            "## The container", "",
-           "**`SAVEINFO` is 168 bytes**: display name at 0 (96, NUL padded), a Unix time at 128, and at 136 a SHA-256 "
+           "`SAVEINFO` is 168 bytes: display name at 0 (96, NUL padded), a Unix time at 128, and at 136 a SHA-256 "
            "over the *compressed* `SAVE_000` bytes. Changing the display name does not touch the hash; changing the "
            "archive does, and `tools/save_edit.py` recompresses and rehashes it (`recompress --write`), verified by "
            "decompressing the result back to the same bytes.", "",
-           "**The archive** is `[DESC]` (this schema) then `[DATA]`: for each class, its name, a u32, then that class's "
+           "The archive is `[DESC]` (this schema) then `[DATA]`: for each class, its name, a u32, then that class's "
            "value bytes. Strings are NUL-terminated. The next section is the decoded schema of each save on this "
            "machine.", ""]
     out += ["## Schema by save", ""]
@@ -455,9 +455,9 @@ def save_schema_page():
             "    --class D_CSTM_SETTINGS --field PROFILE_NAME --string TESTNAME --write\n```", "",
             "On a copy of the settings save it turned `CASUAL` into `TESTNAME` at archive offset `0x1e68`; the "
             "archive re-read identical and the hash verified.", "",
-            "**The edit loads.** Proof, 2026-11-24: the edit was applied to a copy of the whole profile "
+            "The edit loads. Proof, 2026-11-24: the edit was applied to a copy of the whole profile "
             "(`work/scratch/load-test`, the real profile untouched), `mlb.exe --profile work/scratch/load-test` "
-            "started, and the settings preset list showed **TESTNAME** in the row that read `CASUAL`; a memory dump "
+            "started, and the settings preset list showed `TESTNAME` in the row that read `CASUAL`; a memory dump "
             "of that run contains `TESTNAME`. A minimal profile with only the save slot failed, because the game "
             "created a new user id and never read the edited save; the full copy preserved the user id.", "",
             "## Where the values land", "",

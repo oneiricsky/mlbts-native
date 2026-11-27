@@ -4,7 +4,7 @@ At match start the game freezes for about 0.7 s while it draws a map of the fiel
 
 The game builds a 512x512 picture in which each pixel says how far it is from the nearest edge of the field (the msdfgen step, MSDF for short). It then runs an error-correction pass over that picture to look for pixels that are wrong.
 
-Most of the picture is empty space. Before the pass starts, 97.1 percent of the pixels hold plus or minus infinity in all three channels, which only means "inside" or "outside" with no distance. Only 2.9 percent (7,506 pixels) hold real distances. The pass still visits every pixel and computes `(a - 0.5) / (a - b)` for neighbours. With infinite inputs that is infinity minus infinity, which is not a number (a NaN). A NaN fails the "is there an edge here" test, so the answer for every empty pixel is "nothing to fix". The game spends most of the step proving that empty space has no edges.
+Most of the picture is empty space. Before the pass starts, 97.1 percent of the pixels hold plus or minus infinity in all three channels, which only means "inside" or "outside" with no distance. Only 2.9 percent (7,506 pixels) hold real distances. The pass still visits every pixel and computes `(a - 0.5) / (a - b)` for neighbours. With infinite inputs that is infinity minus infinity, which is not a number (a NaN). A NaN fails the "is there an edge here" test, so the answer for every empty pixel is "nothing to fix".
 
 It makes about 67 to 70 million NaN results per match start. About 18.4 million are born as `inf - inf`; the rest are those NaNs carried through later arithmetic. They come from the game's own data, not from a mistake in the port.
 

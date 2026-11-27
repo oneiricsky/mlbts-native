@@ -1,4 +1,4 @@
-This is the research wiki for a personal fork of [Fastball](https://github.com/sam110411/fastball), the native Windows port of MLB The Show 26 for Switch. The fork exists to find out why the game stalls and where the port loses time, and to build tools for that work. The product is what we learn plus working tools, not releases. Fastball itself, its releases and its issues are upstream's.
+This is the research wiki for a personal fork of [Fastball](https://github.com/sam110411/fastball), the native Windows port of MLB The Show 26 for Switch. The fork exists to find out why the game stalls and where the port loses time, and to build tools for that work. What the fork produces is findings and working tools. Fastball itself, its releases and its issues are upstream's.
 
 ### Specs
 
@@ -40,7 +40,7 @@ tracing has labelled 48 more. The continuation
 accepted 234 labels across 612 functions. See the accepted labels by aspect and the evidence rules on
 [Theming progress](Theming-progress).
 
-## Table of Contents
+## Table of contents
 
 {{toc}}
 

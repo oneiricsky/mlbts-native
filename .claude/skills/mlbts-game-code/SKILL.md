@@ -26,7 +26,7 @@ repo, the binary and `docs/`; each claim is tagged [C] confirmed (read from bina
   `work/map/`. A release contains no game code. [C]
 - The owner is not a graphics programmer: explain findings in plain words (see the repo `CLAUDE.md` rules).
 
-## Honest status of this skill (read before trusting it)
+## Status of this skill (read before trusting it)
 
 This is an index-level map, not a read-through of the code. Built from: the repo docs, the port's source (parsed), strings and vtables recovered from the original
 machine code for all 135,060 recompiled functions, and six region notes written by Haiku agents from that index. Every one of the 135,060 functions is classified:
@@ -79,7 +79,7 @@ the read roles in a second pass, and add what you verify to known-functions.md.
 | the wiki's subsystem pages (`Fielding`, `Frontend`, `Audio`, `AI-actor-API`, `Lighting`, `Game-modes`) | you need the on-field rings, the UI/screen layer, the audio path, the 119-slot actor API, the lighting bake or the end-of-game records, read from the bodies and checked against the index |
 | `docs/map/README.md`, `source/*.md`, `binary.md`, `coverage.md` | a function of the port's own source (11,308 listed with callees and purpose), or binary totals and the coverage check |
 
-## Rules that bit people before
+## Rules from past mistakes
 
 | Rule | Why |
 |---|---|

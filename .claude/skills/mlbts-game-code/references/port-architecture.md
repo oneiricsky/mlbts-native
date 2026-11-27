@@ -40,7 +40,7 @@ The port also wraps game functions/globals at known per-version addresses (`rtts
 | Topic | Detail |
 |---|---|
 | Pipeline | the game records NVN command buffers and calls `nvnQueueSubmitCommands`; the front end builds an op stream; an async replay thread (`MLB_REPLAY_ASYNC`, default on) walks it (`vk_exec.c`, draws in `vk_exec_draw.c`); a recorder thread (`vk_rec.c`) makes the Vulkan calls |
-| Frame cost | a sum, not an overlap: after the submit the game polls an event word (`f_70005a1a90`) until the GPU signals, then runs its own code; a heavy frame is game code 5 to 7 ms + replay 7 to 10 ms + GPU tail about 2 ms (see Frame rate and GPU waits) |
+| Frame cost | the parts run one after another: after the submit the game polls an event word (`f_70005a1a90`) until the GPU signals, then runs its own code; a heavy frame is game code 5 to 7 ms + replay 7 to 10 ms + GPU tail about 2 ms (see Frame rate and GPU waits) |
 | Textures | live in guest memory (Tegra block-linear); `vk_texture.c` keeps a VkImage cache keyed by the full descriptor plus a per-address list; several images at one address is aliasing (on console an image is its memory) and causes most "image from another menu" bugs: `alias_copy`, `alias_overwritten`, `slot_resolve`; GPU-compressed textures (BC7 via an R32G32B32A32_UINT render) are caught by `cpu_rewrite_refresh` |
 | Shaders | precompiled Maxwell binaries in the RomFS (456 `.FXBNVN` banks, about 4,505 unique graphics stages) go through the Ryujinx translator (`tools/xlate`) to SPIR-V; caches in `work/build/` |
 | Scene image | one HDR image 1440x810 (B10G11R11) stretched to 1080p in the game's last pass; `resolution.c` changes the table the game reads; DLAA and FSR work on that image |

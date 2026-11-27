@@ -1,6 +1,6 @@
 # PRE_PLAY and IN_PLAY: what the handler bodies do
 
-This page covers the PRE_PLAY and IN_PLAY handler bodies in game 1.0.20, module `main`, from the vtable slots through the sub-state machines and the events that move them. All line numbers are in `work/gen/main/`. Tags say how sure each row is: [C] the body or data I read shows it, [I] inferred from what I read, [H] guess. Names of states and sub-states come from the game's own strings, names of functions and fields are mine, and the first and last tables say what was read in full and what was not.
+This page covers the PRE_PLAY and IN_PLAY handler bodies in game 1.0.20, module `main`, from the vtable slots through the sub-state machines and the events that move them. All line numbers are in `work/gen/main/`. Tags say how sure each row is: [C] the body or data I read shows it, [I] inferred from what I read, [H] guess. Names of states and sub-states come from the game's own strings, and names of functions and fields are mine.
 
 ## Summary
 
@@ -10,7 +10,7 @@ This page covers the PRE_PLAY and IN_PLAY handler bodies in game 1.0.20, module 
 | PRE_PLAY handlers | Every step has up to three handler functions, picked by a second counter at +0x1c. | [C] |
 | IN_PLAY shape | Much smaller: its sub-state sits at +0xc, it has five steps, and incoming events (numbered messages on an event bus) move it from step to step. | [C] |
 | PLAY_OVER hand-off | When IN_PLAY reaches its last sub-state, PLAY_OVER, it asks the state manager every frame for a state change; which game state that request names is not settled. | [C] for the request, [H] for the target |
-| Correction | The earlier note that the 558-line `f_70010939dc` is an IN_PLAY vtable slot was wrong: it is not in the vtable, it is the event handler, and IN_PLAY slot 7 is the 176-line `f_700109448c`. | [C] |
+| Correction | The earlier note that the 558-line `f_70010939dc` is an IN_PLAY vtable slot was wrong. That function is the event handler and sits outside the vtable, and IN_PLAY slot 7 is the 176-line `f_700109448c`. | [C] |
 
 ## What was read
 
@@ -26,7 +26,7 @@ This page covers the PRE_PLAY and IN_PLAY handler bodies in game 1.0.20, module 
 
 | Slot | State | Function | What it does | Lines | Tag |
 |---|---|---|---|---|---|
-| 3 to 10 | both | — | same roles in both states where I could check; the role word "Update" is [I] because I did not read the caller, the evidence being that slot 7 takes a float time step as its argument and subtracts or adds it to a timer | — | [C] for the roles, [I] for "Update" |
+| 3 to 10 | both | | same roles in both states where I could check; the role word "Update" is [I] because I did not read the caller, the evidence being that slot 7 takes a float time step as its argument and subtracts or adds it to a timer | | [C] for the roles, [I] for "Update" |
 | 3 | PRE_PLAY | `f_700106cfc4` | sets up the object: writes -1 to +0x18, fetches an object from `f_7000d81dd8` into +0x20, sets flags at +0x28 to +0x30, stores the address of `f_700106d054` at `[[0x700227e6f8]+0xa298]` | 15376 to 15417 | [C] |
 | 3 | IN_PLAY | `f_70010936ec` | resets: clears +0x14, +0x16, +0x28 and +0x18, zeroes +0xc and logs "state = NULL" if it was nonzero | 7741 to 7763 | [C] |
 | 5 | PRE_PLAY | `f_700106d0c8` | starts the state: sets sub-state 1, zeroes +0x8, logs the name of sub-state 1; if +0x28 is set it writes -1 and posts a request (5, 1, 1) through `[0x700227e688]` vtable +0x60 | 15453 to 15493 | [C] |
@@ -38,7 +38,7 @@ This page covers the PRE_PLAY and IN_PLAY handler bodies in game 1.0.20, module 
 | 9 | PRE_PLAY | `f_700106d1cc` | subscribes the object to 7 event ids | 15530 to 15577 | [C] |
 | 9 | IN_PLAY | `f_7001093804` | subscribes to 22 event ids | 7832 to 7954 | [C] |
 | 10 | PRE_PLAY | `f_700106d438` | the same 7 ids with `f_70005e69d0` (unsubscribe, [I]) | 15705 to 15744 | [C] |
-| 10 | IN_PLAY | `f_700109419c` | not read | — | — |
+| 10 | IN_PLAY | `f_700109419c` | not read | | |
 
 ## Event subscriptions (`f_70005e6830(id, bus, this, mode)`)
 
@@ -63,28 +63,28 @@ This page covers the PRE_PLAY and IN_PLAY handler bodies in game 1.0.20, module 
 
 | No | Name | Handlers | Evidence | Tag |
 |---|---|---|---|---|
-| 0 | ONLINE_SYNC_META | — | moves to 1 when `f_7000a52ee4` returns true (15771 to 15790) | [C] |
+| 0 | ONLINE_SYNC_META | | moves to 1 when `f_7000a52ee4` returns true (15771 to 15790) | [C] |
 | 1 | ONLINE_SYNC_ENTER | `f_700106e610`, `f_700106e7e4`, `f_700106e968` | phases 0, 4 and 6: `f_700106e610` at line 15817, `f_700106e7e4` at 15810, `f_700106e968` at 15826 | [C] |
 | 2 | RAIN_DELAY | `f_700106e968` | next step after 1 (default) | [C] |
-| 3 | CRITICAL_SITUATION_PROMPT | — | set by `f_700106ecac` | [C] |
-| 4 | CRITICAL_SITUATION_SIM | — | set by `f_700106ecac` | [C] |
+| 3 | CRITICAL_SITUATION_PROMPT | | set by `f_700106ecac` | [C] |
+| 4 | CRITICAL_SITUATION_SIM | | set by `f_700106ecac` | [C] |
 | 5 | AUTO_FAST_FORWARD | `f_700106f670` | at 16394 | [I] |
 | 6 | AUTO_SUB | `f_700106f7b0` | set by `f_700106eb90` and `f_700106f0d0`; `f_700106f7b0` at 16489 | [C] |
-| 7 | SETUP_PLAY | — | set inline at about 16475 | [I] |
-| 8 | PROMPT_SUGGESTION | — | set inline at about 16495 | [I] |
-| 9 | PROMPT_PITCHER | — | set inline at about 16525 | [I] |
-| 10 | PROMPT_PINCH_HIT | — | compared at about 16545 | [I] |
-| 11 | PROMPT_PITCHER_HANDEDNESS | — | compared at about 16616 | [I] |
-| 12 | MANDATORY_SUB | — | set inline at 16632 to 16643 | [I] |
+| 7 | SETUP_PLAY | | set inline at about 16475 | [I] |
+| 8 | PROMPT_SUGGESTION | | set inline at about 16495 | [I] |
+| 9 | PROMPT_PITCHER | | set inline at about 16525 | [I] |
+| 10 | PROMPT_PINCH_HIT | | compared at about 16545 | [I] |
+| 11 | PROMPT_PITCHER_HANDEDNESS | | compared at about 16616 | [I] |
+| 12 | MANDATORY_SUB | | set inline at 16632 to 16643 | [I] |
 | 13 | CAREER_INTRO | `f_700106ea54` | at 15890; chosen by `f_700106e968` when `f_70000aaae0` is true | [C] |
 | 14 | CAREER_AUTO_SUB | `f_700106eb90` | chosen by `f_700106e968` otherwise; `f_700106eb90` at 16006 | [C] |
 | 15 | CAREER_EVAL | `f_700106ecac` | set by `f_700106eb90`; `f_700106ecac` at 16029 | [C] |
 | 16 | CAREER_FAST_FORWARD | `f_700106ecac` | set by `f_700106ecac` | [C] |
 | 17 | CAREER_LAST_PLAY | `f_700106d054` | set by the callback `f_700106d054` (lines 15418 to 15452) | [C] |
-| 18 | ONLINE_SYNC_EXIT | — | set inline at about 16660 | [I] |
-| 19 | ASYNC_PRES | — | compared at about 16721 | [I] |
-| 20 | ASYNC_CARD_SELCT (sic) | — | set inline at about 16700 | [I] |
-| 21 | EXIT | — | set inline at 16710 to 16713 and by `f_700106f0d0` | [I] |
+| 18 | ONLINE_SYNC_EXIT | | set inline at about 16660 | [I] |
+| 19 | ASYNC_PRES | | compared at about 16721 | [I] |
+| 20 | ASYNC_CARD_SELCT (sic) | | set inline at about 16700 | [I] |
+| 21 | EXIT | | set inline at 16710 to 16713 and by `f_700106f0d0` | [I] |
 
 ## PRE_PLAY table notes
 
@@ -109,7 +109,7 @@ This page covers the PRE_PLAY and IN_PLAY handler bodies in game 1.0.20, module 
 
 | Offset | Seen | Meaning | Tag |
 |---|---|---|---|
-| all below | — | all [C] as accesses and [H] as meanings | [C] access, [H] meaning |
+| all below | | all [C] as accesses and [H] as meanings | [C] access, [H] meaning |
 | +0x8 | float, `[+0x8] = [+0x8] - dt` every update (15769 to 15772) | time counter | [C] access, [H] meaning |
 | +0x18 | 32-bit sub-state, -1 at start | sub-state | [C] |
 | +0x1c | 0, 3, 4, 6 | phase | [C] values, [I] meaning |
@@ -121,8 +121,8 @@ This page covers the PRE_PLAY and IN_PLAY handler bodies in game 1.0.20, module 
 
 | Value | Name | Where read | Tag |
 |---|---|---|---|
-| +0xc / +0x10 | sub-state / phase (0 or 1) | — | [C] |
-| mapping | the mapping is shown in the event handler: each case loads the value and a name string, then both go to the shared store at line 8109 (`ST64 [x19+12]`) and a call to the logger thunk `f_7001c1fb40` with the string | — | [C] |
+| +0xc / +0x10 | sub-state / phase (0 or 1) | | [C] |
+| mapping | the mapping is shown in the event handler: each case loads the value and a name string, then both go to the shared store at line 8109 (`ST64 [x19+12]`) and a call to the logger thunk `f_7001c1fb40` with the string | | [C] |
 | 0 | NULL | 7752, 7824 | [C] |
 | 1 | IN_PITCH | case at line 8083 | [C] |
 | 2 | IN_PLAY | 8074 | [C] |
@@ -159,7 +159,7 @@ This page covers the PRE_PLAY and IN_PLAY handler bodies in game 1.0.20, module 
 | 0x213 | IN_PLAY (2) or POST_PITCH (3) | reads flag bytes in the event data (x1): +0x29 set goes to POST_PITCH; +0x21, +0x2b, +0x2c or +0x2a set goes to IN_PLAY; otherwise two helper calls (`f_7000d438d4`, `f_70001c8500`) and a field test decide | 7997 to 8025 | [C] for the flags, [I] for the helpers |
 | 0x21f | POST_PITCH (3) | only if `f_70016703f0 -> [+8] -> [+0x30c] == 4` | 8095 to 8100 | [C] |
 | 0x83 | none in the first block | writes a float, no sub-state write seen | 8029 to 8073 | [C] |
-| all other ids | no change | all other ids in the table at 0x7001d9c96a (events 0x20a to 0x21f) | — | [C] |
+| all other ids | no change | all other ids in the table at 0x7001d9c96a (events 0x20a to 0x21f) | | [C] |
 
 ## From pitch to end of play
 
@@ -179,9 +179,9 @@ This page covers the PRE_PLAY and IN_PLAY handler bodies in game 1.0.20, module 
 | Request | Where posted | Reading | Tag |
 |---|---|---|---|
 | (7, 0, 0) | every update of PLAY_OVER, through `[[0x700227e688]]` vtable +0x60 (8894 to 8901) | the hand-off in step 8 | [C] |
-| (5, 1, 1) | PRE_PLAY slot 5, through the same object and slot | — | [C] |
+| (5, 1, 1) | PRE_PLAY slot 5, through the same object and slot | | [C] |
 | first argument | both requests | I take it as the id of the state to go to | [I] |
-| id 7 names PLAY_OVER? | — | [H]: nothing I read maps ids to the 12 state classes | [H] |
+| id 7 names PLAY_OVER? | | [H]: nothing I read maps ids to the 12 state classes | [H] |
 
 ## Event-free path to POST_PITCH
 
