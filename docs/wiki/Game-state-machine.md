@@ -1,6 +1,6 @@
 The game's top-level flow is a set of 12 state classes that share one interface. Their function bodies were read by four agents, and each report was then spot-checked against the generated C (20 claims per report), so this page keeps what held up. The detail pages are [Intro states](Intro-states), [Batter up state](Batter-up-state), [Play states](Play-states) and [End states](End-states). Tags: C means the body shows it, I means inferred, H means a guess.
 
-## The 12 classes
+## State classes
 
 | State | Vtable | Handlers |
 |---|---|---|
@@ -17,7 +17,7 @@ The game's top-level flow is a set of 12 state classes that share one interface.
 | PLAY_OVER | `0x70021e3258` | `0x700109a680` to `0x700109d510`, `0x700109d8c4` |
 | WARM_UP | `0x70021e3538` | `0x70010a2e78` to `0x70010a3908`, `0x70010a3b5c` |
 
-## What each vtable slot does
+## Vtable slots
 
 | Slot | Role | Tag |
 |---|---|---|
@@ -39,7 +39,7 @@ Events subscribed through slots 9 and 10:
 | PRE_PLAY | 7 events |
 | IN_PLAY | 22 events |
 
-## Where the sub-state lives
+## Sub-state fields
 
 | State | Sub-state | Phase or step |
 |---|---|---|
@@ -96,7 +96,7 @@ Its event handler:
 | `0x70010939dc` | IN_PLAY's event handler: a function the state calls, not a vtable slot | event 0x13f moves it to IN_PITCH, and the 0x213 rules were checked |
 | `0x70010939dc` | the same handler also reacts to 0x38, 0x61, 0x20a, 0x5b and 0x21a | those were read but not re-checked |
 
-## PRE_PLAY and GAME_OVER names
+## Sub-state names
 
 | State | Names | Table | Note | Tag |
 |---|---|---|---|---|
@@ -110,7 +110,7 @@ The mercy-rule message depends on a byte at `[[0x700227e6b8]+0x137]`:
 | byte is zero | "Game called due to mercy rule" |
 | byte is nonzero | the "griefing rules" text |
 
-## The end of a play
+## Play endings
 
 | Function | What it does | Tag |
 |---|---|---|
@@ -120,7 +120,7 @@ The mercy-rule message depends on a byte at `[[0x700227e6b8]+0x137]`:
 | INNING_OVER slot 5 | posts event 0x11 | |
 | `f_7000ed562c` | called by INNING_OVER's CHECK_SUB step; it holds the "Do you still want ... to come in? You have 15 seconds" prompt | |
 
-## Not found
+## Open questions
 
 | Question | State |
 |---|---|

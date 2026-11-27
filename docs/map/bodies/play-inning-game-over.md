@@ -1,6 +1,10 @@
 # PLAY_OVER, INNING_OVER and GAME_OVER: what the handler bodies do
 
-Game 1.0.20. PLAY_OVER, INNING_OVER and GAME_OVER are the three game states that end a play, an inning and a game, and all three sit in `work/gen/main/main_0121.c`, so every "main_0121.c:N" below is a line in that file unless another file is named. I read the generated C of the handlers (with the register save and restore stripped) and the data tables they use, and I did not run the game. A claim is tagged [C] when the body I read shows it, [I] when it is a reading of what I saw, [H] when it is a guess.
+PLAY_OVER, INNING_OVER and GAME_OVER are the game states that end a play, an inning and a game (game 1.0.20). All three sit in `work/gen/main/main_0121.c`, so every "main_0121.c:N" below is a line in that file unless another file is named.
+
+I read the generated C of the handlers (with the register save and restore stripped) and the data tables they use, and I did not run the game.
+
+Tags: [C] the body I read shows it, [I] a reading of what I saw, [H] a guess.
 
 ## Conventions
 
@@ -11,7 +15,7 @@ Game 1.0.20. PLAY_OVER, INNING_OVER and GAME_OVER are the three game states that
 | Print helper | `f_7001c1fb40` takes the log string in x0 and looks like a print call | [I] |
 | Newline helper | `f_7001c1fc90(0xa)` follows a print each time, so it looks like a newline | [I] |
 
-## The three classes share one design
+## Shared design
 
 | Part | Evidence | Tag |
 |---|---|---|
@@ -25,7 +29,7 @@ Game 1.0.20. PLAY_OVER, INNING_OVER and GAME_OVER are the three game states that
 | Per-frame time, INNING_OVER | slot 7 keeps it in s8 and adds it in the first part of the function (6604-6720) | |
 | Per-frame time, GAME_OVER | slot 7 passes it to `f_70003aaf00` at 3609 | |
 
-## The sub-state machine and its event
+## Sub-state event
 
 | Part | Detail | Tag |
 |---|---|---|
@@ -35,7 +39,7 @@ Game 1.0.20. PLAY_OVER, INNING_OVER and GAME_OVER are the three game states that
 | How much the receiver reads | how many of the three values the receiver reads is not visible in the posting function | [H] |
 | `f_70005e6b40(event id, data pointer)` | main_0047.c:816, 964 callers; the event posting function | |
 
-## Slot 5 and slot 7 by state
+## Slots by state
 
 | State | Slot 5 | Slot 7 | Slot 3 |
 |---|---|---|---|
@@ -50,7 +54,9 @@ Game 1.0.20. PLAY_OVER, INNING_OVER and GAME_OVER are the three game states that
 | `f_70010920f4` (slot 33) | main_0121.c:6080; the table is at 0x7001d9c960 in the data, 10 entries, main_0121.c:6090-6100 | a second jump table, for sub-states 4 to 13 | [C] |
 | `f_700108f87c` (helper) | main_0121.c:3085-3133, four direct callers in the index | sets the sub-state: it stores its second argument at `[state+0x18]` and its third at `[state+0x1c]` and prints the name from a table | [C] |
 
-## GAME_OVER sub-states, read from the game's own tables
+## GAME_OVER sub-states
+
+Read from the game's own tables.
 
 | Item | Detail | Tag |
 |---|---|---|
@@ -77,7 +83,7 @@ Game 1.0.20. PLAY_OVER, INNING_OVER and GAME_OVER are the three game states that
 | 13 | PRES_MOMENTS_OUTRO | slot 5 (3435) |
 | 14 | FADE_COMPLETE_EXIT_GAME | name only |
 
-## GAME_OVER: how it starts and what picks the first sub-state
+## GAME_OVER start
 
 | Step | Function | Evidence | What it does | Tag |
 |---|---|---|---|---|
@@ -116,7 +122,7 @@ Game 1.0.20. PLAY_OVER, INNING_OVER and GAME_OVER are the three game states that
 | `[state+0x30]` | byte set to 1 at the top of slot 7 (3611) | [C] |
 | `[state+0x38]` | pointer to a 0x28-byte helper object created by `operator new` in slot 3 (3061-3085) | [C] |
 
-## GAME_OVER: almost every presentation ends at POST_GAME_MENU
+## GAME_OVER exit chain
 
 | Function | Line | What it does | Tag |
 |---|---|---|---|
@@ -159,7 +165,7 @@ Game 1.0.20. PLAY_OVER, INNING_OVER and GAME_OVER are the three game states that
 | 9 | CHALLENGE_PLAY | 19027-19028, 19425-19426 |
 | 10 | EXIT | 16853, 16932, 16977, 17020, 17061, 17584, 19314-19315 |
 
-## PLAY_OVER: how a play ends
+## PLAY_OVER handlers
 
 **Slot 5 `f_700109a6a8` (main_0121.c:16052-16276)**
 
@@ -282,7 +288,7 @@ Game 1.0.20. PLAY_OVER, INNING_OVER and GAME_OVER are the three game states that
 | `[state+0x1c]` | phase: 0 to 5 | [C] |
 | `[state+0x20]` | byte flag, cleared in slots 5 and 6 | [C] |
 
-## The loop, as far as the bodies show
+## State loop
 
 | Step | Evidence | Tag |
 |---|---|---|
@@ -301,7 +307,7 @@ Game 1.0.20. PLAY_OVER, INNING_OVER and GAME_OVER are the three game states that
 | What leaves each state | not in these bodies: it lives in whatever calls slots 5 and 7 | |
 | Outs, score and inning tests | outs, score and inning tests, and the choice between INNING_OVER and GAME_OVER, are not in these handlers; they are in the caller or in the play data | [H] |
 
-## Named callees seen
+## Named callees
 
 | Function | Role | Where seen |
 |---|---|---|
@@ -316,7 +322,7 @@ Game 1.0.20. PLAY_OVER, INNING_OVER and GAME_OVER are the three game states that
 | `f_70010906bc` | enter MERCY_RULE and build its message | GAME_OVER |
 | `f_70003aaf00` | per-frame call that takes the time step | INNING_OVER, GAME_OVER |
 
-## Not determined
+## Open questions
 
 | Question | Why open |
 |---|---|

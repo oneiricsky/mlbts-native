@@ -1,6 +1,19 @@
 # MLB The Show 26 (1.0.20), audio map: stream engine, Scream DSP, PXP commentary
 
-Read-only analysis of `main` (base `0x7000000000`), game version 1.0.20: no repo file was edited and the game was not run. Everything below comes from `tools/map_find.py`, the generated C in `work/gen/main/`, `tools/disasm.py` / capstone on the shipped ARM64, the string blobs in `work/build/game/exefs/main`, the `sdk` symbol index, and the existing run log `work/build/logs/mlb.log`. The module carries Sony's **Scream / 989snd** engine statically, with full PS3-era source paths in its strings (`C:/MLBPS3/SRC/TnT_Audio/SCREAM/...`, `.../NCA/trunk/project/external/wws_gattaca/...`), so most SCREAM functions can be named from the file and message they embed. Tags: **[C]** string, symbol, or code read; **[I]** strong pattern; **[H]** guess. Two tools serve this: `tools/fnxref.py` (every string a function references, in code order; this is what ties a log line to the state store that follows it) and `tools/strdump.py` (the C string at a guest address).
+Read-only analysis of `main` (base `0x7000000000`), game version 1.0.20: no repo file was edited and the game was not run.
+
+| Source | Detail |
+|---|---|
+| Index | `tools/map_find.py` and the `sdk` symbol index |
+| Code | the generated C in `work/gen/main/`; `tools/disasm.py` / capstone on the shipped ARM64 |
+| Strings | the string blobs in `work/build/game/exefs/main` |
+| Run log | the existing `work/build/logs/mlb.log` |
+| `tools/fnxref.py` | every string a function references, in code order; this ties a log line to the state store that follows it |
+| `tools/strdump.py` | the C string at a guest address |
+
+The module carries Sony's Scream / 989snd engine statically, with full PS3-era source paths in its strings (`C:/MLBPS3/SRC/TnT_Audio/SCREAM/...`, `.../NCA/trunk/project/external/wws_gattaca/...`), so most SCREAM functions can be named from the file and message they embed.
+
+Tags: [C] string, symbol, or code read; [I] strong pattern; [H] guess.
 
 ## Summary
 
@@ -13,7 +26,7 @@ Read-only analysis of `main` (base `0x7000000000`), game version 1.0.20: no repo
 | Commentary ("PXP") | A per-pack object with a 129-entry vtable of play-event handlers; a handler copies an **event name string** (`PitchGetsAwayResult`, `PickoffStealResult`, `IntentionalWalk`, …) and calls vtable slot 9 (`+0x48`) with it, and the engine resolves that name to a sound in the pack's bank (`Audio\PXP.TBL/.MRK/.CTL/.SKX`), whose playlist picks a line and rejects ones in the recent history. | [C] |
 | Variants | Three full copies of the PXP engine and five `PlayByPlay*` pack names exist, so the game ships several commentary variants ("TV", "MiLB", "PG", "Griffey", "RF_RF") compiled separately. | [C] |
 
-## 1. The one PCM stream to audout
+## Audio output
 
 Where the mix is submitted (confirmed): one thread opens and feeds the audio device.
 
@@ -107,7 +120,7 @@ Slot layout read from the code [C]:
 | `+0x4d8` | cleared on fade | [C] |
 | `+0x4e0` | the stop-pending byte on the manager object | [C] |
 
-## 2. Playlist, music selection and the fade path
+## Music and fades
 
 The music path is the same stream engine plus a bank and a catalogue layer [C].
 
@@ -158,7 +171,9 @@ Fade. `0x70003df4b8` (95 lines, 48 callers) is the shared "manual fade this slot
 | Hard stop sibling | `0x70003ddcb4`, `0x70003ddaf0` | `0x70003ddcb4` (83 lines, 50 callers) issues the stop request; `0x70003ddaf0` drives the state machine directly. | `'%010d, Manual Stop: Issuing stop request to audio system.\n'` | [C] |
 | Conclusion | | A fade is a gain ramp on the 989snd voice followed by the same stop handshake; there is no separate mix-level fade bus. | | [C] |
 
-## 3. The commentary event path (PXP)
+## Commentary events
+
+The PXP path.
 
 Dispatch is by vtable slot, not by string, but the event name is passed as data [C]. The commentary engine is one class with a **129-entry vtable**; each play event is a virtual method.
 
@@ -299,7 +314,7 @@ End to end (each hop is [C] at the address given):
 | `0x7000e4ae90` | kills a commentary conversation | `'[KillConversation: '`, `'[KillConversation: Cleared Event Buffer]'` | [C] |
 | `0x7000fad808` | commentary pack `PlayByPlayMiLB` | string `'PlayByPlayMiLB'` | [C] |
 
-## What is not mapped
+## Open questions
 
 | # | Not mapped | What is known | Next step | Tag |
 |---|---|---|---|---|

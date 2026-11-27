@@ -9,7 +9,7 @@ There are four separate stalls, and only one is caused by the fork.
 | 3 | Match start, once | 1.4 to 1.6 s frame | The game's own CPU work: grass tiles plus a 512x512 distance-field render | MSDF part fixed, in `main`; see [Match-start freeze](Match-start-freeze) |
 | 4 | Match start, a few frames | 140 to 250 ms | A burst of 52 GPU waits, shader loading, a UI event wait | Counted, not investigated |
 
-## Stall 2: cold reads on the replay thread
+## Cold file reads
 
 Reading the 58 colour-map files of a match (the part of each file the loader keeps, 0.67 MiB):
 
@@ -42,18 +42,18 @@ Loads is the slowest single demand load and the total for the first 64. Upload l
 
 To get cold files without admin rights, a script made a folder of hard links in which each of the match's 60 heads points at the data of a head nobody had read.
 
-## Stall 3: the game's own work
+## Match-start CPU work
 
 One frame of 1.4 to 1.6 s at match start. The game logs the cause itself just before it: "grass tiles generated in 172 to 177 ms" and "MSDF took 775 to 968 ms". The replay thread is busy 100 to 154 ms in that frame, uploads 5 to 11 ms, waits under 15 ms, so this is CPU work in the lifted game code on the main thread. A sampler profile showed no single hot function.
 
-## Stall 4: not traced
+## Untraced frames
 
 Frames of 100 ms or more besides the above, from a 230 s run: 245 ms at frame 1127 (a 52-wait GPU burst at the Pitch History and Pitch Meter initialisation), 186 ms at frame 432 during "Loading shader" lines, 171 ms at frame 3 (a first-frame fence wait), 138 ms at frame 1474 (an event wait while the game allocates UI nodes).
 
-## Not proven
+## Open questions
 
 One PC, one hard disk; a different disk changes the size of stall 2, not its cause. "Cold" means not read since boot. The prefetch result is three runs off and two on, one window each. The 555 ms lineup stall's old cause is inferred from the matching shape, not traced.
 
-## Considered and not taken
+## Rejected options
 
 Loading everything or a local pack file (the lead time is seconds and the read is 15 ms), remembering the last teams, swapping the PS5 image in later, forcing a cold cache with a memory hog, PGO for the game's own code (upstream's release must not carry it), caching the MSDF texture (too invasive for about 1 s once per match).

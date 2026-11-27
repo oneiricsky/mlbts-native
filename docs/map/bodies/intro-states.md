@@ -2,7 +2,7 @@
 
 Six of the twelve game-state classes, read from the generated C (`work/gen/main`, game 1.0.20): PRE_GAME, GAME_INTRO, LINEUP_INTRO, WARM_UP, STADIUM_CREATOR and OPTIONS_ON_RAMP. Tags: [C] the body I read shows it, [I] inferred from a pattern, [H] guess. File and line ranges point at the function in the generated C, and in every function `x19` is the state object (`this`).
 
-## How it was read
+## Method
 
 | Scope | Read as | What is complete | What is missing |
 |---|---|---|---|
@@ -10,14 +10,14 @@ Six of the twelve game-state classes, read from the generated C (`work/gen/main`
 | Large functions: slot 7 of LINEUP_INTRO, WARM_UP and OPTIONS_ON_RAMP, slot 5 of OPTIONS_ON_RAMP | skeleton: every call, branch, compare and store, but not every load | the phase logic | arithmetic between the calls |
 | Callee sizes, caller counts and strings | local index | sizes, counts and strings | |
 
-## What each slot does
+## Slots
 
 Checked against all six states.
 
 | Slot | Role | Evidence | What it does | Tag |
 |---|---|---|---|---|
 | 3 | resets the state's own fields to defaults | `main_0104.c:49979-49986`, `main_0121.c:2781-2788`, `main_0105.c:27701-27719` | every slot 3 is a run of stores to the object: STADIUM_CREATOR sets `+0x14` to 2; GAME_INTRO zeroes `+0x18` and `+0x20`; OPTIONS_ON_RAMP sets `+0x20`=5, `+0x30`=4, `+0x38`=1 | [C] |
-| 3 (sub-state log) | logs a sub-state | | the earlier note that slot 3 logs a sub-state is true only for WARM_UP, whose slot 3 also logs "GAME_STATE_WARM_UP: state = %s" | |
+| 3 (sub-state log) | logs a sub-state | | only WARM_UP's slot 3 also logs "GAME_STATE_WARM_UP: state = %s" | |
 | 5 | enter: starts the state | | LINEUP_INTRO, WARM_UP and OPTIONS_ON_RAMP log "ATT_SCREEN: ..." here; GAME_INTRO and LINEUP_INTRO store a start time; WARM_UP posts event 0x218; PRE_GAME sets phase 2 or 3 | [C] |
 | 6 | exit: tears the state down | `main_0120.c:51265-51323`, `main_0121.c:11155-11200`, `main_0121.c:26371-26426` | PRE_GAME zeroes phase and step; LINEUP_INTRO zeroes `+0x20`, `+0x29` and starts a fade ("SPFX - Fade"); WARM_UP calls the function whose string is "Exit" | [C] |
 | 7 | update: runs every frame while the state is active | `main_0120.c:51048-51170` | it is a phase machine that polls (PRE_GAME waits for a byte at `0x70045ad12b` to become 0xff), so it must be called repeatedly; the caller was not read | [I] |
@@ -36,7 +36,7 @@ Each state keeps its position in a phase number on the object; the offset differ
 | WARM_UP | `+0x18` (1 to 8) | `+0x1c` | `+0x22`, `+0x23` bytes, `+0x28` default 8 | [C] `main_0121.c:26437-26848` | |
 | OPTIONS_ON_RAMP | `+0x18` (1 to 10) | `+0x1c` (1, 2) | `+0x20` value 1 to 5, default 5 | [C] `main_0105.c:28344-28832` | |
 
-## Per state
+## States
 
 ### PRE_GAME
 
@@ -130,7 +130,7 @@ Each state keeps its position in a phase number on the object; the offset differ
 | `[0x700227e688]` object | | holds a mode id at +0x20 and +0x28 and answers a virtual call at +0x60 that PRE_GAME and GAME_INTRO use to end | [C] |
 | `[0x700227e688]` object | | the object's identity | [H] |
 
-## Not determined
+## Open questions
 
 | Item | Scope | Why open |
 |---|---|---|

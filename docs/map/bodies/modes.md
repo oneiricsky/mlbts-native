@@ -1,10 +1,10 @@
 # Modes, summaries and records: main 0x7000e00000-0x7000f00000
 
-Read-only pass over game 1.0.20 (`main` base 0x7000000000) using `tools/map_find.py`, `tools/disasm.py`, a
-string-reference scan (`tools/fnxref.py` gives the per-function, code-order version) and the generated C in
-`work/gen/`. Nothing in the repo was
-changed and the game was not run. Every claim is tagged [C] (string, symbol or code read), [I] (strong pattern) or
-[H] (guess); generated-C line numbers are 1.0.20's.
+Read-only pass over game 1.0.20 (`main` base 0x7000000000). Nothing in the repo was changed and the game was not run.
+
+It used `tools/map_find.py`, `tools/disasm.py`, a string-reference scan (`tools/fnxref.py` gives the per-function, code-order version) and the generated C in `work/gen/`. Generated-C line numbers are 1.0.20's.
+
+Tags: [C] string, symbol or code read; [I] strong pattern; [H] guess.
 
 ## Summary
 
@@ -16,9 +16,11 @@ changed and the game was not run. Every claim is tagged [C] (string, symbol or c
 | Sibling builders | 0x7000e03ea0 (end of game) and 0x7000e07820 (end of plate appearance) fill the same kind of map and emit "EndOfGameSummary" / "EndPlateAppearanceSummary". |
 | Leaders | The leader object at 0x7000e54c00 is 92 top-10 lists (4 groups × 23 stats, 10 × 0x30 bytes each) filled by f_70006753d0 from up to 1350 players and a `qsort`; 0.2.0's `walkup_leaders` patch removes the first of two identical builds in f_7000e5640c. |
 
-## The big function (0x7000e0fb10)
+## Telemetry builder
 
-### What it is
+The big function, 0x7000e0fb10.
+
+### Role
 
 | Item | Finding | Tag |
 |---|---|---|
@@ -27,7 +29,7 @@ changed and the game was not run. Every claim is tagged [C] (string, symbol or c
 | Dispatch | There is no call through a mode id and no array of function pointers. | [C] |
 | Switch 1 | The two indirect branches are enum-to-label switches: `switch (c->x[10]) { case 0x7000e13234ull … }` (main_0099.c:3810) on a value at `sp+0x2d0` with four cases, "Directional" (3814), "Timing" (3864), "Zone" (3868), "CPU" (3872) and default "None" (3818), for the `batter_interface` key. | [C] |
 | Switch 2 | main_0099.c:3923 for `pitcher_interface` (six cases "Classic"/"None"/"Meter"/"Pinpoint"/"Pulse"/"Analog", default "CPU"). These are setting labels, not modes. | [C] |
-| Naming | The strings that suggested "game-mode table" are the 19 mode display names in the opening ladder. They are values written into one map key, `game_mode_description`. | [C] |
+| Naming | The 19 mode display names in the opening ladder are values written into one map key, `game_mode_description`. | [C] |
 
 ### Structure
 
@@ -44,7 +46,7 @@ changed and the game was not run. Every claim is tagged [C] (string, symbol or c
 | String table | | 388 distinct strings | The string table behind them has 388 distinct strings (164 `stat_*`, 46 `pinpoint_*`, 12 `option_*`, plus `batter_*`, `pitcher_*`, `game_mode`, `play_mode`, `home_score`, …). | [C] |
 | Key building | | main_0099.c:603-617 | Keys are built in place as libc++ short strings: e.g. `x9 = 0x1c` (28 = 14<<1) then the bytes of "pitches_played". | [C] |
 
-### One entry, end to end
+### One entry
 
 | Step | Function | Evidence | What it does | Tag |
 |---|---|---|---|---|
@@ -57,7 +59,7 @@ changed and the game was not run. Every claim is tagged [C] (string, symbol or c
 | Next key | `pitches_simmed` | `LD32(sp_ + 0x2a8)`, line 641, key at 0x7001d063f3 | The next key is the same block reading another stack slot. | [C] |
 | Bookkeeping | 0x70005b19d0 | 310 sites in this function | After each assign the code tests the temporary string's SSO flag and, if it owns heap memory, calls `operator delete`; that is why the function is so large: each field costs ~60 generated lines. | [C] |
 
-### How a mode is chosen
+### Mode selection
 
 | Step | Function | Evidence | What it does | Tag |
 |---|---|---|---|---|
@@ -108,7 +110,9 @@ After the ladder, the chosen name and the numeric mode ids go into their keys:
 | Mbl names | "MblEndGame*" names (17/15/18) | disasm 0xa7fa0: `mov w0, wzr; ret` | Sit on a branch guarded by f_70000a7fa0, which is a stub returning 0. | [C] |
 | Caller chain | f_7000e0fb10 ← f_7000df7fc0 only | vtable 0x7002295ae0 (5 slots), slot 2; main_0094.c:45205 | f_7000df7fc0 is slot 2 and is called by f_7000df7d2c, which builds telemetry XML including `<TELEMETRY_MAN_ENDED PLAY_MODE="%d" GAME_MODE="%d" GAME_UUID="%s" >`, `AudioInGameInfoExit`, `PresentationInfoExit`, `FrameRateSummary` and then calls f_7000df7fc0. So the map is a telemetry payload. | [I] |
 
-## End-of-game summary (0x7000e03ea0)
+## End-of-game summary
+
+Function 0x7000e03ea0.
 
 | Step | Function | Evidence | What it does | Tag |
 |---|---|---|---|---|
@@ -144,21 +148,23 @@ Each value is `std::to_string(...)` into the map; the row tag covers the whole e
 | `stadium_id` / `training_data` / `training_mode` / `user_overall` / `matchuuid` / `minigame_type` | assorted | 7811 / 7869 / 7932 / 8008 / 8061 / 8134 | [C] |
 | `OnlineQueryView` / `GLOBAL_TC_RANK` / `player` / `rank` | online rank block | 8369-8390 | [C] |
 
-### local_player_win
+### Local player win
 
 | Step | Function | Evidence | What it does | Tag |
 |---|---|---|---|---|
 | Only computation | `local_player_win` | key 7240; main_0096.c:7210-7213 | If `game_over` is 0 the answer is 0; otherwise it compares away score with home score to pick the winning team index (`CC_LE` → 0 else 1), walks to that team's record through the global at 0x700227e128, reads the team id at +0x128, and returns 0 only when that id is 4 or 5: the code computes `(id - 6) + 2` and maps the carry to 0. | [C] |
 | 4/5 exclusion | | not known | The meaning of the 4/5 exclusion is not known; it is not a plain "id ≥ 6" test. | [H] |
 
-### Text produced
+### Output text
 
 | Item | Detail | Tag |
 |---|---|---|
 | Values | All values are decimal strings or ids except the event name and the mode name. | [C] |
 | Prose | There is no sentence building here; the prose lives in the records/awards functions (0x7000e8xxxx). | [C] |
 
-## End-of-plate-appearance summary (0x7000e07820)
+## Plate appearance summary
+
+End of a plate appearance, function 0x7000e07820.
 
 ### Event name
 
@@ -180,7 +186,7 @@ Each value is `std::to_string(...)` into the map; the row tag covers the whole e
 | `local_control`/`remote_control`, `active_card_effects`, `leverage_index`, `win_expectancy`/`_post`, `count_*`, `total_swings` | | [C] |
 | `batter_attribute_*`, `pitcher_attribute_*`, DD item/series ids, `is_online`, `hitting_difficulty`, `pitching_difficulty`, and the shared stat keys | | [C] |
 
-### Text produced
+### Output text
 
 | Field | Key | Source | Tag |
 |---|---|---|---|
@@ -192,7 +198,9 @@ Each value is `std::to_string(...)` into the map; the row tag covers the whole e
 | `ballpip_type` | "Popup", "Flyball", "Linedrive", "Groundball", "Drag Bunt", "Sacrifice", "Other" | 0x7001c49894, 0x7001d0de37, 0x7001cfb12d, 0x7001cd2fcb, 0x7001c7d1c7, 0x7001d0dfe8 | [C] |
 | `ballhitscored_type` | "Popup Hit", "Flyball Hit", "Linedrive Hit", "Groundball Hit", "Drag Bunt Hit", "Sacrifice Attempt Hit", "Other" | | [C] |
 
-## League leaders (0x7000e54c00 / 0x7000e53654)
+## League leaders
+
+Functions 0x7000e54c00 and 0x7000e53654.
 
 | Item | Finding | Evidence | Tag |
 |---|---|---|---|
@@ -267,7 +275,7 @@ string, disassembly or generated-C line that supports the role; the tag applies 
 | 0x7000e8a974 | Single-season/season HR and hits record-holder text | [C] | `'Single-Season HR Record Holder'`, `'Season Hits Record Holder (%d - %d)'` |
 | 0x7000eb72c0 | Base game-state no-op virtual (`ret`); slot 4 of 29 game-state vtables | [C] | disasm `ret`; 5L; 29 vtables in `vtables.jsonl` list it at slot 4; neighbour 0x7000eb72b4 returns "GAME_STATE_STADIUM_CREATOR" |
 
-## What is not mapped
+## Open questions
 
 | Topic | Not mapped |
 |---|---|

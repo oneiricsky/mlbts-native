@@ -2,7 +2,7 @@
 
 Read before reopening something. Sources: `docs/reports/*.md`, `docs/walkup-freeze.md`, `docs/frame-rate.md`, `CLAUDE.md`. Numbers are from one PC (RX 6700 XT / RTX 3060 Ti dev machines).
 
-## Solved
+## Solved problems
 
 | Problem | Cause | Fix | Evidence |
 |---|---|---|---|
@@ -15,7 +15,7 @@ Read before reopening something. Sources: `docs/reports/*.md`, `docs/walkup-free
 | Tutorials back every start; hub upgrades lost; custom cameras reset | online-only profile; autosave not triggered by hub purchases; cache storage never created | `tutorials.c`, `rtts_autosave.c`, `cache_storage.c` | per-file headers |
 | Face buttons wrong in menus vs play | one icon cell serves both; Switch build maps by place | `MLB_PAD_MAP=auto` switched by the game's UI screen log lines | hid.c |
 
-## Open
+## Open problems
 
 | Problem | State | Settles it |
 |---|---|---|

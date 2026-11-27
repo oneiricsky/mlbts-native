@@ -214,12 +214,12 @@ def register(rows, letter):
            f"quote a string, a file name or a library. The other {len(rs) - len(crows):,} are known only by their "
            f"shape or their callers; they are counted at the foot of this page and per 256 KB window on "
            f"[Function census](Function-census).", ""]
-    out += ["## Named and string-bearing functions", "",
+    out += ["## Evidenced functions", "",
             f"{len(crows):,} functions, in address order, folded in 256 KB bands.", "",
             banded(["Address", "Bytes", "Callers", "Role", "Basis"],
                    [[r["addr"], f"{r['span']:#x}", r["callers"], known_code(r["role"], r.get("strings")),
                      r["basis"]] for r in crows]), ""]
-    out += ["## Functions by shape", "",
+    out += ["## Shapes", "",
             "These functions have no string and no symbol. The shape is read from the generated C: a getter loads a "
             "field and returns it, a forwarder tail-calls another function, an empty stub returns at once. They are "
             "counted here; listing them one by one would run to thousands of rows.", "",
@@ -271,16 +271,18 @@ def overview(rows, summary):
         "A function's name *is* its address: `f_70012c54ec` is `main + 0x12c54ec`. Addresses here are 1.0.20; 1.0.15 "
         "code sits 0x20 to 0x1500 lower (`tools/addrmap.py` maps one to the other).",
         "",
-        "## How much is known", "", "\n".join(mt), "",
+        "## Coverage", "", "\n".join(mt), "",
         *TAG_TABLE,
         "",
-        "## What each function got", "", "\n".join(kt), "",
+        "## Function kinds", "", "\n".join(kt), "",
         "An import thunk is nine lines of generated C that load a pointer from the import table and jump through it. "
         "Its row names the function it reaches, so the 724 thunks of `main` and the 7,961 of `sdk` are named exactly.",
         "",
         f"Every function with no string, symbol or shape was then read from its own code: the generated C was "
         f"normalised to its meaningful operations and read in batches ({sum(1 for r in rows if r.get('read')):,} "
-        f"functions). Those rows are on [Read roles](Read-roles); their tag says which evidence stands behind the "
+        f"functions).",
+        "",
+        f"Those rows are on [Read roles](Read-roles); their tag says which evidence stands behind the "
         f"role: C a string, symbol or import, I the shape of the code or the call graph, H the neighbours. The audit "
         f"on that page says how often they were right.",
         "",
@@ -291,19 +293,19 @@ def overview(rows, summary):
         "903 field entries from the saves on this machine). The names come from the save files, so searching one in "
         "the code finds the code that reads or writes it.",
         "",
-        "## What the bodies look like", "", "\n".join(st), "",
-        "## How to look one up", "",
+        "## Body shapes", "", "\n".join(st), "",
+        "## Lookup", "",
         "```\npython -I tools/map_find.py fn 0x700108b628         # size, callers, callees, strings, vtable slot\n"
         "python -I tools/map_find.py str \"MSDF took\"          # which function quotes a message\n"
         "python -I tools/map_find.py callers 0x70005a1a90     # who calls it\n"
         "python -I tools/map_find.py role 0x700108b628        # this page's row (tools/map_find.py)\n```",
         "",
-        "## What is not known", "",
+        "## Open questions", "",
         f"{sum(1 for r in main if r['tag'] == 'H'):,} of the {len(main):,} `main` functions have no string and no "
         "simple shape. Their row says who calls them or which vtable slot they fill, and nothing about what they "
         "compute. Reading their bodies is the remaining work; the region notes list the biggest unknowns.",
         "",
-        "## How to rebuild", "",
+        "## Rebuild", "",
         "```\npython -I tools/map_all.py        # index every function, its strings and its vtable slots\n"
         "python -I tools/map_roles.py     # names thunks, classifies every function, writes roles.jsonl\n"
         "python -I tools/wiki_build.py    # writes the wiki pages, including these\n```",
@@ -331,7 +333,8 @@ def read_pages(rows, limit=3500):
                         "These roles are unverified. They were written by a model reading each function's "
                         "normalised body in batches. In a 10-function audit, 6 were right, 1 was incomplete and 3 "
                         "carried a wrong specific detail (a count, a polarity or an offset, sometimes borrowed from "
-                        "a callee). The tag records what the reader relied on (C a string or a named callee, I the "
+                        "a callee).", "",
+                        "The tag records what the reader relied on (C a string or a named callee, I the "
                         "operations, H a guess), not whether the row was checked. Read the body before relying on a "
                         "detail: `python -I tools/map_find.py fn 0xADDR`.", ""]
     groups = defaultdict(list)
@@ -388,7 +391,7 @@ def save_schema_page():
                ["Container", "zlib stream; `SAVEINFO` 168 B, SHA-256 over the compressed payload"],
                ["Editing", "by class and field name; one edit proven to load in game"],
            ]), "",
-           "## The container", "",
+           "## Container", "",
            "`SAVEINFO` is 168 bytes: display name at 0 (96, NUL padded), a Unix time at 128, and at 136 a SHA-256 "
            "over the *compressed* `SAVE_000` bytes. Changing the display name does not touch the hash; changing the "
            "archive does, and `tools/save_edit.py` recompresses and rehashes it (`recompress --write`), verified by "
@@ -416,10 +419,11 @@ def save_schema_page():
                                      [[f["name"], f["desc"][1], f"{f['desc'][2]}x{f['desc'][3]}",
                                        f.get("value_offset", "?")] for f in c["fields"]])))
         out.append("")
-    out += ["## The five u16", "",
+    out += ["## Field descriptor", "",
             "A field descriptor is `[property id, type, dim1, dim2, 0]`. Each registration builder writes a 32-byte "
             "record per field, `[name][0][attr0][attr1]`, with `type = attr0.u16[2]`, `dim1 = attr0.u16[3]` and "
-            "`dim2 = attr1.u16[0]`. Reconstructing the builders from their own code and comparing with the saves "
+            "`dim2 = attr1.u16[0]`.", "",
+            "Reconstructing the builders from their own code and comparing with the saves "
             "gives 18 exact matches in 19 field comparisons across three classes; the one non-match is a name that "
             "is not a save field.", "",
             table(["Field", "Builder attrs", "Predicted", "Save"], [
@@ -440,7 +444,7 @@ def save_schema_page():
                 ["`D_ORTCOUNTERS`", "238×1 = 238", "238"],
             ]), "",
             "The `Values` column in the class tables is that prediction.", "",
-            "## Writer side", "",
+            "## Writer", "",
             "`0x7000df270c` writes `[DESC]`, `0x7000df27d4` writes `[DATA]`, and the per-class writer (for the "
             "settings classes, `0x70018286f0`) emits one entry per property through `0x7000df1e90`, which builds a "
             "type word as `4 | (type << 5)` and passes a 16-byte packet to the archive writer `0x7000df1d30`.", "",
@@ -458,9 +462,10 @@ def save_schema_page():
             "The edit loads. Proof, 2026-11-24: the edit was applied to a copy of the whole profile "
             "(`work/scratch/load-test`, the real profile untouched), `mlb.exe --profile work/scratch/load-test` "
             "started, and the settings preset list showed `TESTNAME` in the row that read `CASUAL`; a memory dump "
-            "of that run contains `TESTNAME`. A minimal profile with only the save slot failed, because the game "
+            "of that run contains `TESTNAME`.", "",
+            "A minimal profile with only the save slot failed, because the game "
             "created a new user id and never read the edited save; the full copy preserved the user id.", "",
-            "## Where the values land", "",
+            "## Value destinations", "",
             "The save classes are not memory structs: the loader dispatches fields into engine structures. Measured "
             "by changing a field and diffing two memory dumps (`D_CSTM_SETTINGS`, 2026-11-24):", "",
             table(["Field", "Destination", "Evidence"], [
@@ -521,14 +526,14 @@ def sdk_page(rows):
             "exact name for each (`python -I tools/map_find.py role 0xADDR`).", "",
             table(["Group", "Thunks", "Examples"],
                   [[g, n, "; ".join(examples[g])] for g, n in groups.most_common()]), ""]
-    out += ["## Named by namespace", "",
+    out += ["## Namespaces", "",
             "Every named SDK function is in the local index with its demangled symbol (`tools/map_find.py name nvnQueue`). "
             "The table groups them by namespace, which is what the port's own code uses to see what the game asks of "
             "the OS.", "",
             table(["Namespace", "Functions", "First", "Last"],
                   [[k, v, hex(nrange[k][0]), hex(nrange[k][1])] for k, v in ns.most_common()]), ""]
     sh = Counter(r["shape"] for r in sdk if r["kind"] == "boilerplate")
-    out += ["## Unnamed functions by shape", "",
+    out += ["## Unnamed shapes", "",
             table(["Shape", "Count", "Meaning"], [[s, n, SHAPES.get(s, s)] for s, n in sh.most_common()]), "",
             "The windows and counts for the whole module are on [Function census](Function-census)."]
     return "\n".join(out)
@@ -556,7 +561,7 @@ def fields_page(limit=80):
            "The vtable-to-class link is provisional: the index finds tables of function pointers, and some are "
            "dispatch tables for several classes, so a group whose slots read unrelated things is probably not a "
            "class. Very large groups (150+ fields) and groups with no clear shape are left out.", "",
-           "## Classes on this page", "",
+           "## Class list", "",
            table(["Vtable", "Slots", "Fields"],
                  [[c["vtable"], c["size"], len(c["fields"])] for c in classes[:limit]]), "",
            "The field table of each class follows.", ""]

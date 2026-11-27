@@ -4,7 +4,7 @@ Address = guest = host address; module offset = address - base (`main` base `0x7
 Tags: [C] confirmed by a doc measurement, code, symbol or string; [I] inferred. "Source" says where it was established. Look any of them up with
 `python -I tools/map_find.py fn <addr>`. 1.0.15 addresses are lower by 0x20..0x1500 for code (`tools/addrmap.py` maps them).
 
-## Program entry, memory, logging
+## Entry, memory, logging
 
 | Address | What | Tag | Source |
 |---|---|---|---|
@@ -17,7 +17,7 @@ Tags: [C] confirmed by a doc measurement, code, symbol or string; [I] inferred. 
 | `0x7000589b08` | crash/"dying" message writer (`MLB_DYING_MSG_START_V2`, "Built: %s %s") | C | string |
 | `0x7001ad9090` (1.0.15 `0x7001ad7bd0`) | engine print/log function; trace it with `MLB_FNTRACE` to read the game's messages | C | AGENTS.md |
 
-## Graphics functions
+## Graphics
 
 | Address | What | Tag | Source |
 |---|---|---|---|
@@ -31,8 +31,21 @@ Tags: [C] confirmed by a doc measurement, code, symbol or string; [I] inferred. 
 
 ## Game flow
 
-The game's top-level state machine is 12 state classes with the same interface [C, vtables]: each a 32-36 slot vtable overriding a shared base
-(default stubs from `0x7000eb72c0`). Slots, read from the bodies and spot-checked (see Game-state-machine on the wiki and `docs/map/bodies/`): 0 and 1 destructor thunks; 2 returns the state name; 3 resets the state's fields; 5 enter (runs once: logs, stores a start time, requests lighting in BATTER_UP, starts the lighting bake in PLAY_OVER); 6 exit; 7 update every frame (adds the frame time into `[this+0x8]`, then a phase machine); 9 and 10 subscribe and unsubscribe to events on the bus at `[0x7002298000+0x428]`. Nothing calls slots 5 to 7 directly, so enter, exit and update are readings of the bodies [I]. Every phase change posts event 0x13d through `f_7000e23cec`.
+The game's top-level state machine is 12 state classes with the same interface [C, vtables]. Each has a 32 to 36 slot vtable overriding a shared base (default stubs from `0x7000eb72c0`).
+
+The slots, read from the bodies and spot-checked (see Game-state-machine on the wiki and `docs/map/bodies/`):
+
+| Slot | Role |
+|---|---|
+| 0, 1 | destructor thunks |
+| 2 | returns the state name |
+| 3 | resets the state's fields |
+| 5 | enter: runs once, logs and stores a start time; requests lighting in BATTER_UP, starts the lighting bake in PLAY_OVER |
+| 6 | exit |
+| 7 | update, every frame: adds the frame time into `[this+0x8]`, then runs a phase machine |
+| 9, 10 | subscribe and unsubscribe to events on the bus at `[0x7002298000+0x428]` |
+
+Nothing calls slots 5 to 7 directly, so enter, exit and update are readings of the bodies [I]. Every phase change posts event 0x13d through `f_7000e23cec`.
 
 | State | Vtable | Handlers |
 |---|---|---|
@@ -49,10 +62,17 @@ The game's top-level state machine is 12 state classes with the same interface [
 | PLAY_OVER | `0x70021e3258` (+`0x70021e3378`) | `0x700109a680`-`0x700109d510`, `0x700109d8c4` |
 | WARM_UP | `0x70021e3538` | `0x70010a2e78`-`0x70010a3908`, `0x70010a3b5c` |
 
-Sub-states named in strings [C]: BATTER_UP: NONE, WALK_UP, WALK_UP_PRES, PLAYERS_SETUP, SELECT_PITCH, MANAGER_MODE, LAUNCH_PITCH, IN_PITCH.
-IN_PLAY: NULL, IN_PLAY, IN_PITCH, POST_PITCH, ANIM_SEQUENCE, PLAY_OVER. PLAY_OVER: POST_PLAY, WAIT, EXIT, PRES_LOAD, PRES_GAMEOVER, CHALLENGE_PLAY.
-INNING_OVER: NORMAL, PRESENTATION, START_INNING_PRES, CHECK_SUB. GAME_OVER: NONE, MERCY_RULE, POST_GAME_MENU, PRES_GROUP_A, PRES_GROUP_B, PRES_REEL,
-PRES_COPYRIGHT, REPLAY_VAULT, WAIT_FOR_MESSAGE. Home Run Derby has its own `HRDERBY_STATE_IN_PLAY` near `0x7001300000`.
+Sub-states named in strings [C]:
+
+| State | Sub-states |
+|---|---|
+| BATTER_UP | NONE, WALK_UP, WALK_UP_PRES, PLAYERS_SETUP, SELECT_PITCH, MANAGER_MODE, LAUNCH_PITCH, IN_PITCH |
+| IN_PLAY | NULL, IN_PLAY, IN_PITCH, POST_PITCH, ANIM_SEQUENCE, PLAY_OVER |
+| PLAY_OVER | POST_PLAY, WAIT, EXIT, PRES_LOAD, PRES_GAMEOVER, CHALLENGE_PLAY |
+| INNING_OVER | NORMAL, PRESENTATION, START_INNING_PRES, CHECK_SUB |
+| GAME_OVER | NONE, MERCY_RULE, POST_GAME_MENU, PRES_GROUP_A, PRES_GROUP_B, PRES_REEL, PRES_COPYRIGHT, REPLAY_VAULT, WAIT_FOR_MESSAGE |
+
+Home Run Derby has its own `HRDERBY_STATE_IN_PLAY` near `0x7001300000`.
 
 | Address | What | Tag | Source |
 |---|---|---|---|
@@ -63,23 +83,45 @@ PRES_COPYRIGHT, REPLAY_VAULT, WAIT_FOR_MESSAGE. Home Run Derby has its own `HRDE
 | `main+0xd4f6e0` | copies the averaging byte right before the frame timer runs | C | framerate.c |
 | `0x700000b140` | per-frame call that runs the lighting bake step (`0x70012e0150`) | C | walkup-freeze.md |
 
-### Verified by reading the body of `0x700108b628` (BATTER_UP slot 5) [C]
+### BATTER_UP enter handler
 
-`x19` = the BATTER_UP state object. `[x19+0x18]` holds the sub-state number: the handler compares it with 3 (then sets 4 and runs a small call) and with 1 (then calls
-`0x700108c030`, the WALK_UP_PRES handler); otherwise it calls `0x700108cd24` (PLAYERS_SETUP); an earlier path calls `0x700108b500` (WALK_UP). So slot 5 dispatches to the
-sub-state handlers listed above. Fields seen: `[x19+0x20]` a 32-bit value re-read each frame (change detection), `[x19+0x24]` a flag byte, `[x19+0x26]`, `[x19+0x28]`, `[x19+0x31]`, `[x19+0x32]` bytes.
-It asks `0x70012c54ec` for the lighting manager then calls `0x70012d0fcc`; the generated code carries both the original `x1 = 1` (force) and the patched path under `rt_patch_on[0]`,
-and a second `rt_patch_on[0]` block clears bit 9 of `[manager+0xd3c]` (patch site 3), matching `docs/walkup-freeze.md`. It also makes virtual calls through
-objects (`[obj]->[+0x80]`, `[+0x60]`, `[+0x90]`, `[+0x1b0]`) that were not resolved. Everything else in the function (what the 70+ callees do) is unread.
+Verified by reading the body of `0x700108b628`, BATTER_UP slot 5 [C].
 
-## Stadium lighting and props (the walk-up freeze)
+`x19` is the BATTER_UP state object, and `[x19+0x18]` holds the sub-state number. Slot 5 dispatches on it to the sub-state handlers listed above:
+
+| Condition | What runs |
+|---|---|
+| an earlier path | `0x700108b500` (WALK_UP) |
+| value is 3 | sets 4 and runs a small call |
+| value is 1 | `0x700108c030`, the WALK_UP_PRES handler |
+| otherwise | `0x700108cd24` (PLAYERS_SETUP) |
+
+Fields seen:
+
+| Field | Type or use |
+|---|---|
+| `[x19+0x20]` | 32-bit value re-read each frame (change detection) |
+| `[x19+0x24]` | flag byte |
+| `[x19+0x26]`, `[x19+0x28]`, `[x19+0x31]`, `[x19+0x32]` | bytes |
+
+The lighting request:
+
+1. It asks `0x70012c54ec` for the lighting manager, then calls `0x70012d0fcc`.
+2. The generated code carries both the original `x1 = 1` (force) and the patched path under `rt_patch_on[0]`.
+3. A second `rt_patch_on[0]` block clears bit 9 of `[manager+0xd3c]` (patch site 3), matching `docs/walkup-freeze.md`.
+
+Not read: the virtual calls through objects (`[obj]->[+0x80]`, `[+0x60]`, `[+0x90]`, `[+0x1b0]`) were not resolved, and what the 70+ callees do is unread.
+
+## Stadium lighting
+
+Lighting and props, the code behind the walk-up freeze.
 
 | Address | What | Tag |
 |---|---|---|
 | `0x70012c54ec` | returns the lighting manager (object 0x101e40 bytes). Fields: on-screen buffer `+0xd38`, bake flag word `+0xd3c`, dirty byte `+0xc2d`, times at `+0x101400 + 4*buffer` | C |
 | `0x70012d0fcc(manager, force)` | request lighting for the current time | C |
 | `0x70012d1e04` | lighting switch/bake decision: quick-switch to a finished spare buffer, else start a bake | C |
-| `0x70012d20a0` | start the background bake (flags `0xec01`, one step a frame, ~50 frames) | C |
+| `0x70012d20a0` | start the background bake (flags `0xec01`). One step a frame for about 50 frames is not confirmed: the bit-9 path loops all stages with a GPU wait, and the 1.0.20 stage code does not reconcile with 50 frames (see [Lighting](Lighting)) | C |
 | `0x70012e0150` | runs a bake step; flag bit 9 (0x200) makes one call loop all ~50 steps with a GPU wait each | C |
 | `0x700128d2a0` | indirect-light probes; refresh when the lighting-version counter (`0x7002ca9338`) changes | C |
 | `0x70019fb800`, `0x70019fb880`, `0x70019fbbb0` | turn stadium props off/on at 19.5 h (17.0 h in months 0 and 12); table at `0x70021edca0` | C |
@@ -87,7 +129,7 @@ objects (`[obj]->[+0x80]`, `[+0x60]`, `[+0x90]`, `[+0x1b0]`) that were not resol
 Patch `walkup_light`: 6 sites (`main+0x108bbb4`, `0x12d1f74`, `0x12d1f7c`, `0x12d1f84`, `0x12d1f98`, `0x108bbc0`; see `tools/data/patches-1.0.20.txt`). Result: frames over
 100 ms in 30 pitches 27 -> 0.
 
-## Broadcast "moments" and league leaders
+## Broadcast leaders
 
 | Address | What | Tag |
 |---|---|---|
@@ -97,7 +139,7 @@ Patch `walkup_light`: 6 sites (`main+0x108bbb4`, `0x12d1f74`, `0x12d1f7c`, `0x12
 | `0x7000e53654` | clears the object, builds lists (`main+0xe53808` calls `0x7000e54c00`); the patch `walkup_leaders` nops that first build | C |
 | `0x7000e543a4`, `0x7000e54080`, `0x7000e545f0` | build lists again first thing / write other fields | C |
 
-## Input, saves, tutorials, storage
+## Input and storage
 
 | Address | What | Tag | Source |
 |---|---|---|---|
@@ -117,19 +159,38 @@ Patch `walkup_light`: 6 sites (`main+0x108bbb4`, `0x12d1f74`, `0x12d1f7c`, `0x12
 | `main+0x152e844` | game modes menu asks the eShop for consumables (refused offline) | C | services.c |
 | `main+0xaa201c` | time-zone rule request site | C | time.c |
 
-## Frame timing (module offsets; add `0x7000000000`)
+## Frame timing
+
+Module offsets; add `0x7000000000`.
 
 `main+0x58a9f0` frame timer; `+0x22ad028` vsync count (1 = 60 fps); `+0x22c90c4` time step; `+0x22c9078` averaging flag; `+0x2cb6150` timer carry.
 1.0.15 offsets are `0x1000`-`0x20` lower (`k_addrs[]` in `framerate.c` has both).
 
-## Dev-harness hooks
+## Harness hooks
 
-Match-settings struct pointer at `0x7004651350` (`main+0x4651350`); team ids written at home `+0x3f`, `+0x47`, `+0x59`, away `+0x40`, `+0x52`, `+0x54`, `+0x56`
-(all copies must be written; writing one gave the wrong uniforms). Team ids: 0 BAL, 1 BOS, 2 NYY, 3 TB, 4 TOR, 5 CWS, 6 CLE, 7 DET, 8 KC, 9 MIN, 10 HOU, 11 LAA,
-12 ATH (unconfirmed), 13 SEA, 14 TEX, 15 ATL, 16 MIA, 17 NYM, 18 PHI, 19 WSH, 20 CHC, 21 CIN, 22 MIL, 23 PIT, 24 STL, 25 AZ, 26 COL, 27 LAD, 28 SD, 29 SF.
-Boot options (`BOOT/CONFIG_MAIN_USER.TXT`): `AIvAI` + `GameOnly` = AI-vs-AI match with no input; option names are matched by a 32-bit hash (see game-binary.md).
+The match-settings struct pointer is at `0x7004651350` (`main+0x4651350`). All copies of a team id must be written; writing one gave the wrong uniforms.
 
-## Fielding, catching and running (body reads, 2026-11-23)
+| Side | Offsets |
+|---|---|
+| Home | `+0x3f`, `+0x47`, `+0x59` |
+| Away | `+0x40`, `+0x52`, `+0x54`, `+0x56` |
+
+Team ids:
+
+| Ids | Teams |
+|---|---|
+| 0 to 4 | 0 BAL, 1 BOS, 2 NYY, 3 TB, 4 TOR |
+| 5 to 9 | 5 CWS, 6 CLE, 7 DET, 8 KC, 9 MIN |
+| 10 to 14 | 10 HOU, 11 LAA, 12 ATH (unconfirmed), 13 SEA, 14 TEX |
+| 15 to 19 | 15 ATL, 16 MIA, 17 NYM, 18 PHI, 19 WSH |
+| 20 to 24 | 20 CHC, 21 CIN, 22 MIL, 23 PIT, 24 STL |
+| 25 to 29 | 25 AZ, 26 COL, 27 LAD, 28 SD, 29 SF |
+
+Boot options (`BOOT/CONFIG_MAIN_USER.TXT`): `AIvAI` + `GameOnly` gives an AI-vs-AI match with no input. Option names are matched by a 32-bit hash (see game-binary.md).
+
+## Fielding and running
+
+From body reads, 2026-11-23.
 
 Read from the generated C; the detail is on [Fielding](Fielding). The block is built on a named "ring" per
 character: a state function names its state in strings, then calls the shared ring entry.
@@ -148,7 +209,7 @@ character: a state function names its state in strings, then calls the shared ri
 | `0x7000344134` | runner leadoff ring, 12 named states | C | "Runner Leadoff Ring" |
 | `0x70002d0a40` | umpire safe/out call ring | C | "SAFE TURN", "OUT CALL" |
 
-## Front-end, Road To The Show and the database layer
+## Front end and database
 
 Detail on [Frontend](Frontend). The front end is a data-driven UI: `uiEngine` keeps a screen deque and one
 worker prints the entry log; screens are C++ objects with a 14-slot vtable; cells bind to named properties.
@@ -182,7 +243,9 @@ PA, umpire and commentary are streams through the game's own 7-state slot machin
 | `0x70021e07d8` | 129-entry play-by-play handler vtable (several copies exist) | C | vtable |
 | `0x7000e37630` | `DoPickoffResultPXP`, a 1,444-line commentary handler. At offset `+0x3f0` it copies the event name with `strncpy`, then calls vtable slot 9 (`+0x48`) | C | "BaseResultHandler", "PitchGetsAwayResult", "PickoffStealResult" |
 
-## The 119-slot actor API (47 tables)
+## Actor API
+
+47 tables of 119 slots.
 
 Detail on [AI actor API](AI-actor-API). This family is not the AI's scoring code: it is the actor/play-control
 interface that AI decision code calls through, and the role strings sit in the client code around it.
@@ -195,7 +258,7 @@ interface that AI decision code calls through, and the role strings sit in the c
 | `0x70000b7d34`-`0x70000b8084` | the base table's 119 default stubs (return, or return 0) | C | bodies |
 | slots 20-25 / 56-60 / 73-89 | catch / runner-steal / bat-pitch input clusters | I | callers' strings |
 
-## Game records, telemetry and league leaders
+## Records and telemetry
 
 Detail on [Game modes](Game-modes). The largest function is not a mode-to-handler table: it builds the
 end-of-game telemetry record and derives the mode description from settings.
@@ -210,7 +273,7 @@ end-of-game telemetry record and derives the mode description from settings.
 | `0x7000e5640c` | refreshes the leaders; builds twice, and 0.2.0's `walkup_leaders` nops the first | C | patch line |
 | `0x7000eb72c0` | bare `ret` virtual, slot 4 of 32 game-state vtables | C | body |
 
-## Animation and locomotion
+## Animation
 
 Detail on [Lighting](Lighting) (which covers the animation core it found next door).
 
@@ -221,15 +284,9 @@ Detail on [Lighting](Lighting) (which covers the animation core it found next do
 | `0x7000d4e560` | `LoadAnimBin`: loads an animation clip | C | the name |
 | `0x7001500000`-`0x7001547fff` | studio online services (olClient, socket, OpenSSL), not animation | C | string themes |
 
-## Corrections to earlier pages (2026-11-23)
+## Teams and live count
 
-| Claim | Correction | Tag | Source |
-|---|---|---|---|
-| the 119-slot vtable family is "the AI decision layer" (Region A, [I]) | it is the actor/play-control API the AI drives; 47 tables, not about 40, and no AI scoring inside | C | [AI actor API](AI-actor-API) |
-| `0x7000e0fb10` is "the game-mode table" (game-binary.md) | an end-of-game telemetry builder that also maps settings to a mode description; the mode choice is that ladder | C | [Game modes](Game-modes) |
-| `0x70012d20a0` "one step a frame, ~50 frames" (walkup-freeze.md) | flag `0xec01` confirmed; the bit-9 path loops all stages with a GPU wait, which the 1.0.20 stage code does not reconcile with 50 frames | C flag, open count | [Lighting](Lighting) |
-
-## Teams, batting side and the live count object (2026-11-24, found while building the scenario tool)
+Found 2026-11-24 while building the scenario tool.
 
 | Address | What | Tag | Evidence |
 |---|---|---|---|
@@ -248,14 +305,18 @@ Detail on [Lighting](Lighting) (which covers the animation core it found next do
 | `0x700185d058` | Copies one whole 0x550-byte team record into a match slot: 0x368-byte block at +0x50 (via `f_70018492c4`: 0x2f8 memcpy plus fields through +0x364), 0x148 bytes at +0x3b8, 0x39 bytes at +0x500, pointers at +0x540/+0x548 | C | body, main_0170.c; 3 callers |
 | `0x700066f770` | Builds one side's player entries from the player list in the copied team block, 0x138 bytes each into a 40-slot array; carries the "ERROR: Entering MLB game when minor leagues are not active but player is not on an MLB team" check | C body, I role | main_0050.c; first call at 61.426 s |
 
-## Main-menu data object (2026-11-24, hides the offline panel)
+## Main menu data
+
+Found 2026-11-24; used to hide the offline panel.
 
 - `f_7000c0da4c` (vtable 0x70021bd438 slot 6) sets obj+0x129 (online) and obj+0x128 (server allows panels). [C, read, logged 0/0 offline]
 - `f_7000c0dc6c` (slot 8) hands field values to the menu script; SHOW_DYNAMIC_PANELS = obj+0x129 && obj+0x128. [C]
 - Fields of the class "GameModesMain" (slot 4 `f_7000c0df84`): HAS_ANNOUNCEMENTS, ANNOUNCMENT_NUMBER, SHOW_DYNAMIC_PANELS, STUBS_CAP (`f_7000c0d970`). [C]
 - See docs/menu-offline-panel.md and runtime/mlb/menu_offline.c.
 
-## Trainer targets: settings, pitcher state, contact result (2026-11-24, read only, nothing written live)
+## Trainer targets
+
+Settings, pitcher state and contact result, 2026-11-24. Read only; nothing written live.
 
 | Address | What | Tag | Evidence |
 |---|---|---|---|
@@ -278,7 +339,9 @@ Live results for the three rows above (2026-11-24, AI matches, hooks of `runtime
 | Contact result: `R+0x40` is the launch angle, `+0x44` the direction, `+0x48` the exit speed in mph (matches the scorebug). All zero on a miss. Writing them after `0x7001679cdc` returns changes the scorebug's speed but not the play | C |
 | A bl at a patch site can reach a host function: point it at an unused word of the patch page and `rt_register_host` that address before the dispatch table is built | C |
 
-## Swing, pitch placement and the umpire (2026-11-24, for the trainer's cheats)
+## Swing and umpire
+
+Swing, pitch placement and the umpire, 2026-11-24, for the trainer's cheats.
 
 | Address | What | Tag | Evidence |
 |---|---|---|---|
@@ -290,7 +353,9 @@ Live results for the three rows above (2026-11-24, AI matches, hooks of `runtime
 | `0x7001673894` | the pitch's end: takes the zone answer, decides, and calls `f_700166f6d0(this, strike)`, which raises event `0x51`; the count handlers are `f_7000d413bc` (ball), `f_7000d4c210` (strike, also the reset) and `f_7000d467c8` (strike by foul [I]) | C live | hardware watchpoints on the count object |
 | `0x7001687dd8` | 1 when the pitch was a strike by location; the pitch's end stores it at `+0x3a` of the object at `[0x70045c3058]`. Call at `main+0x1673908` | C code and live | the trainer answers 1 |
 
-## Throws and errors (2026-11-25, traced for the trainer's "wild throws")
+## Throws and errors
+
+Traced 2026-11-25 for the trainer's "wild throws".
 
 | Address | What | Tag | Evidence |
 |---|---|---|---|
@@ -318,7 +383,9 @@ Live results for the three rows above (2026-11-24, AI matches, hooks of `runtime
 | sliders | `*(0x700464ab80)`: 39 signed bytes, -5..+5; get `f_70017c2350(i)`, float `f_70017c23a0(i)`, set `f_70017c2468(i, v)`; 22 field error, 23 throw error, 33/34 the outfield pair; names in the table at `*(0x7002286e08)`, stride 0x20; saved as `D_AISLIDERS` | C code | disassembly |
 | catch ratings | arm accuracy, fielding and reaction (`D_PLAYER_ATTS` 0x13..0x18) are read in play through `f_7001868fd4` (rating / 100), seen in fielder movement setup, not in an error roll | C live | watchpoint |
 
-## Player records and ratings (2026-11-24, probed and written in a live match)
+## Player ratings
+
+Player records, probed and written in a live match on 2026-11-24.
 
 | What | Where | Tag | Evidence |
 |---|---|---|---|
@@ -332,7 +399,9 @@ Match settings key 15 (`S+0x3e+15`) is the side controller 1 plays: 0 away, 1 ho
 
 The real pitcher energy (2026-11-24, C, refill seen live): a float 0..255 at `role+0x18`, `role` being the first argument of `PitchStoreFatigue`; `role+0x10` holds the energy object whose first word is `0x70022b6bf8`, `role+0x1c` the pitcher's id. It is stored through virtual slot 2 (`f_70002ed9a4`, writes the record byte `+0xa3`) from `0x700186c948`. Writing the float refills: the next request was 252 after 255.
 
-## Road to the Show starting tokens and the message box queue (2026-11-26, 1.0.20)
+## Tokens and message boxes
+
+Road to the Show starting tokens and the message box queue, 2026-11-26, 1.0.20.
 
 | Address | What | Tag | Evidence |
 |---|---|---|---|
@@ -344,7 +413,9 @@ The real pitcher energy (2026-11-24, C, refill seen live): a float 0..255 at `ro
 
 An open question: one run on 2026-11-26 ended with a token count of 47133 after the count had been written in memory while the allocation screen was open; the arithmetic that produced it was not found.
 
-## Season and Franchise calendar simulation (2026-11-27, 1.0.20, measured on a live game)
+## Calendar simulation
+
+Season and Franchise, 2026-11-27, 1.0.20, measured on a live game.
 
 Tools: `tools/season_sim_watch.py <pid>` (timing, memory read only), `tools/live_sample.py <pid> <out>` (samples a
 running game without a restart).

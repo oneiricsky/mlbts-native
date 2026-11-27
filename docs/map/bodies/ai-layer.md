@@ -1,6 +1,10 @@
 # AI decision layer, 47×119 method-table family (main 1.0.20)
 
-Read-only analysis of `work/gen` (generated C) and `work/build/game/exefs/main`; no repo file was modified. It covers the 47×119 virtual method-table family in `0x7002164248` to `0x700216f3f0`: 47 implementations of one 119-method interface, their registry, the 119 public trampolines in front of them, and the game code that calls them. Tag meaning: **[C]** a string, symbol or code read proves it; **[I]** a strong pattern in the code suggests it; **[H]** a guess.
+Read-only analysis of `work/gen` (generated C) and `work/build/game/exefs/main`; no repo file was modified.
+
+It covers the 47×119 virtual method-table family in `0x7002164248` to `0x700216f3f0`: 47 implementations of one 119-method interface, their registry, the 119 public trampolines in front of them, and the game code that calls them.
+
+Tags: [C] a string, symbol or code read proves it; [I] a strong pattern in the code suggests it; [H] a guess.
 
 ## Summary
 
@@ -16,7 +20,7 @@ Read-only analysis of `work/gen` (generated C) and `work/build/game/exefs/main`;
 | 8 | Slot use clusters name the consumers: 20–25 fielding/catch, 56–60 baserunning/steal, 73–89 batting/pitching, 0/1/5/13/33/73 locomotion parameters, 2/3/17/19/37/38/78/84–87/95/96/104/110/114 fixed flags | caller strings and slot overlaps in the function map below | I |
 | 9 | Three table pairs are byte-identical, so 47 tables hold 44 distinct method sets | `0x7002164248`/`5cc0`, `7b00`/`9940`, `a860`/`dd50` | C |
 
-## Where the data is
+## Data location
 
 | Item | Address | Detail | Tag |
 |---|---|---|---|
@@ -118,7 +122,7 @@ Grouping by the set of slots a table overrides (base table excluded) gives these
 | `0x7000358520` | hit-chance code that consumes slots 80, 83, 84 | string `        {Hitchance: %.2f, Hitroll: %.2f, Tipfoulchance: %.2f, Tipfoul %d, Miss: %d}` | C |
 | `0x700038b57c` | fielding/catch code that consumes slots 20 and 23 | string `Deflection catch` | C |
 
-## What is not mapped
+## Open questions
 
 | Gap | Detail |
 |---|---|

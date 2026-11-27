@@ -2,7 +2,7 @@
 
 Game 1.0.20, class vtable `0x70021e2708` (36 slots), read from the recompiler's generated C (`work/gen/main`); in that C `x19` is the state object ("this"). Citations are lines of `work/gen/main/<file>`, the recompiler's output, so they only help someone who has generated that folder. Tags: [C] the body I read shows it, [I] inferred, [H] guess.
 
-## What was read
+## Coverage
 
 | Scope | Members | Note |
 |---|---|---|
@@ -10,7 +10,7 @@ Game 1.0.20, class vtable `0x70021e2708` (36 slots), read from the recompiler's 
 | Cited, not redone | slot 5 (`0x700108b628`) | read earlier in the same session and is cited |
 | Not read | `0x700108c9b8`, `cae0`, `cc58`, `ce48`, `d194`, `d340`, `d5d0`, `d720`, `d808`, `daa0`, `dba4`, `be8c` | only summarised by their callees |
 
-## What was found
+## Findings
 
 | Part | Function | What it does | Tag |
 |---|---|---|---|
@@ -38,7 +38,7 @@ Game 1.0.20, class vtable `0x70021e2708` (36 slots), read from the recompiler's 
 | 10 | MANAGER_MODE | `d4ec`, `e4ec` | main_0120.c:54395, main_0121.c:1461 to 1546 |
 | 11 | no log | not found | slot 7 tests it at main_0120.c:53456 |
 
-## The setter
+## Setter
 
 The names come from a jump table in the setter `0x700108b500`:
 
@@ -50,7 +50,7 @@ The names come from a jump table in the setter `0x700108b500`:
 | Values 4 and 6 | `0x700108b500` | map to the default case, which logs no string (it only prints the newline); values above 10 also go there | | [C] |
 | Enter functions | `cd24`, `cf34`, `d4ec`, `e610` | write the number directly and log the same strings, so they work as "enter this sub-state" functions | | [C] |
 
-## The pitch sequence
+## Pitch sequence
 
 | From | To | How | Evidence | Tag |
 |---|---|---|---|---|
@@ -135,7 +135,7 @@ Handler `0x700108debc` takes (id, payload, this):
 
 Case targets for 0x11a to 0x167 come from the byte table at `0x7001d9c8e9` (main_0121.c:1038).
 
-## What each part calls
+## Calls
 
 | Callee | Role | Tag | Evidence |
 |---|---|---|---|
@@ -172,7 +172,7 @@ Case targets for 0x11a to 0x167 come from the byte table at `0x7001d9c8e9` (main
 | 4, 8, 11 to 13, 19 to 22, 29, 30 | | point at 5 to 7 line stubs shared with other states, not read | none |
 | 14 to 18, 23, 25 | | small thunks, not read | none |
 
-## Not determined
+## Open questions
 
 | Question | What is known | Tag |
 |---|---|---|

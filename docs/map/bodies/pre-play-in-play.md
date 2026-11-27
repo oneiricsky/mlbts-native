@@ -1,6 +1,10 @@
 # PRE_PLAY and IN_PLAY: what the handler bodies do
 
-This page covers the PRE_PLAY and IN_PLAY handler bodies in game 1.0.20, module `main`, from the vtable slots through the sub-state machines and the events that move them. All line numbers are in `work/gen/main/`. Tags say how sure each row is: [C] the body or data I read shows it, [I] inferred from what I read, [H] guess. Names of states and sub-states come from the game's own strings, and names of functions and fields are mine.
+This page covers the PRE_PLAY and IN_PLAY handler bodies in game 1.0.20, module `main`: the vtable slots, the sub-state machines and the events that move them. All line numbers are in `work/gen/main/`.
+
+Names of states and sub-states come from the game's own strings, and names of functions and fields are mine.
+
+Tags: [C] the body or data I read shows it, [I] inferred from what I read, [H] guess.
 
 ## Summary
 
@@ -10,9 +14,9 @@ This page covers the PRE_PLAY and IN_PLAY handler bodies in game 1.0.20, module 
 | PRE_PLAY handlers | Every step has up to three handler functions, picked by a second counter at +0x1c. | [C] |
 | IN_PLAY shape | Much smaller: its sub-state sits at +0xc, it has five steps, and incoming events (numbered messages on an event bus) move it from step to step. | [C] |
 | PLAY_OVER hand-off | When IN_PLAY reaches its last sub-state, PLAY_OVER, it asks the state manager every frame for a state change; which game state that request names is not settled. | [C] for the request, [H] for the target |
-| Correction | The earlier note that the 558-line `f_70010939dc` is an IN_PLAY vtable slot was wrong. That function is the event handler and sits outside the vtable, and IN_PLAY slot 7 is the 176-line `f_700109448c`. | [C] |
+| Event handler | The 558-line `f_70010939dc` is the event handler and sits outside the vtable; IN_PLAY slot 7 is the 176-line `f_700109448c`. | [C] |
 
-## What was read
+## Coverage
 
 | Part | Extent | Tag |
 |---|---|---|
@@ -40,7 +44,9 @@ This page covers the PRE_PLAY and IN_PLAY handler bodies in game 1.0.20, module 
 | 10 | PRE_PLAY | `f_700106d438` | the same 7 ids with `f_70005e69d0` (unsubscribe, [I]) | 15705 to 15744 | [C] |
 | 10 | IN_PLAY | `f_700109419c` | not read | | |
 
-## Event subscriptions (`f_70005e6830(id, bus, this, mode)`)
+## Event subscriptions
+
+Through `f_70005e6830(id, bus, this, mode)`.
 
 | State | Count | Ids | Bus | Tag |
 |---|---|---|---|---|
@@ -161,7 +167,7 @@ This page covers the PRE_PLAY and IN_PLAY handler bodies in game 1.0.20, module 
 | 0x83 | none in the first block | writes a float, no sub-state write seen | 8029 to 8073 | [C] |
 | all other ids | no change | all other ids in the table at 0x7001d9c96a (events 0x20a to 0x21f) | | [C] |
 
-## From pitch to end of play
+## Pitch to play end
 
 | Step | What happens | Tag |
 |---|---|---|
@@ -183,7 +189,7 @@ This page covers the PRE_PLAY and IN_PLAY handler bodies in game 1.0.20, module 
 | first argument | both requests | I take it as the id of the state to go to | [I] |
 | id 7 names PLAY_OVER? | | [H]: nothing I read maps ids to the 12 state classes | [H] |
 
-## Event-free path to POST_PITCH
+## POST_PITCH without events
 
 | Aspect | Detail | Tag |
 |---|---|---|
@@ -208,7 +214,7 @@ This page covers the PRE_PLAY and IN_PLAY handler bodies in game 1.0.20, module 
 | `f_70002803f0` | returns an options object; bytes +0x121 and +0x122 choose the ANIM_SEQUENCE path | [C] for use |
 | `f_7000d81dd8` | returns an object stored at +0x20 of the PRE_PLAY state | [C] |
 
-## Not determined
+## Open questions
 
 | Item | Why |
 |---|---|

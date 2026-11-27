@@ -9,7 +9,7 @@ Read this first, then open the reference file for the part you are touching. Eve
 repo, the binary and `docs/`; each claim is tagged [C] confirmed (read from binary/code/measurement),
 [I] inferred, [H] hypothesis. Do not state an [I] or [H] as fact.
 
-## What this is, in six lines
+## Overview
 
 - The game is MLB The Show 26 for Nintendo Switch, version 1.0.20 (also 1.0.15). ARM64 code in two modules:
   `main` (base `0x7000000000`, 94,991 functions, the game) and `sdk` (base `0x7004c00000`, 40,069 functions, Nintendo
@@ -26,21 +26,32 @@ repo, the binary and `docs/`; each claim is tagged [C] confirmed (read from bina
   `work/map/`. A release contains no game code. [C]
 - The owner is not a graphics programmer: explain findings in plain words (see the repo `CLAUDE.md` rules).
 
-## Status of this skill (read before trusting it)
+## Reliability
 
-This is an index-level map, not a read-through of the code. Built from: the repo docs, the port's source (parsed), strings and vtables recovered from the original
-machine code for all 135,060 recompiled functions, and six region notes written by Haiku agents from that index. Every one of the 135,060 functions is classified:
-import name, SDK symbol, library, string evidence, or code shape (getter, forwarder, empty stub, ...). The 47,308 `main` functions that had no string, symbol or
-shape were then read from their own code, normalised to the operations that matter, in batches. A completeness pass now reads every remaining body, the unnamed
-`sdk` functions included, so that the coverage chart's body-read bar reaches 100% everywhere; [Reading every function body](Reading-every-function-body) has the
-method, and the chart and the Read roles page show how far it has got.
-Those read roles are leads, not verified facts: a 10-function audit found 6 right, 1 incomplete and 3 with a wrong specific detail, so open the body before relying
-on a detail (the wiki's Read roles page carries the same warning). Function bodies read in full: the handlers of all 12 game-state classes (about 60 functions, read by agents
-and spot-checked, 20 claims per report, with the wrong ones corrected; see `docs/map/bodies/`) and about 300 more from the subsystem passes.
-Treat region-note roles tagged [I] or [H] as leads, not facts, and read the body (see the playbook) before building on one. Next step if more fluency is wanted: verify
-the read roles in a second pass, and add what you verify to known-functions.md.
+Read this before trusting the map.
 
-## First 60 seconds on any task
+This is an index-level map, not a read-through of the code.
+
+| Built from | Detail |
+|---|---|
+| Repo | the docs and the port's source (parsed) |
+| Binary | strings and vtables recovered from the original machine code for all 135,060 recompiled functions |
+| Region notes | six, written by Haiku agents from that index |
+
+How far the reading goes:
+
+- Every one of the 135,060 functions is classified: import name, SDK symbol, library, string evidence, or code shape (getter, forwarder, empty stub, ...).
+- The 47,308 `main` functions that had no string, symbol or shape were then read from their own code in batches, normalised to the operations that matter.
+- A completeness pass now reads every remaining body, the unnamed `sdk` functions included, so that the coverage chart's body-read bar reaches 100% everywhere. [Reading every function body](Reading-every-function-body) has the method, and the chart and the Read roles page show how far it has got.
+- Bodies read in full: the handlers of all 12 game-state classes (about 60 functions, read by agents and spot-checked, 20 claims per report, with the wrong ones corrected; see `docs/map/bodies/`) and about 300 more from the subsystem passes.
+
+How far to trust it:
+
+- The read roles are leads, not verified facts. A 10-function audit found 6 right, 1 incomplete and 3 with a wrong specific detail, so open the body before relying on a detail (the wiki's Read roles page carries the same warning).
+- Treat region-note roles tagged [I] or [H] as leads, and read the body (see the playbook) before building on one.
+- Next step if more fluency is wanted: verify the read roles in a second pass, and add what you verify to known-functions.md.
+
+## First steps
 
 1. Rebuild/check the local index if `work/map/index/` is missing: `python -I tools/map_all.py` (needs
    `python -I -m pip install libclang --target work/pylib` once; ~2 min).
@@ -65,7 +76,9 @@ the read roles in a second pass, and add what you verify to known-functions.md.
 5. Before changing anything: the repo rules in `CLAUDE.md` (diagnose first, numbers before and after, commit style,
    one game instance per run slot, no game data in commits).
 
-## Reference files (open only what the task needs)
+## Reference files
+
+Open only what the task needs.
 
 | File | When |
 |---|---|
@@ -79,7 +92,7 @@ the read roles in a second pass, and add what you verify to known-functions.md.
 | the wiki's subsystem pages (`Fielding`, `Frontend`, `Audio`, `AI-actor-API`, `Lighting`, `Game-modes`) | you need the on-field rings, the UI/screen layer, the audio path, the 119-slot actor API, the lighting bake or the end-of-game records, read from the bodies and checked against the index |
 | `docs/map/README.md`, `source/*.md`, `binary.md`, `coverage.md` | a function of the port's own source (11,308 listed with callees and purpose), or binary totals and the coverage check |
 
-## Rules from past mistakes
+## Working rules
 
 | Rule | Why |
 |---|---|
@@ -92,20 +105,31 @@ the read roles in a second pass, and add what you verify to known-functions.md.
 | A code patch is a unit | Patch lines in `tools/data/patches-<ver>.txt`, a settings row in `runtime/mlb/cfg.c` (default on), a menu toggle, and a doc with Cause, fix, what else changes and how it was checked |
 | Do not trust an address in an older comment | Check it in the index for the right version |
 
-## The wiki
+## Wiki publishing
 
-The same knowledge is published as the GitHub wiki of `oneiricsky/mlbts-native`. The skill is the source for the game-code pages (this page is Start-here, the
-references become How-the-port-works, The-game-binary, Known-game-functions, Tracing-playbook and History-and-open-questions, and the region notes become Region-A to
-Region-F). The findings pages (walk-up freeze, match-start freeze, load stalls, frame rate, PS5 textures, upstream bugs, dev harness) are written by hand in `docs/wiki/`.
-Rebuild every page with `python -I tools/wiki_build.py` (writes `work/wiki/`, checks that all links resolve); never edit a generated page in the wiki, edit its source
-here. Publishing is a push to `git@github.com:oneiricsky/mlbts-native.wiki.git` (branch `master`), only when the owner asks. Steps that worked on 2026-11-23: run
-`wiki_build.py`; with `GIT_TERMINAL_PROMPT=0` and `GIT_SSH_COMMAND="C:/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=15"` clone the wiki to `work/wikirepo`
-(the clone and `ls-remote` print a harmless "IO is still pending on closed socket" line; if a clone fails, run it again); `cp work/wiki/*.md work/wikirepo/`; commit there with
-`git -c user.name="Sky Miles" -c user.email="14169181+oneiricsky@users.noreply.github.com" commit` (signing comes from the global config; do not change config); `git push origin master`.
-GitHub creates the wiki repository only when someone saves a first page in the web UI, and the owner has to be signed in for that. Check the result by fetching each page
-(`/oneiricsky/mlbts-native/wiki/<Page>` should return 200).
+The same knowledge is published as the GitHub wiki of `oneiricsky/mlbts-native`.
 
-## Keeping this skill true
+| Source | Wiki pages |
+|---|---|
+| this page | Start-here |
+| the references | How-the-port-works, The-game-binary, Known-game-functions, Tracing-playbook, History-and-open-questions |
+| the region notes | Region-A to Region-F |
+| `docs/wiki/`, written by hand | the findings pages: walk-up freeze, match-start freeze, load stalls, frame rate, PS5 textures, upstream bugs, dev harness |
+
+Rebuild every page with `python -I tools/wiki_build.py` (writes `work/wiki/`, checks that all links resolve). Never edit a generated page in the wiki; edit its source here.
+
+Publishing is a push to `git@github.com:oneiricsky/mlbts-native.wiki.git` (branch `master`), only when the owner asks. Steps that worked on 2026-11-23:
+
+1. Run `wiki_build.py`.
+2. With `GIT_TERMINAL_PROMPT=0` and `GIT_SSH_COMMAND="C:/Windows/System32/OpenSSH/ssh.exe -o BatchMode=yes -o ConnectTimeout=15"`, clone the wiki to `work/wikirepo`. The clone and `ls-remote` print a harmless "IO is still pending on closed socket" line; if a clone fails, run it again.
+3. `cp work/wiki/*.md work/wikirepo/`
+4. Commit there with `git -c user.name="Sky Miles" -c user.email="14169181+oneiricsky@users.noreply.github.com" commit` (signing comes from the global config; do not change config).
+5. `git push origin master`
+6. Check the result by fetching each page (`/oneiricsky/mlbts-native/wiki/<Page>` should return 200).
+
+GitHub creates the wiki repository only when someone saves a first page in the web UI, and the owner has to be signed in for that.
+
+## Maintenance
 
 If you learn a game function's meaning, add it to `references/known-functions.md` with its tag, the evidence and the
 version. If the map tools change, update the commands above. If something here is contradicted by the code, fix this

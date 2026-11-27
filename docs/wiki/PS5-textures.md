@@ -1,20 +1,27 @@
 An optional feature, `MLB_HD_TEXTURES`, uses a player's face texture from a PS5 dump of the game in place of the Switch one. Nothing is shipped. It reads the user's own dump and does nothing without an index file.
 
-## How it works
+## Texture swap
 
-The game does not take a texture's size from the `.TEX` file's header. It creates the texture at the Switch size (Ohtani's colour map is 512x256, his normal map 256x128) and copies the file's decompressed storage into it. A bigger file cannot just replace the Switch one; a converted file with the right header still came out as noise. So the swap happens in the port, at upload (`hd_apply` in `vk_texture.c`):
+The game does not take a texture's size from the `.TEX` file's header. It creates the texture at the Switch size (Ohtani's colour map is 512x256, his normal map 256x128) and copies the file's decompressed storage into it.
+
+A bigger file cannot just replace the Switch one; a converted file with the right header still came out as noise. So the swap happens in the port, at upload (`hd_apply` in `vk_texture.c`):
 
 1. A texture whose size and mip count are in the index has the first 16 KiB of its storage hashed (FNV-1a). The index holds that hash for each Switch texture.
 2. A match reads the PS5 file (`runtime/mlb/hdtex.c`), rearranges its blocks into plain rows and creates a second image. That image takes the place of the Switch-sized one for the next binding.
 3. Ohtani's normal map becomes 1024x512 BC7 (0.7 MiB) in place of 256x128.
 
-`tools/make_hd_index.py --all-heads` builds the index from the Switch files and the dump. It covers the colour maps of
-2,409 heads and the normal maps of 2,411, every head that has the map on both sides. 13 heads cannot be used: 12 have no
-PS5 file and one is only in the dump. Switch textures that share their first 16 KiB are told apart by a hash of the
-whole storage, or, for four pairs with identical Switch colour maps, by which head file the game opened. `--check`
-validates an index. The setting `MLB_HD_TEXTURES` (menu: Graphics, PS5 face textures) is on by default.
+`tools/make_hd_index.py --all-heads` builds the index from the Switch files and the dump, and `--check` validates one.
 
-## The PS5 file format
+| Item | Detail |
+|---|---|
+| Colour maps | 2,409 heads |
+| Normal maps | 2,411 heads, every head that has the map on both sides |
+| Unusable | 13 heads: 12 have no PS5 file and one is only in the dump |
+| Shared first 16 KiB | told apart by a hash of the whole storage |
+| Identical Switch colour maps | four pairs, told apart by which head file the game opened |
+| Setting | `MLB_HD_TEXTURES` (menu: Graphics, PS5 face textures), on by default |
+
+## File format
 
 Found by decoding the files; none of it is documented. Same TX12 container as the Switch files (magic `TX12PS5`), raw instead of LZ4. Only BC1 and BC7 are handled.
 
@@ -44,11 +51,17 @@ run 2.
 
 Low is the 1 percent low in fps (median of six one-minute windows); Slow counts frames over 100 ms.
 
-## The yellow face (fixed)
+## Yellow face fix
 
 Swapping in the PS5 colour map made faces bright yellow-orange and flat in lit scenes, at 2048x1024 and at 1024x512. A PS5 map cut to the Switch size rendered normally.
 
-The cause: a compute shader that runs when a head is shown measures the skin tone with an integer `texelFetch` over a rectangle given in the Switch texture's texel coordinates, and queries the size it normalises by. On a 1024x512 image that rectangle is the wrong quarter of the map, so the skin-tone average comes out wrong. The lit face shaders divide the albedo by that average, and the face blows out. It was found by logging which binding each reader uses and disassembling the compute shader.
+The cause is a compute shader that runs when a head is shown:
+
+1. It measures the skin tone with an integer `texelFetch` over a rectangle given in the Switch texture's texel coordinates, and queries the size it normalises by.
+2. On a 1024x512 image that rectangle is the wrong quarter of the map, so the skin-tone average comes out wrong.
+3. The lit face shaders divide the albedo by that average, and the face blows out.
+
+It was found by logging which binding each reader uses and disassembling the compute shader.
 
 The fix is in `get_view` (`runtime/gfx/vk_exec_draw.c`). While a compute dispatch is recorded, a PS5 image is bound from the level that has the Switch texture's size (`hd_shift`). Fragment shaders still sample by normalised coordinates and keep the large level.
 
@@ -60,9 +73,9 @@ How it was counted: each configuration fixed from frame 0, one shot every 10 fra
 | No fix | 50 to 52 of 101 |
 | Fix | 0 of 101 (peak 101 pixels, against 4,565 unfixed) |
 
-An earlier conclusion in the investigation, that every reader group needs the small level, was wrong. It came from comparing runs whose readers were shifted in combination, and only the compute group needs it.
+Only the compute group needs the small level.
 
-## Known limits
+## Limits
 
 - Colour maps are on by default since 2026-11-27. Few faces have been looked at close up; the rest are checked offline
   only (the right file is found and loads).

@@ -1,10 +1,14 @@
 # Fielding and play simulation: 0x7000100000 - 0x7000400000
 
-Module `main`, game 1.0.20, base 0x7000000000. Read-only: the game was not run and no repo file was edited. Evidence
-was read from `work/map/index/*.jsonl` (`tools/map_find.py`) and from the generated C in `work/gen/main/*.c`, with
-`tools/disasm.py work/build/game/exefs/main <off>` to confirm immediate constants (it takes module-relative offsets,
-so 0x700026b5e0 is 0x26b5e0). Tags: [C] string, symbol or code read; [I] strong pattern in strings, callers and
-callees; [H] guess.
+Module `main`, game 1.0.20, base 0x7000000000. Read-only: the game was not run and no repo file was edited.
+
+| Evidence | Source |
+|---|---|
+| Index | `work/map/index/*.jsonl` (`tools/map_find.py`) |
+| Code | the generated C in `work/gen/main/*.c` |
+| Constants | `tools/disasm.py work/build/game/exefs/main <off>` confirms immediates; it takes module-relative offsets, so 0x700026b5e0 is 0x26b5e0 |
+
+Tags: [C] string, symbol or code read; [I] strong pattern in strings, callers and callees; [H] guess.
 
 ## Summary
 
@@ -18,9 +22,11 @@ callees; [H] guess.
 | Umpire rings | State their names outright: `"WATCH PLAY STAND/TURN/IDLE"`, `"SAFE CALL"`, `"OUT CALL"`, `"FAIR CALL"` | [C] |
 | Tag basis | The quoted strings and call edges are [C] (see §1-§3 for the code line or the exact string); the role wording (`"decides"`, `"pumps"`, `"owns"`) is [I] | [C] |
 
-## 1. The catch / throw / run decision pipeline
+## Decision pipeline
 
-### Step 1: interval selection (0x7000100000 block)
+### Interval selection
+
+Step 1, in the 0x7000100000 block.
 
 | Step | Function | Evidence | What it does | Tag |
 |---|---|---|---|---|
@@ -29,7 +35,7 @@ callees; [H] guess.
 | 3 | 0x7000101090 | `"Player=%d Sorting: nIntervals = %d"`, `"No intervals to sort"`, `"bFoundBetter = %d"` | Ranks the intervals; the spot a fielder runs to is therefore chosen as the time window he can reach the ball in, not as a raw point [I], and the interval type itself is not recovered | [C] |
 | 4 | 0x70001065e8 | `"ClearIntervals() %s"`; 15 callers | Clears a player's fly-ball interval list | [C] |
 
-### Step 2: target and avoidance
+### Target and avoidance
 
 | Step | Function | Evidence | What it does | Tag |
 |---|---|---|---|---|
@@ -39,7 +45,7 @@ callees; [H] guess.
 | 4 | 0x70001993c8 | strings `"working avoid ring"`, `"Moving avoid"` | Working avoid ring: fielder avoidance, named next door to the target ring | [C] |
 | 5 | 0x700019a094 | strings `"AVOID BREAKDOWN"`, `"POST AVOID IDLE"` | Avoid-breakdown / post-avoid-idle neighbour of the avoidance ring | [C] |
 
-### Step 3: the catch decision
+### Catch decision
 
 | Step | Function | Evidence | What it does | Tag |
 |---|---|---|---|---|
@@ -49,7 +55,7 @@ callees; [H] guess.
 | 4 | `f_7000389da4`, `f_700038a6e0`, `f_700038a97c`, `f_700038f844` | the result is masked to 16 bits and compared with `0x100`; `"Working catch ring"` | Fall-through path: calls 0x7000389da4, then 0x700038a6e0, then the working catch ring 0x700038a97c and 0x700038f844 | [C] |
 | 5 | 0x70003915c8 (callers) | 7 callers include 0x7000391000, 0x700038b57c and 0x7000392fbc | The shared catch-attempt entry for canned, deflection and redirect throws | [I] |
 
-### Step 3b: catch flavours
+### Catch variants
 
 | Function | Flavour | Strings | Counts | Tag |
 |---|---|---|---|---|
@@ -66,7 +72,7 @@ callees; [H] guess.
 | 0x70003a1df8 | Predictive hub: target ring, predicted catch and idle in one body | calls 0x70003a0410, 0x700039fb90, 0x70003a2360 | 9 callers | [I] |
 | 0x7000391000 | Hub that calls the predictive catch and the throw | calls 0x700037db00 and 0x7000384a60 | caller 0x70003915c8 | [I] |
 
-### Step 4: the throw
+### Throw
 
 | Step | Function | Evidence | What it does | Tag |
 |---|---|---|---|---|
@@ -81,7 +87,7 @@ callees; [H] guess.
 | 8 | 0x700015d400 | `"User cutoff ring"`; calls 0x700140e908 and 0x7000d97cbc (`"ACT_CUTOFF_END"`) | User-controlled cutoff (relay) ring | [C] |
 | 9 | 0x70002bf884 | `"RoleCutoff working ring"`; calls 0x70002c14ec (`"Fake cutoff catch"`) and 0x70002c1864 (`"OLE catch"`) | RoleCutoff working ring: the relay man (the relay, or "cutoff", layer) | [C] |
 
-### Step 5: the runner's advance
+### Runner advance
 
 | Step | Function | Evidence | What it does | Tag |
 |---|---|---|---|---|
@@ -98,7 +104,7 @@ callees; [H] guess.
 | 11 | 0x7000344134 | `"Runner Leadoff Ring"`, `"Leadoff lean forward Idle"`, `"Increase Leadoff"`, `"Return to base"` | Runner leadoff ring (12 named states), reached from 0x7000304604 (`"Runner reaction ring"`) | [C] |
 | 12 | 0x700032dc54 | `"  Runner (original base %s) now %s is %sFORCEABLE%s"` | Prints the forced-runner bookkeeping | [C] |
 
-## 2. The state machines (anchors)
+## State machine anchors
 
 | Function | Lines | Callees | Code evidence | Role | Tag |
 |---|---|---|---|---|---|
@@ -147,7 +153,7 @@ callees; [H] guess.
 | 0x70002ddd00 | WARMUP, CLEAN PLATE, PRE_SET, WALKUP | named only by its state strings | [C] |
 | 0x70002d9cc4 | BALL STAND, BALL IDLE | named only by its state strings | [C] |
 
-## 3. Functions mapped here
+## Mapped functions
 
 | Scope | Detail |
 |---|---|
@@ -222,7 +228,7 @@ callees; [H] guess.
 | 0x70002d6b30 | Watch-play turn/crouch/duck ring (12 states) | [C] | strings `"WATCH PLAY TURN"`, `"WATCH PLAY CROUCH->STAND"`, `"WATCH PLAY DUCK TO STAND"` |
 | 0x70002d0a40 | Safe/out call ring (60 callees) | [C] | strings `"SAFE TURN"`, `"OUT CALL"`, `"POST SAFE IDLE"`, `"BREAKDOWN"` |
 
-## What is not mapped
+## Open questions
 
 | Subject | Limit | Tag |
 |---|---|---|
