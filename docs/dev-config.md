@@ -115,6 +115,29 @@ Not accepted (the hash matches, the code does not bear it out):
 The PS5 build's `CONFIG_MAIN.TXT` matches the Switch one apart from line endings, and its executable
 holds 130 of the hashes as constants. Its words added only the `ForceK` candidate.
 
+## What some unnamed options do
+
+`python -I tools/config_effects.py [HASH ...]` shows the code on each side of the branch after every
+lookup (197 of 246 unnamed lookup sites followed on 2026-11-27; in the other 49 the result is not
+tested right after the call). Rows tagged [C] were checked in the disassembly; [I] rows are read
+from the tool's short walk. None was tried in a running game.
+
+| Hash | When set | |
+|---|---|---|
+| `0xBC5E91F7` | In the game system process, prints "We're trying to crash 1." and takes a separate path. | [C] |
+| `0xACE9617F` | Prints the same message in the batter-up state. | [I] |
+| `0xC17C5EF3` | The save code skips its compression (zlib 1.2.12) step. | [C] |
+| `0xBAA17BD5` | Skips the save mount maintenance (unmount, size check, extend). | [C] |
+| `0x4BC55E35`, `0x883451AB`, `0xC4A34521`, `0x01123897` | Game-UI task start: sets the word at +0x58 to 0, 1, 2 or 3. | [C] |
+| `0x3D812C0D`, `0x732A4A01` / `0x0CDF0E01` / `0xC004AC01` / `0xF42D9CC1` | Same place: +0x58 = 4 with +0x5c = 3 / 2 / 1 / 4. What the values select is not known. | [C], the last [I] |
+| `0x2BE25E21` | A number: 2 or more is stored, capped at 100, with a flag beside it (`f_7000003e48`). What it counts is not known. | [C] |
+| `0x6D05B233` | The front-end and game loops exit the current mode; boot code can then set `0x2E0E7DC5`. | [I] |
+| `0xEB33224D` | Text: a pitching animation file name used in place of the default load. | [I] |
+| `0xE1F65C85` | Takes the position-player pitching-duty path. | [I] |
+| `0x3AA4B9D7` | Entering the singles-moment page writes 2 to setting 0x13, leaving it writes 6. | [I] |
+| `0x84298F41` | Returns early from the jumbotron routine that handles `ForceJumboOFF`. | [I] |
+| `0xBAA694ED` | One-time state change in the device sign-in code, then erased. | [I] |
+
 ## Named in CONFIG_MAIN.TXT but compiled out
 
 Their handlers are gone from the retail binary; uncommenting them in CONFIG_MAIN.TXT does nothing.
