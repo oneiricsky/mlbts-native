@@ -331,3 +331,15 @@ Live results for the three rows above (2026-11-24, AI matches, hooks of `runtime
 Match settings key 15 (`S+0x3e+15`) is the side controller 1 plays: 0 away, 1 home, 2 none [C for 0 and 1, switched live with Team Select; I for 2].
 
 The real pitcher energy (2026-11-24, C, refill seen live): a float 0..255 at `role+0x18`, `role` being the first argument of `PitchStoreFatigue`; `role+0x10` holds the energy object whose first word is `0x70022b6bf8`, `role+0x1c` the pitcher's id. It is stored through virtual slot 2 (`f_70002ed9a4`, writes the record byte `+0xa3`) from `0x700186c948`. Writing the float refills: the next request was 252 after 255.
+
+## Road to the Show starting tokens and the message box queue (2026-11-26, 1.0.20)
+
+| Address | What | Tag | Evidence |
+|---|---|---|---|
+| `f_700040d340` | loads `ATTRIBUTECATEGORIES.XML`; `<Playstyle id tokens>` (0 pitcher 50, 1 two-way 75, 2 position 50) into u16 `[*(0x7002280f08)][id]` (seen at `0x7002b4236c`) | C | store at main+0x40d8d8; table read 1000,1000,1000 live with an override |
+| `f_700040c210(id)` | that table's value; used by the creation command `f_7000bc0970` (BpCreation), which gives it to the player | C code and live | body |
+| `f_7000440904(n, flag)` | sets the player's tokens, u16 at `+0x12c0` of `*(0x7002c5c9d8)` (`f_700045c724`); 11 callers, all upgrade screen commands | C | disassembly, memory read |
+| `f_7000bc1708`, `f_7000bc611c` | attribute screen commits: write the screen's own count (`this+0x9a`, preset screen `this+0xa4`) to the player, so a memory edit of the player while the screen is open is lost or inconsistent | C code | disassembly |
+| `f_7000889978(Q)` | opens the next entry of the message box queue Q=`*(0x7003ab49d8)`: 16 entries of 0x7e8 bytes, title `+0x20`, bytes at `+0x7e90` last queued, last shown, active, blocked | C code and live | queue dump of a hung game |
+
+An open question: one run on 2026-11-26 ended with a token count of 47133 after the count had been written in memory while the allocation screen was open; the arithmetic that produced it was not found.
