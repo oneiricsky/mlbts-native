@@ -167,6 +167,10 @@ def codeify(text):
             continue
         html = "<summary" in line or "<details" in line or "</details>" in line
         quotes_even = line.count('"') % 2 == 0  # an embedded quote inside a game string: do not pair those
+        # an italic line (the generated banner, the tag legend): its opening "_" is not part of a symbol
+        edge = "_" if len(line) > 2 and line[0] == line[-1] == "_" and line[1] != "_" else ""
+        if edge:
+            line = line[1:-1]
         pieces = LABELSPLIT.split(line)  # [text, mark, label, tail] per link
         for i in range(0, len(pieces), 4):
             pieces[i] = code_text(pieces[i], html, quotes_even)
@@ -175,7 +179,7 @@ def codeify(text):
         line = "".join(pieces)
         while "``" in line:  # two spans whose ends touched (a span right before a token): merge them into one
             line = line.replace("``", "")
-        out.append(line)
+        out.append(edge + line + edge)
     return "\n".join(out)
 
 
