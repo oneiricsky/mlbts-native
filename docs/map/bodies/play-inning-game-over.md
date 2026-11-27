@@ -1,27 +1,39 @@
 # PLAY_OVER, INNING_OVER and GAME_OVER: what the handler bodies do
 
-Game 1.0.20. All three classes sit in `work/gen/main/main_0121.c`, so every "main_0121.c:N" below is a line in that file unless another file is named. I read the generated C of the handlers (with the register save and restore stripped) and the data tables they use. I did not run the game. A claim is tagged [C] when the body I read shows it, [I] when it is a reading of what I saw, [H] when it is a guess.
+Game 1.0.20. PLAY_OVER, INNING_OVER and GAME_OVER are the three game states that end a play, an inning and a game, and all three sit in `work/gen/main/main_0121.c`, so every "main_0121.c:N" below is a line in that file unless another file is named. I read the generated C of the handlers (with the register save and restore stripped) and the data tables they use, and I did not run the game. A claim is tagged [C] when the body I read shows it, [I] when it is a reading of what I saw, [H] when it is a guess. The notation and the reading method are in the first table.
 
-The generated C was read with the shell filter in the Tracing playbook. Two helper roles are my reading [I]: `f_7001c1fb40` takes the log string in x0 and looks like a print call, and `f_7001c1fc90(0xa)` follows a print each time, so it looks like a newline.
+## Conventions
 
-Notation: `[global 0xADDR + off]` is a field of the game object that the pointer at 0xADDR names. The game reaches these through its table of globals, loading the slot and then loading again through it; a few (such as 0x7003aeb818) are plain variables loaded once. The object's real type is not known.
+| Item | Detail | Tag |
+|---|---|---|
+| Global notation | `[global 0xADDR + off]` is a field of the game object that the pointer at 0xADDR names. The game reaches these through its table of globals, loading the slot and then loading again through it; a few (such as 0x7003aeb818) are plain variables loaded once. The object's real type is not known. | — |
+| Reading method | the generated C was read with the shell filter in the Tracing playbook | — |
+| Print helper | `f_7001c1fb40` takes the log string in x0 and looks like a print call | [I] |
+| Newline helper | `f_7001c1fc90(0xa)` follows a print each time, so it looks like a newline | [I] |
 
 ## The three classes share one design
 
 | Part | Evidence | Tag |
 |---|---|---|
-| Object | each state is an object (x0, held in x19) with a small-integer sub-state and a small-integer phase | C |
-| Slot 5 | one-time setup work: clears timers, posts game events, picks the first sub-state; takes no time step | C |
-| Slot 7 | per-frame update: its first lines keep the time step (s0) and add it to a float at `[state+8]`; then it switches on the sub-state and phase | C |
-| Slot 3 | resets fields and prints the state name; PLAY_OVER sets sub-state 2, GAME_OVER sets sub-state 0 | C |
-| Calling pattern | nobody calls slots 5 and 7 directly (the index shows 0 callers), so "once on entry" and "once per frame" are the natural reading and not something I saw called | I |
-| Name print | every sub-state change prints `GAME_STATE_<CLASS>: state = <NAME>` | C |
+| Object | each state is an object (x0, held in x19) with a small-integer sub-state and a small-integer phase | [C] |
+| Slot 5 | one-time setup work: clears timers, posts game events, picks the first sub-state; takes no time step | [C] |
+| Slot 7 | per-frame update: its first lines keep the time step (s0) and add it to a float at `[state+8]`; then it switches on the sub-state and phase | [C] |
+| Slot 3 | resets fields and prints the state name; PLAY_OVER sets sub-state 2, GAME_OVER sets sub-state 0 | [C] |
+| Calling pattern | nobody calls slots 5 and 7 directly (the index shows 0 callers), so "once on entry" and "once per frame" are the natural reading and not something I saw called | [I] |
+| Name print | every sub-state change prints `GAME_STATE_<CLASS>: state = <NAME>` | [C] |
+| Per-frame time, PLAY_OVER | slot 7 adds the time step into `[state+8]` at main_0121.c:16719 | — |
+| Per-frame time, INNING_OVER | slot 7 keeps it in s8 and adds it in the first part of the function (6604-6720) | — |
+| Per-frame time, GAME_OVER | slot 7 passes it to `f_70003aaf00` at 3609 | — |
 
-Per-frame time: PLAY_OVER slot 7 adds the time step into `[state+8]` at main_0121.c:16719. INNING_OVER slot 7 keeps it in s8 and adds it in the first part of the function (6604-6720). GAME_OVER slot 7 passes it to `f_70003aaf00` at 3609.
+## The sub-state machine and its event
 
-The phase is a second counter inside each sub-state. Each sub-state has a begin handler (phase 0), an update handler (phase 2) and a finish check (phase 3). A sub-state change stores the new number, resets the phase to 0, prints the name and calls `f_7000e23cec`.
-
-`f_7000e23cec(state, sub-state, flag)` (main_0100.c:1538, 56 callers) only posts game event 0x13d. It stores three 32-bit values next to each other on its stack (the number at `[global 0x700227e688 + 0x20]`, the sub-state and the flag) and passes the address of the first [C]. How many of them the receiver reads is not visible in the posting function [H]. The event posting function is `f_70005e6b40(event id, data pointer)` (main_0047.c:816, 964 callers).
+| Part | Detail | Tag |
+|---|---|---|
+| Phase | a second counter inside each sub-state: each sub-state has a begin handler (phase 0), an update handler (phase 2) and a finish check (phase 3) | — |
+| Sub-state change | stores the new number, resets the phase to 0, prints the name and calls `f_7000e23cec` | — |
+| `f_7000e23cec(state, sub-state, flag)` | main_0100.c:1538, 56 callers; it only posts game event 0x13d. It stores three 32-bit values next to each other on its stack (the number at `[global 0x700227e688 + 0x20]`, the sub-state and the flag) and passes the address of the first | [C] |
+| How much the receiver reads | how many of the three values the receiver reads is not visible in the posting function | [H] |
+| `f_70005e6b40(event id, data pointer)` | main_0047.c:816, 964 callers; the event posting function | — |
 
 ## Slot 5 and slot 7 by state
 
@@ -31,11 +43,21 @@ The phase is a second counter inside each sub-state. Each sub-state has a begin 
 | INNING_OVER | `f_7001092518`, 163 lines: enter | `f_700109276c`, 789 lines: per-frame switch | no handler of its own among those read |
 | GAME_OVER | `f_700108f904`, 414 lines: enter, picks the first sub-state | `f_700108ff50`, 549 lines: per-frame jump table | `f_700108f7c4`: set sub-state 0, allocate a helper object |
 
-GAME_OVER has two more per-frame pieces. Slot 33 (`f_70010920f4`, main_0121.c:6080) is a second jump table for sub-states 4 to 13 (table at 0x7001d9c960 in the data, 10 entries, main_0121.c:6090-6100) [C]. A helper `f_700108f87c` (main_0121.c:3085-3133, four direct callers in the index) sets the sub-state: it stores its second argument at `[state+0x18]` and its third at `[state+0x1c]` and prints the name from a table [C].
+**GAME_OVER's two extra per-frame pieces**
+
+| Function | Evidence | What it does | Tag |
+|---|---|---|---|
+| `f_70010920f4` (slot 33) | main_0121.c:6080; the table is at 0x7001d9c960 in the data, 10 entries, main_0121.c:6090-6100 | a second jump table, for sub-states 4 to 13 | [C] |
+| `f_700108f87c` (helper) | main_0121.c:3085-3133, four direct callers in the index | sets the sub-state: it stores its second argument at `[state+0x18]` and its third at `[state+0x1c]` and prints the name from a table | [C] |
 
 ## GAME_OVER sub-states, read from the game's own tables
 
-GAME_OVER prints names from two arrays in the data. I read them straight from the image [C].
+| Item | Detail | Tag |
+|---|---|---|
+| Source | GAME_OVER prints names from two arrays in the data; I read them straight from the image | [C] |
+| "Name only" | the name is in the table and I found no handler that stores that value or prints it by itself; values 3 and 5 are printed as names by slot 33, so they exist as sub-states even though I did not see where they are set | — |
+| Value table | at 0x70021e2c90 (entry n is value n+1) | — |
+| Phase table | at 0x70021e2d00, holds five names: 0 ENTER, 1 LOAD, 2 UPDATE, 3 UPDATE_PRES, 4 EXIT, stored at `[state+0x1c]` | [C] |
 
 | Value | Name | Seen set at |
 |---|---|---|
@@ -55,18 +77,15 @@ GAME_OVER prints names from two arrays in the data. I read them straight from th
 | 13 | PRES_MOMENTS_OUTRO | slot 5 (3435) |
 | 14 | FADE_COMPLETE_EXIT_GAME | name only |
 
-The value table is at 0x70021e2c90 (entry n is value n+1). The phase table is at 0x70021e2d00 and holds five names: 0 ENTER, 1 LOAD, 2 UPDATE, 3 UPDATE_PRES, 4 EXIT, stored at `[state+0x1c]` [C].
-
-"Name only" means the name is in the table and I found no handler that stores that value or prints it by itself. Values 3 and 5 are printed as names by slot 33, so they exist as sub-states even though I did not see where they are set.
-
 ## GAME_OVER: how it starts and what picks the first sub-state
 
-Slot 5 (main_0121.c:3134-3587) does these things in order [C]:
-
-1. Calls `f_70000a7360` and `f_70000a7430` and updates two settings objects through `f_7000df2bb0` and `f_7000df7b28` (3140-3225).
-2. Posts event 0x11 to the event object at `0x7002291000+0x5d8` (3231) and clears `[global 0x7003b14aa8 + 0x398]` (3239).
-3. Stores `f_70005748ac()` times 1.0e-6 (the constant 0x358637bd) in `[state+8]` at 3268-3274: a clock reading in seconds.
-4. Chooses the first sub-state:
+| Step | Function | Evidence | What it does | Tag |
+|---|---|---|---|---|
+| Slot 5 | `f_700108f904` | main_0121.c:3134-3587 | does these things in order | [C] |
+| 1 | `f_70000a7360`, `f_70000a7430`, `f_7000df2bb0`, `f_7000df7b28` | 3140-3225 | calls `f_70000a7360` and `f_70000a7430` and updates two settings objects through `f_7000df2bb0` and `f_7000df7b28` | [C] |
+| 2 | event 0x11 | 3231, 3239 | posts event 0x11 to the event object at `0x7002291000+0x5d8` and clears `[global 0x7003b14aa8 + 0x398]` | [C] |
+| 3 | `f_70005748ac` | 3268-3274 | stores `f_70005748ac()` times 1.0e-6 (the constant 0x358637bd) in `[state+8]`: a clock reading in seconds | [C] |
+| 4 | see the next table | 3276, 3281, 3342, 3435, 3468 | chooses the first sub-state | [C] |
 
 | Test | Result | Line |
 |---|---|---|
@@ -75,30 +94,56 @@ Slot 5 (main_0121.c:3134-3587) does these things in order [C]:
 | else `f_70000a8220()` or `f_70000a82e0()` is true | sub-state 13 PRES_MOMENTS_OUTRO | 3435 |
 | else (after `f_70008898c4` and two bytes) | sub-state 4 PRES_GROUP_A | 3468 |
 
-The byte at `[global 0x7003aeb818 + 0x136]` is the mercy-rule flag, [I]: its only visible use is to start MERCY_RULE. What the three predicates mean is not shown by their bodies in this note [H]; they are short functions with 403, 146 and few callers.
+**MERCY_RULE and the flags behind the choice**
 
-MERCY_RULE (value 1) is entered by `f_70010906bc` (main_0121.c:4137-4227). It calls `f_7000e23cec` with the current sub-state, sets byte `[state+0x31]` to 1, builds a message and hands it to `f_70008a846c`. The message text depends on byte `[global 0x700227e6b8 + 0x137]`: zero gives "Game called due to mercy rule." (string at 0x7001ca5f49) and nonzero gives "Game called due to griefing rules." (0x7001d2d0be) [C: both strings read from the data, the byte is read at 4167]. It sets the phase to 2 (4192) and prints the name.
+| Item | Detail | Tag |
+|---|---|---|
+| Entry | MERCY_RULE (value 1) is entered by `f_70010906bc` (main_0121.c:4137-4227): it calls `f_7000e23cec` with the current sub-state, sets byte `[state+0x31]` to 1, builds a message and hands it to `f_70008a846c`, sets the phase to 2 (4192) and prints the name | [C] |
+| Message text | depends on byte `[global 0x700227e6b8 + 0x137]`: zero gives "Game called due to mercy rule." (string at 0x7001ca5f49) and nonzero gives "Game called due to griefing rules." (0x7001d2d0be); both strings were read from the data and the byte is read at 4167 | [C] |
+| Mercy-rule flag | the byte at `[global 0x7003aeb818 + 0x136]`; its only visible use is to start MERCY_RULE | [I] |
+| Predicate meanings | what `f_70000aa6c0`, `f_70000a8220` and `f_70000a82e0` mean is not shown by their bodies in this note; they are short functions with 403, 146 and few callers | [H] |
 
-Other fields in GAME_OVER:
+**Other fields in GAME_OVER**
 
 | Field | Meaning | Tag |
 |---|---|---|
-| `[state+0x08]` | float: start time in seconds, written in slot 5 and in `f_70010906bc` | C |
-| `[state+0x18]` | sub-state number | C |
-| `[state+0x1c]` | phase number | C |
-| `[state+0x20]` | 16-bit value read at offset 0x130 of the result of `f_700181a6bc` (3245-3249) | C |
-| `[state+0x24]` | result of `f_7000ed5528` (3227-3229) | C |
-| `[state+0x28]` | set to 4 in slot 3 (3060); cleared in slot 5 | C |
-| `[state+0x30]` | byte set to 1 at the top of slot 7 (3611) | C |
-| `[state+0x38]` | pointer to a 0x28-byte helper object created by `operator new` in slot 3 (3061-3085) | C |
+| `[state+0x08]` | float: start time in seconds, written in slot 5 and in `f_70010906bc` | [C] |
+| `[state+0x18]` | sub-state number | [C] |
+| `[state+0x1c]` | phase number | [C] |
+| `[state+0x20]` | 16-bit value read at offset 0x130 of the result of `f_700181a6bc` (3245-3249) | [C] |
+| `[state+0x24]` | result of `f_7000ed5528` (3227-3229) | [C] |
+| `[state+0x28]` | set to 4 in slot 3 (3060); cleared in slot 5 | [C] |
+| `[state+0x30]` | byte set to 1 at the top of slot 7 (3611) | [C] |
+| `[state+0x38]` | pointer to a 0x28-byte helper object created by `operator new` in slot 3 (3061-3085) | [C] |
 
-Almost every presentation sub-state in GAME_OVER ends by setting sub-state 10, POST_GAME_MENU: `f_700108ff50` (3864), `f_7001090a58` (4504), `f_7001090d88` (4786), `f_7001090fec` (4850, 4903), `f_70010911d8` (5041), `f_7001091330` (5214), `f_70010915a0` (5278), `f_70010918e8` (5503), `f_70010920f4` (6139, 6220) [C]. PRES_GROUP_A goes to WAIT_FOR_MESSAGE (4288). PRES_COPYRIGHT is set by `f_70010911d8` (5022).
+## GAME_OVER: almost every presentation ends at POST_GAME_MENU
 
-The data above shows that GAME_OVER runs a chain of presentation sub-states and ends in POST_GAME_MENU. It does not show what ends the whole game, because value 14 (FADE_COMPLETE_EXIT_GAME) is only a name in the table [C] and no store of 14 is in the handlers I read.
+| Function | Line | What it does | Tag |
+|---|---|---|---|
+| `f_700108ff50` | 3864 | ends by setting sub-state 10, POST_GAME_MENU | [C] |
+| `f_7001090a58` | 4504 | ends by setting sub-state 10, POST_GAME_MENU | [C] |
+| `f_7001090d88` | 4786 | ends by setting sub-state 10, POST_GAME_MENU | [C] |
+| `f_7001090fec` | 4850, 4903 | ends by setting sub-state 10, POST_GAME_MENU | [C] |
+| `f_70010911d8` | 5022 (sets PRES_COPYRIGHT), 5041 | ends by setting sub-state 10, POST_GAME_MENU | [C] |
+| `f_7001091330` | 5214 | ends by setting sub-state 10, POST_GAME_MENU | [C] |
+| `f_70010915a0` | 5278 | ends by setting sub-state 10, POST_GAME_MENU | [C] |
+| `f_70010918e8` | 5503 | ends by setting sub-state 10, POST_GAME_MENU | [C] |
+| `f_70010920f4` | 6139, 6220 | ends by setting sub-state 10, POST_GAME_MENU | [C] |
+| PRES_GROUP_A | 4288 | goes to WAIT_FOR_MESSAGE instead | [C] |
+
+**What the chain shows**
+
+| Question | Answer | Tag |
+|---|---|---|
+| Shape of GAME_OVER | almost every presentation sub-state in GAME_OVER ends by setting sub-state 10, POST_GAME_MENU, so GAME_OVER runs a chain of presentation sub-states and ends there | [C] |
+| What ends the whole game | not shown: value 14 (FADE_COMPLETE_EXIT_GAME) is only a name in the table, and no store of 14 is in the handlers I read | [C] |
 
 ## PLAY_OVER sub-states
 
-The numbers are my mapping from each store to the string printed beside it. No table gives these names.
+| Item | Detail | Tag |
+|---|---|---|
+| Mapping | the numbers are my mapping from each store to the string printed beside it; no table gives these names | — |
+| State fields | the state keeps its sub-state at `[state+0x24]` and the phase at `[state+0x28]`; phase values seen are 0 (begin), 2 (running) and 3 (finished) | [C] |
 
 | Value | Name | Evidence |
 |---|---|---|
@@ -114,21 +159,28 @@ The numbers are my mapping from each store to the string printed beside it. No t
 | 9 | CHALLENGE_PLAY | 19027-19028, 19425-19426 |
 | 10 | EXIT | 16853, 16932, 16977, 17020, 17061, 17584, 19314-19315 |
 
-The state keeps its sub-state at `[state+0x24]` and the phase at `[state+0x28]`; phase values seen are 0 (begin), 2 (running) and 3 (finished) [C].
-
 ## PLAY_OVER: how a play ends
 
-Slot 5 `f_700109a6a8` (main_0121.c:16052-16276) [C]:
+**Slot 5 `f_700109a6a8` (main_0121.c:16052-16276)**
 
-1. Clears `[state+8]` and byte `[state+0x1c]`, and calls `f_700134df20(0)`.
-2. Posts event 0x11c (16104).
-3. Calls `f_70012c54ec` (the lighting manager) and then `f_70012d20a0` (16110): this starts the background lighting bake after each play, the one the walk-up freeze notes describe.
-4. Calls `f_700109aa1c` (below) and then loops over a few checks on `f_70002e2348` (play data) that end in `f_700109ab58` when a base-running or ball-state condition holds.
-5. Sets `[state+0x24]` to 1 (16220) when `f_70000a7360` or `f_7000a8325c` is true; otherwise sets it to 0 and prints WAIT (16228-16229).
+| Step | Function | Evidence | What it does | Tag |
+|---|---|---|---|---|
+| 1 | `f_700134df20(0)` | — | clears `[state+8]` and byte `[state+0x1c]`, and calls `f_700134df20(0)` | [C] |
+| 2 | `f_70005e6b40` | 16104 | posts event 0x11c | [C] |
+| 3 | `f_70012c54ec`, `f_70012d20a0` | 16110 | calls `f_70012c54ec` (the lighting manager) and then `f_70012d20a0`: this starts the background lighting bake after each play, the one the walk-up freeze notes describe | [C] |
+| 4 | `f_700109aa1c`, `f_70002e2348`, `f_700109ab58` | — | calls `f_700109aa1c` (next table) and then loops over a few checks on `f_70002e2348` (play data) that end in `f_700109ab58` when a base-running or ball-state condition holds | [C] |
+| 5 | `f_70000a7360`, `f_7000a8325c` | 16220, 16228-16229 | sets `[state+0x24]` to 1 when `f_70000a7360` or `f_7000a8325c` is true; otherwise sets it to 0 and prints WAIT | [C] |
 
-`f_700109aa1c` (16299-16388) decides how this play will be presented. It starts `[state+0x20]` at 6 (16308), then asks the presentation controller, which it gets from the object at `0x7002295000+0xb40`, whether it can show a presentation of a kind. The tests run in this order: kind 0xb (gated by the byte `[global 0x700227e798 + 0x58]`), then kind 0xa (`f_70010e62c4(0xa)` must be true, and a virtual call at slot 0x170 answers), then kind 6 (`f_70010e62c4(6)`), then kind 6 once more through `f_70010e672c`. The first one accepted is stored in `[state+0x20]` with byte `[state+0x19]` set to 1 (16368-16369) [C]. That the kinds are presentation ids, and that 0xb means "game over" and 6 "normal end of play", is my reading of how the next step uses them [I].
+**How the play will be presented: `f_700109aa1c` (16299-16388)**
 
-Slot 7 `f_700109af70` then runs these sub-states [C], with the lines where each finishes:
+| Step | Detail | Tag |
+|---|---|---|
+| Start value | starts `[state+0x20]` at 6 (16308) | [C] |
+| Tests, in order | asks the presentation controller, which it gets from the object at `0x7002295000+0xb40`, whether it can show a presentation of a kind: kind 0xb (gated by the byte `[global 0x700227e798 + 0x58]`), then kind 0xa (`f_70010e62c4(0xa)` must be true, and a virtual call at slot 0x170 answers), then kind 6 (`f_70010e62c4(6)`), then kind 6 once more through `f_70010e672c` | [C] |
+| Result | the first one accepted is stored in `[state+0x20]` with byte `[state+0x19]` set to 1 (16368-16369) | [C] |
+| Reading | that the kinds are presentation ids, and that 0xb means "game over" and 6 "normal end of play", is my reading of how the next step uses them | [I] |
+
+**Slot 7 `f_700109af70`, with the lines where each sub-state finishes**
 
 | Sub-state | Begin | Update | Next |
 |---|---|---|---|
@@ -143,27 +195,42 @@ Slot 7 `f_700109af70` then runs these sub-states [C], with the lines where each 
 | 8 CHALLENGE_PLAY_PROMPT | `f_700109cd28` (18864) | `f_700109ce30` (18937) | 9 (19028) |
 | 9 CHALLENGE_PLAY | inline at 17626-17700 | `f_700109d498` (19394) | not read |
 
-The WAIT sub-state decides how long to hold. Phase 0 computes `[state+0x2c]`, a number of seconds, from the play-result values `[game+0x30c]` and `[game+0x310]` (where game is `*(f_70016703f0()+8)`) and from several flags: the constants stored are 0, 1.0, 1.5, 2.0, 2.5, 3.0 and 3.5 (17215-17305) [C]. The update loop at 17312-17493 waits until `[state+8]` (elapsed) reaches that value, with early-out tests on `f_7001824b74(0x13)` and a flag at `[global 0x700227e6b8 + 0x128]`, then sets phase 3 (17493). The phase 3 handling at 17519-17575 calls `f_700109ade4` (16585, post-play work), reads `[game+0x308]` and `[game+0x310]` (compared with 2, 6 and 8), asks the presentation controller, and then picks 7 (if the byte `[global 0x700227e6b8 + 0x3d]` is set), 3 or 8. The three exits are at 17564, 17670 and 17853.
+**The WAIT sub-state: how long it holds**
 
-The EXIT handler `f_700109cf7c` (19034-19330, 292 lines) sets sub-state 10 and prints EXIT (19314-19315). It calls `f_700107e208` (main_0120.c:36295, 447 lines), which holds the strings "The batter", "The pitcher" and "A runner" and calls `f_70001e8834` (main_0014.c:28526, 2,158 lines), a play-result text builder with strings such as " stole home. " and " stole 3rd. " [C]. So EXIT builds the written description of the play [I].
+| Phase | Detail | Tag |
+|---|---|---|
+| 0 | computes `[state+0x2c]`, a number of seconds, from the play-result values `[game+0x30c]` and `[game+0x310]` (where game is `*(f_70016703f0()+8)`) and from several flags; the constants stored are 0, 1.0, 1.5, 2.0, 2.5, 3.0 and 3.5 (17215-17305) | [C] |
+| 0 to 2 | the update loop at 17312-17493 waits until `[state+8]` (elapsed) reaches that value, with early-out tests on `f_7001824b74(0x13)` and a flag at `[global 0x700227e6b8 + 0x128]`, then sets phase 3 (17493) | — |
+| 3 | the phase 3 handling at 17519-17575 calls `f_700109ade4` (16585, post-play work), reads `[game+0x308]` and `[game+0x310]` (compared with 2, 6 and 8), asks the presentation controller, and then picks 7 (if the byte `[global 0x700227e6b8 + 0x3d]` is set), 3 or 8; the three exits are at 17564, 17670 and 17853 | — |
 
-PLAY_OVER state fields:
+**The EXIT handler**
+
+| Item | Detail | Tag |
+|---|---|---|
+| Handler | `f_700109cf7c` (19034-19330, 292 lines) sets sub-state 10 and prints EXIT (19314-19315) | [C] |
+| Play description text | it calls `f_700107e208` (main_0120.c:36295, 447 lines), which holds the strings "The batter", "The pitcher" and "A runner", and calls `f_70001e8834` (main_0014.c:28526, 2,158 lines), a play-result text builder with strings such as " stole home. " and " stole 3rd. " | [C] |
+| Reading | so EXIT builds the written description of the play | [I] |
+
+**PLAY_OVER state fields**
 
 | Field | Meaning | Tag |
 |---|---|---|
-| `[state+0x08]` | float: seconds spent in the current sub-state | C |
-| `[state+0x18]` | byte: set to 1 after event 0x11b has been posted once (16768-16778) | C |
-| `[state+0x19]` | byte: a presentation kind was chosen (16347) | C |
-| `[state+0x1a]` | byte: set to 1 after two events 0x14d are posted in `f_700109c1b4` (18134-18145) | C |
-| `[state+0x1e]` | byte: set to 1 in `f_700109c1b4` when a presentation starts (18082) | C |
-| `[state+0x20]` | the chosen presentation kind: 6, 0xa or 0xb | C |
-| `[state+0x24]` | sub-state | C |
-| `[state+0x28]` | phase: 0, 2, 3 | C |
-| `[state+0x2c]` | float: how many seconds WAIT holds | C |
+| `[state+0x08]` | float: seconds spent in the current sub-state | [C] |
+| `[state+0x18]` | byte: set to 1 after event 0x11b has been posted once (16768-16778) | [C] |
+| `[state+0x19]` | byte: a presentation kind was chosen (16347) | [C] |
+| `[state+0x1a]` | byte: set to 1 after two events 0x14d are posted in `f_700109c1b4` (18134-18145) | [C] |
+| `[state+0x1e]` | byte: set to 1 in `f_700109c1b4` when a presentation starts (18082) | [C] |
+| `[state+0x20]` | the chosen presentation kind: 6, 0xa or 0xb | [C] |
+| `[state+0x24]` | sub-state | [C] |
+| `[state+0x28]` | phase: 0, 2, 3 | [C] |
+| `[state+0x2c]` | float: how many seconds WAIT holds | [C] |
 
 ## INNING_OVER
 
-The sub-state is at `[state+0x18]` and the phase at `[state+0x1c]` (both read as 32 bits, stored as 64). Names come from the strings printed beside each store.
+| Item | Detail | Tag |
+|---|---|---|
+| State fields | the sub-state is at `[state+0x18]` and the phase at `[state+0x1c]` (both read as 32 bits, stored as 64) | — |
+| Names | come from the strings printed beside each store | — |
 
 | Value | Name | Set at |
 |---|---|---|
@@ -174,51 +241,65 @@ The sub-state is at `[state+0x18]` and the phase at `[state+0x1c]` (both read as
 | 4 | no name | 6875 |
 | 5 | DONE | 7125-7126, 7300-7301 |
 
-Slot 5 `f_7001092518` (6441-6603) [C]:
+**Slot 5 `f_7001092518` (6441-6603)**
 
-1. Posts event 0x11 (6455).
-2. If the object from `0x7002295000+0xb40` (virtual slot 0x80) has `[+0x450] == 10` (6475), sets sub-state 1 and prints PRESENTATION.
-3. Otherwise reads the half-inning counter `[global 0x700227e6b8 + 0x20]`. It rotates it right by 1 to get a count, takes bit 0 as a flag, adds 1, looks up two 16-bit values through `f_700184abb4`, and posts events 0x121 and 0x13b with them (6485, 6559). Then sets sub-state 0 and prints NORMAL.
-4. Calls `f_7000574c40` and the newline helper, and if the counter equals 7 calls `f_70014aea4c(1)` and `f_70014af940` (6570-6579). I did not read those two.
-5. Clears byte `[state+0x20]`.
+| Step | Function | Evidence | What it does | Tag |
+|---|---|---|---|---|
+| 1 | `f_70005e6b40` | 6455 | posts event 0x11 | [C] |
+| 2 | `0x7002295000+0xb40` (virtual slot 0x80) | 6475 | if the object from `0x7002295000+0xb40` has `[+0x450] == 10`, sets sub-state 1 and prints PRESENTATION | [C] |
+| 3 | `f_700184abb4`, events 0x121 and 0x13b | 6485, 6559 | otherwise reads the half-inning counter `[global 0x700227e6b8 + 0x20]`: it rotates it right by 1 to get a count, takes bit 0 as a flag, adds 1, looks up two 16-bit values through `f_700184abb4`, and posts events 0x121 and 0x13b with them; then sets sub-state 0 and prints NORMAL | [C] |
+| 4 | `f_7000574c40`, `f_70014aea4c(1)`, `f_70014af940` | 6570-6579 | calls `f_7000574c40` and the newline helper, and if the counter equals 7 calls `f_70014aea4c(1)` and `f_70014af940`; I did not read those two | [C] |
+| 5 | — | — | clears byte `[state+0x20]` | [C] |
 
-Slot 7 `f_700109276c` (6604-7560, 789 lines) [C unless marked]:
+**Slot 7 `f_700109276c` (6604-7560, 789 lines), every row [C] unless marked**
 
-| Sub-state | Action | Next |
+| Sub-state | Action | Next | Tag |
+|---|---|---|---|
+| 0 NORMAL | per-frame call through the object at `0x700227e128` (virtual slot 0x38, with the time step), then phases 0 to 5: waits `[state+8]` against 2.0 s or 10.0 s (picked by `f_7000d7412c`; constants 0x40000000 and 0x41200000 at 6657-6658), posts event 0 to the object at `0x7002291000+0x5d8`, then a short hold and event 0x29a (6755) | 4 (6875) | [C] |
+| 1 PRESENTATION | same phase ladder as 0, through `f_70003aaf00` for the time step | 4 (6875) | [C] |
+| 4 | begin posts event 0x121 again and calls `f_7001093390` (7469) and `f_7001093278` (7393); update waits on the presentation controller | 2 START_INNING_PRES (7158) or 5 DONE (7125) | [C] |
+| 2 START_INNING_PRES | posts event 0xcc, runs the presentation controller | 3 CHECK_SUB (7048) | [C] |
+| 3 CHECK_SUB | reads bytes `[ctx+0x784]`, `[ctx+0x125]` and the value `[ctx+0x12c]` (7173-7180), clears bit 22 of `[global 0x700227e708 + 0x34]` (7199), calls `f_70013400e0`, `f_700133fcc0(1,0xff,1)`, `f_7000ed2780` and `f_7000ed562c` (7208; the function is main_0105.c:33822) | 5 DONE (7300) | [C] |
+| 5 DONE | posts an event and tests the phase; the rest of the block was not read | not read | [C] |
+
+**The pitching-change prompt and the last slots**
+
+| Item | Detail | Tag |
 |---|---|---|
-| 0 NORMAL | per-frame call through the object at `0x700227e128` (virtual slot 0x38, with the time step), then phases 0 to 5: waits `[state+8]` against 2.0 s or 10.0 s (picked by `f_7000d7412c`; constants 0x40000000 and 0x41200000 at 6657-6658), posts event 0 to the object at `0x7002291000+0x5d8`, then a short hold and event 0x29a (6755) | 4 (6875) |
-| 1 PRESENTATION | same phase ladder as 0, through `f_70003aaf00` for the time step | 4 (6875) |
-| 4 | begin posts event 0x121 again and calls `f_7001093390` (7469) and `f_7001093278` (7393); update waits on the presentation controller | 2 START_INNING_PRES (7158) or 5 DONE (7125) |
-| 2 START_INNING_PRES | posts event 0xcc, runs the presentation controller | 3 CHECK_SUB (7048) |
-| 3 CHECK_SUB | reads bytes `[ctx+0x784]`, `[ctx+0x125]` and the value `[ctx+0x12c]` (7173-7180), clears bit 22 of `[global 0x700227e708 + 0x34]` (7199), calls `f_70013400e0`, `f_700133fcc0(1,0xff,1)`, `f_7000ed2780` and `f_7000ed562c` (7208; the function is main_0105.c:33822) | 5 DONE (7300) |
-| 5 DONE | posts an event and tests the phase; the rest of the block was not read | not read |
+| `f_7000ed562c` | 148 lines, one caller (`f_700109276c`); it holds the prompts "Do you still want %s %s to come in? You have 15 seconds ..." and "Do you still want to change pitchers?" | [C] |
+| Reading | so CHECK_SUB is where a pending pitching change or substitution is confirmed with a 15 second limit | [I] |
+| Substitution logic | by a call-tree search, no function with the SubstitutionLogic strings is reachable within two calls of any INNING_OVER handler; where the substitution is decided is therefore not in these handlers | [C] |
+| Slot 6 `f_70010934d8` | 7560-7602: clears byte `[state+0x20]` and, through the object at `0x7002296000+0x848`, calls `f_7000eb466c` | — |
+| Slot 32 `f_7001093558` | was not read | — |
 
-`f_7000ed562c` (148 lines, one caller, `f_700109276c`) holds the prompts "Do you still want %s %s to come in? You have 15 seconds ..." and "Do you still want to change pitchers?" [C]. So CHECK_SUB is where a pending pitching change or substitution is confirmed with a 15 second limit [I]. No function with the SubstitutionLogic strings is reachable within two calls of any INNING_OVER handler [C: call-tree search]. Where the substitution is decided is therefore not in these handlers.
-
-Slot 6 `f_70010934d8` (7560-7602) clears byte `[state+0x20]` and, through the object at `0x7002296000+0x848`, calls `f_7000eb466c`. Slot 32 `f_7001093558` was not read.
-
-INNING_OVER state fields:
+**INNING_OVER state fields**
 
 | Field | Meaning | Tag |
 |---|---|---|
-| `[state+0x08]` | float: seconds in the current phase | C |
-| `[state+0x10]` | buffer handed to virtual calls on the presentation controller | C |
-| `[state+0x18]` | sub-state | C |
-| `[state+0x1c]` | phase: 0 to 5 | C |
-| `[state+0x20]` | byte flag, cleared in slots 5 and 6 | C |
+| `[state+0x08]` | float: seconds in the current phase | [C] |
+| `[state+0x10]` | buffer handed to virtual calls on the presentation controller | [C] |
+| `[state+0x18]` | sub-state | [C] |
+| `[state+0x1c]` | phase: 0 to 5 | [C] |
+| `[state+0x20]` | byte flag, cleared in slots 5 and 6 | [C] |
 
 ## The loop, as far as the bodies show
 
 | Step | Evidence | Tag |
 |---|---|---|
-| BATTER_UP to IN_PLAY to PLAY_OVER | the earlier handler read (`f_700108b628`); PLAY_OVER slot 5 is entered after a play and starts the lighting bake | I |
-| PLAY_OVER decides how the play is shown | `f_700109aa1c` picks kind 0xb (game over), 0xa or 6 | C |
-| PLAY_OVER after the wait | sub-state 5 PRES_GAMEOVER if the kind is 0xb, EXIT if 0xa, otherwise PRES_ENDOFPLAY or POST_PLAY | C |
-| PLAY_OVER finishes | sub-state 10 EXIT in every path; the number 10 is printed as the name | C |
-| INNING_OVER runs | NORMAL or PRESENTATION, then START_INNING_PRES, CHECK_SUB (pitching change prompt), DONE | C |
-| GAME_OVER runs | MERCY_RULE, POST_GAME_MENU, PRES_MOMENTS_OUTRO or PRES_GROUP_A first, then presentations, ending at POST_GAME_MENU | C |
+| BATTER_UP to IN_PLAY to PLAY_OVER | the earlier handler read (`f_700108b628`); PLAY_OVER slot 5 is entered after a play and starts the lighting bake | [I] |
+| PLAY_OVER decides how the play is shown | `f_700109aa1c` picks kind 0xb (game over), 0xa or 6 | [C] |
+| PLAY_OVER after the wait | sub-state 5 PRES_GAMEOVER if the kind is 0xb, EXIT if 0xa, otherwise PRES_ENDOFPLAY or POST_PLAY | [C] |
+| PLAY_OVER finishes | sub-state 10 EXIT in every path; the number 10 is printed as the name | [C] |
+| INNING_OVER runs | NORMAL or PRESENTATION, then START_INNING_PRES, CHECK_SUB (pitching change prompt), DONE | [C] |
+| GAME_OVER runs | MERCY_RULE, POST_GAME_MENU, PRES_MOMENTS_OUTRO or PRES_GROUP_A first, then presentations, ending at POST_GAME_MENU | [C] |
 
-What leaves each state is not in these bodies. Nothing I read stores a different game-state class: EXIT, DONE and POST_GAME_MENU are the final sub-states, and the code that sees them lives in whatever calls slots 5 and 7. Outs, score and inning tests, and the choice between INNING_OVER and GAME_OVER, are not in these handlers [H that they are in the caller or in the play data].
+**What leaves each state**
+
+| Item | Detail | Tag |
+|---|---|---|
+| Final sub-states | nothing I read stores a different game-state class: EXIT, DONE and POST_GAME_MENU are the final sub-states, and the code that sees them lives in whatever calls slots 5 and 7 | — |
+| What leaves each state | not in these bodies: it lives in whatever calls slots 5 and 7 | — |
+| Outs, score and inning tests | outs, score and inning tests, and the choice between INNING_OVER and GAME_OVER, are not in these handlers; they are in the caller or in the play data | [H] |
 
 ## Named callees seen
 

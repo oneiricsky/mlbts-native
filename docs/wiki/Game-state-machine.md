@@ -1,6 +1,4 @@
-The game's top-level flow is a set of 12 state classes that share one interface. Their function bodies were read by four agents and each report was then spot-checked against the generated C (20 claims per report). This page keeps what held up. The detail pages are [Intro states](Intro-states), [Batter up state](Batter-up-state), [Play states](Play-states) and [End states](End-states).
-
-Tags: C means the body shows it, I means inferred, H means a guess.
+The game's top-level flow is a set of 12 state classes that share one interface, and each topic below is one table. Their function bodies were read by four agents, and each report was then spot-checked against the generated C (20 claims per report), so this page keeps what held up. The detail pages are [Intro states](Intro-states), [Batter up state](Batter-up-state), [Play states](Play-states) and [End states](End-states). Tags: C means the body shows it, I means inferred, H means a guess.
 
 ## The 12 classes
 
@@ -23,16 +21,23 @@ Tags: C means the body shows it, I means inferred, H means a guess.
 
 | Slot | Role | Tag |
 |---|---|---|
-| 0, 1 | destructor thunks, 5 lines each | C |
-| 2 | returns the state's name | C |
-| 3 | resets the state's own fields to defaults (WARM_UP also logs) | C |
-| 5 | enter: runs once when the state starts. Intro states log `ATT_SCREEN: ...` and store a start time; BATTER_UP resets its timer and fields and asks for the stadium lighting; PLAY_OVER starts the background lighting bake | C |
-| 6 | exit: clears phase and step, resets the input context | C |
-| 7 | update: runs every frame, adds the frame time into a float at `[this+0x8]`, then runs a phase machine | C |
-| 9, 10 | subscribe and unsubscribe to events on a bus at `[0x7002298000+0x428]` | C |
-| 32, 33 | skip hooks and sub-state tables, differ by state | I |
+| 0, 1 | destructor thunks, 5 lines each | [C] |
+| 2 | returns the state's name | [C] |
+| 3 | resets the state's own fields to defaults (WARM_UP also logs) | [C] |
+| 5 | enter: runs once when the state starts. Intro states log `ATT_SCREEN: ...` and store a start time; BATTER_UP resets its timer and fields and asks for the stadium lighting; PLAY_OVER starts the background lighting bake | [C] |
+| 6 | exit: clears phase and step, resets the input context | [C] |
+| 7 | update: runs every frame, adds the frame time into a float at `[this+0x8]`, then runs a phase machine | [C] |
+| 9, 10 | subscribe and unsubscribe to events on a bus at `[0x7002298000+0x428]` | [C] |
+| 32, 33 | skip hooks and sub-state tables, differ by state | [I] |
+| 5 to 7 | nothing calls them directly: they are reached through the vtable by whatever owns the state, so "enter", "exit" and "update" are readings of what the bodies do | [I] |
 
-Nothing calls slots 5 to 7 directly. They are reached through the vtable by whatever owns the state, so "enter", "exit" and "update" are readings of what the bodies do [I]. Slot 9 and 10 counts: BATTER_UP 17 events, PRE_PLAY 7, IN_PLAY 22.
+Events subscribed through slots 9 and 10:
+
+| State | Events subscribed |
+|---|---|
+| BATTER_UP | 17 events |
+| PRE_PLAY | 7 events |
+| IN_PLAY | 22 events |
 
 ## Where the sub-state lives
 
@@ -44,11 +49,13 @@ Nothing calls slots 5 to 7 directly. They are reached through the vtable by what
 | GAME_OVER | `[this+0x18]` | `[this+0x1c]` |
 | PRE_GAME, GAME_INTRO and other intro states | `+0xc` or `+0x18`, by state | |
 
-Every phase change goes through `f_7000e23cec`, which posts event 0x13d (56 callers). It stores the mode number, the new phase and a flag next to each other on its stack and passes the address of the first. Whether the receiver reads the flag is not visible [H].
+The one function every phase change passes through:
+
+| Function | What it does | Open | Tag |
+|---|---|---|---|
+| `f_7000e23cec` | every phase change goes through it; it posts event 0x13d (56 callers). It stores the mode number, the new phase and a flag next to each other on its stack and passes the address of the first | whether the receiver reads the flag is not visible | [H] |
 
 ## BATTER_UP sub-states
-
-Decoded from the jump table in the setter `0x700108b500`, with each case's log string matched [C].
 
 | Value | Name | Set by |
 |---|---|---|
@@ -62,7 +69,14 @@ Decoded from the jump table in the setter `0x700108b500`, with each case's log s
 | 9 | IN_PITCH | `0x700108e610`, which also posts event 0x133 |
 | 10 | MANAGER_MODE | `0x700108d4ec` with flag 0, which posts 0x16b |
 
-Values 4, 6 and 11 are used but never logged. The path is NONE, WALK_UP or WALK_UP_PRES, PLAYERS_SETUP, SELECT_PITCH, LAUNCH_PITCH, IN_PITCH, with MANAGER_MODE reachable from SELECT_PITCH. How BATTER_UP hands over to the next state is not found: slot 7 has no block for sub-states 8 or 9.
+What the table adds up to:
+
+| Point | Detail | Tag |
+|---|---|---|
+| Decoding | from the jump table in the setter `0x700108b500`, with each case's log string matched | [C] |
+| Path | NONE, WALK_UP or WALK_UP_PRES, PLAYERS_SETUP, SELECT_PITCH, LAUNCH_PITCH, IN_PITCH, with MANAGER_MODE reachable from SELECT_PITCH | |
+| Values 4, 6, 11 | used but never logged | |
+| Handover | how BATTER_UP hands over to the next state is not found: slot 7 has no block for sub-states 8 or 9 | |
 
 ## IN_PLAY sub-states
 
@@ -75,17 +89,36 @@ Values 4, 6 and 11 are used but never logged. The path is NONE, WALK_UP or WALK_
 | 4 | ANIM_SEQUENCE | entry posts (4, 0), waits 2.5 s if a flag is set |
 | 5 | PLAY_OVER | in this sub-state `0x700109448c` (slot 7) posts request (7, 0, 0) every update to hand over |
 
-IN_PLAY's event handler is `0x70010939dc`. It is a function the state calls, not a vtable slot. Event 0x13f moves it to IN_PITCH and the 0x213 rules were checked; the handler also reacts to 0x38, 0x61, 0x20a, 0x5b and 0x21a, which were read but not re-checked.
+Its event handler:
+
+| Function | Role | Note |
+|---|---|---|
+| `0x70010939dc` | IN_PLAY's event handler: a function the state calls, not a vtable slot | event 0x13f moves it to IN_PITCH, and the 0x213 rules were checked |
+| `0x70010939dc` | the same handler also reacts to 0x38, 0x61, 0x20a, 0x5b and 0x21a | those were read but not re-checked |
 
 ## PRE_PLAY and GAME_OVER names
 
-PRE_PLAY has 22 sub-state names, 0 ONLINE_SYNC_META to 21 EXIT, in a pointer table at `0x70022d19a8` that slot 5 addresses literally [C].
+| State | Names | Table | Note | Tag |
+|---|---|---|---|---|
+| PRE_PLAY | 22 sub-state names, 0 ONLINE_SYNC_META to 21 EXIT | pointer table at `0x70022d19a8` that slot 5 addresses literally | | [C] |
+| GAME_OVER | sub-states 0 to 14 (NONE, MERCY_RULE, PRES_GROUP_A and so on) and five phases (ENTER, LOAD, UPDATE, UPDATE_PRES, EXIT) | sub-states at `0x70021e2c90`, phases at `0x70021e2d00` | slot 5 picks the first sub-state, and nearly every presentation ends in POST_GAME_MENU | [C] |
 
-GAME_OVER has sub-states 0 to 14 (NONE, MERCY_RULE, PRES_GROUP_A and so on) in a table at `0x70021e2c90`, and five phases (ENTER, LOAD, UPDATE, UPDATE_PRES, EXIT) in a table at `0x70021e2d00` [C]. Slot 5 picks the first sub-state, and nearly every presentation ends in POST_GAME_MENU. The mercy-rule message depends on a byte at `[[0x700227e6b8]+0x137]`: zero gives "Game called due to mercy rule", nonzero gives the "griefing rules" text.
+The mercy-rule message depends on a byte at `[[0x700227e6b8]+0x137]`:
+
+| Condition | Message |
+|---|---|
+| byte is zero | "Game called due to mercy rule" |
+| byte is nonzero | the "griefing rules" text |
 
 ## The end of a play
 
-PLAY_OVER slot 5 posts event 0x11c and starts the background lighting bake (`f_70012c54ec`, then `f_70012d20a0`). `f_700109aa1c` then picks how the play is shown by trying presentation kinds in order: 0xb, 0xa, 6, and 6 again through `f_70010e672c`. The first accepted kind is stored at `[this+0x20]` and routes the exit [C]. That 0xb means game over is my reading [I]. INNING_OVER slot 5 posts event 0x11, and its CHECK_SUB step calls `f_7000ed562c`, which holds the "Do you still want ... to come in? You have 15 seconds" prompt.
+| Function | What it does | Tag |
+|---|---|---|
+| PLAY_OVER slot 5 | posts event 0x11c and starts the background lighting bake (`f_70012c54ec`, then `f_70012d20a0`) | |
+| `f_700109aa1c` | then picks how the play is shown by trying presentation kinds in order: 0xb, 0xa, 6, and 6 again through `f_70010e672c`. The first accepted kind is stored at `[this+0x20]` and routes the exit | [C] |
+| reading of 0xb | that 0xb means game over | [I] |
+| INNING_OVER slot 5 | posts event 0x11 | |
+| `f_7000ed562c` | called by INNING_OVER's CHECK_SUB step; it holds the "Do you still want ... to come in? You have 15 seconds" prompt | |
 
 ## Not found
 

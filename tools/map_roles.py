@@ -10,7 +10,7 @@ Derived from game code: stays under work/, never committed.
 Fields per function: module addr span lines callers ncallees dispatch udf shape kind role basis tag
 name vtable slot vtable_size strings apis target off sub.
   kind   library | sdk | import | symbol | game | boilerplate | unknown
-  tag    C (symbol, import, string in the body) | I (shape, vtable, callee pattern) | H (guess from neighbours)
+  tag    C (string, symbol, import) | I (inferred via shape of code or call graph) | H (inferred via neighbours)
 """
 import argparse, json, os, re, struct, subprocess, sys
 from collections import Counter, defaultdict
