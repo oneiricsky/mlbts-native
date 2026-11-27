@@ -5,8 +5,8 @@ There are four separate stalls, and only one is caused by the fork.
 | # | Stall | Size | Cause | State |
 |---|---|---|---|---|
 | 1 | Lineup card | about 64 ms now, was 555 ms | The forced lighting bake, removed by upstream's walk-up patch (inferred) | Gone in 0.2.0 |
-| 2 | Head textures with PS5 textures on | 200 to 670 ms frames, cold file cache only | The PS5 file was read from the hard disk on the replay thread | Fixed on `research/load-stall` |
-| 3 | Match start, once | 1.4 to 1.6 s frame | The game's own CPU work: grass tiles plus a 512x512 distance-field render | MSDF part fixed on a research branch; see [Match-start freeze](Match-start-freeze) |
+| 2 | Head textures with PS5 textures on | 200 to 670 ms frames, cold file cache only | The PS5 file was read from the hard disk on the replay thread | Fixed, in `main` |
+| 3 | Match start, once | 1.4 to 1.6 s frame | The game's own CPU work: grass tiles plus a 512x512 distance-field render | MSDF part fixed, in `main`; see [Match-start freeze](Match-start-freeze) |
 | 4 | Match start, a few frames | 140 to 250 ms | A burst of 52 GPU waits, shader loading, a UI event wait | Counted, not investigated |
 
 ## Stall 2: cold reads on the replay thread

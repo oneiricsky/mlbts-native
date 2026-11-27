@@ -57,7 +57,7 @@ The game does not count frames. Its timer (1.0.20 `main+0x58a9f0`) sleeps to a v
 |---|---|
 | Settings | env `MLB_<KEY>` (or `TOTK_<KEY>`), then `work/build/mlb.cfg`, then the `cfg.c` default |
 | Game version | SHA-256 of `main`; `tools/data/expected-<ver>.json`; `tools/addrmap.py` maps 1.0.15 addresses to 1.0.20 |
-| Patch sets | `tools/data/patches-1.0.20.txt` and `-1.0.15.txt` (format in `recomp/patches.py`, passed to `recomp/gen.py --patches`): `walkup_light` (6 sites), `walkup_leaders` (1), `msdf_skip` (research branch); the generator lifts the original and the replacement and a runtime switch picks one |
+| Patch sets | `tools/data/patches-1.0.20.txt` and `-1.0.15.txt` (format in `recomp/patches.py`, passed to `recomp/gen.py --patches`): `walkup_light` (6 sites), `walkup_leaders` (1), `msdf_skip` (1, 1.0.20 only); the generator lifts the original and the replacement and a runtime switch picks one |
 
 ## Saves, input, audio, misc [C]
 

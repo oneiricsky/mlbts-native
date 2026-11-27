@@ -10,7 +10,7 @@ Read before reopening something. Sources: `docs/reports/*.md`, `docs/walkup-free
 | 5-6 hour crash (issue 17) | loader bound symbols differently from Horizon's rtld: memory leak | copy rtld's rule | upstream 0.2.0 |
 | Bright yellow face with PS5 colour maps | a compute pass measures skin tone with `texelFetch` over a rectangle in Switch texel coordinates; on a 1024x512 image that is the wrong quarter, lit face shaders divide by it | bind PS5 images from the Switch-size level in compute (`get_view`, `hd_shift`) | blown faces 50 -> 0 of 101 shots |
 | 15 ms cold-disk stalls per PS5 head file, 200-670 ms frames | file read on the replay thread at first upload | prefetch thread on file open (`MLB_HD_PREFETCH`) | max stall on replay thread 28 ms -> 0.7 ms |
-| Match-start freeze (MSDF step ~700 ms) | game proves empty space has no edges: ~67 M NaN results, 97% of pixels infinite | patch `msdf_skip` (research branch, not merged) | 687 -> 189 ms mean, 6 runs; 1,048,576-byte texture identical on 2 stadiums |
+| Match-start freeze (MSDF step ~700 ms) | game proves empty space has no edges: ~67 M NaN results, 97% of pixels infinite | patch `msdf_skip` (in `main` since `ec0370d`, 2026-11-26; 1.0.20 only) | 687 -> 189 ms mean, 6 runs; 1,048,576-byte texture identical on 2 stadiums |
 | Cutscene dips 25-45 fps | `getenv()` x4 per `get_view` in diagnostics (12 ms/frame) | cache once; rule: no lookups in per-draw paths | 59 fps mean, 6.5 min |
 | Tutorials back every start; hub upgrades lost; custom cameras reset | online-only profile; autosave not triggered by hub purchases; cache storage never created | `tutorials.c`, `rtts_autosave.c`, `cache_storage.c` | per-file headers |
 | Face buttons wrong in menus vs play | one icon cell serves both; Switch build maps by place | `MLB_PAD_MAP=auto` switched by the game's UI screen log lines | hid.c |
@@ -19,9 +19,9 @@ Read before reopening something. Sources: `docs/reports/*.md`, `docs/walkup-free
 
 | Problem | State | Settles it |
 |---|---|---|
-| Match-start CPU work (1.4 to 1.6 s frame) | grass tiles about 172 ms plus MSDF about 700 ms; MSDF fixed on a research branch, grass untouched; other start frames: a 52-wait GPU burst at Pitch History and Meter init (245 ms), shader-loading frames, a UI node event wait | profile the grass step; trace the 52-wait burst |
+| Match-start CPU work (1.4 to 1.6 s frame) | grass tiles about 172 ms plus MSDF about 700 ms; MSDF fixed by `msdf_skip`, grass untouched; other start frames: a 52-wait GPU burst at Pitch History and Meter init (245 ms), shader-loading frames, a UI node event wait | profile the grass step; trace the 52-wait burst |
 | Lineup card stall (555 ms, now about 64 ms) | believed to be the same lighting bake, inferred from the shape, never traced with the manager's fields | log the manager's fields at the lineup card |
-| `msdf_skip` equality | proven for two stadiums only | more stadiums, times of day and weather, a whole match, the 1.0.15 address (needs the 1.0.15 exefs); re-measure `research/float-fixup` |
+| `msdf_skip` equality | proven for two stadiums only | more stadiums, times of day and weather, a whole match, the 1.0.15 address (needs the 1.0.15 exefs); re-measure the float fix-up (`MLB_FP_FIXUP`) with the skip on |
 | Stadiums turn black now and then | reported from one played match (2026-11-27), not reproduced; upstream issue 30 may be related (guess) | a screenshot and the moment; the same match with `--no-hd-textures` and with `--no-walkup-light` |
 | PS5 crowd heads, created-player layers, mascots | player head maps are done and on by default; these categories are untouched | check each category's compute consumers first (`docs/ps5-textures.md`) |
 | Issue 10 | confirm flips to circle on `PresSkip` and the dynamic challenge popup | add those screens to the menu list in `hid_game_log`; needs the challenge screen's real name |
