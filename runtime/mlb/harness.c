@@ -37,6 +37,8 @@ int harness_active(void) { return g_active; }
 const HarnessScenario *harness_scenario(void) { return &g_sc; }
 int harness_match_settings_filled(void) { return g_filled; }
 
+static void mkdirs(const char *dir);
+
 // ---- frame log. The frame tick runs on the present thread, markers on any thread, start and stop on the dev panel's
 // thread or the watcher's. g_fl is read without the lock only to skip it; every use of the stream is under g_fl_lock,
 // and a stop clears g_fl under that lock before it closes the stream, so nothing uses it after fclose.
@@ -73,6 +75,11 @@ static void framelog_atexit(void) { harness_framelog_stop(); }
 int harness_framelog_start(const char *path) {
     if (!g_on || !path || !*path) return 0;
     if (g_fl) { rt_log("harness: framelog not started (%s): one is running", path); return 0; }
+    char dir[700];
+    snprintf(dir, sizeof dir, "%s", path);
+    char *cut = strrchr(dir, '/'), *bs = strrchr(dir, '\\');
+    if (bs && (!cut || bs > cut)) cut = bs;
+    if (cut && cut != dir) *cut = 0, mkdirs(dir);
     FILE *f = fopen(path, "wb");
     if (!f) { rt_log("harness: framelog cannot open %s", path); return 0; }
     setvbuf(f, NULL, _IOFBF, 1 << 16);
