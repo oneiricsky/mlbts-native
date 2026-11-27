@@ -87,7 +87,8 @@ textures off to compare, so the cause is **not known**.
 
 ## Open: stadiums turn black now and then
 
-Reported by the owner from the played match. Not reproduced.
+Reported by the owner from the played match: only the stadium turns black, now and then. Not reproduced. Home park:
+Seattle (a night lighting rig was baked at the start).
 
 - The log records nothing about it. No stadium texture was swapped: all 110 swaps are head files.
 - About 500 screenshots from computer-played runs show no black stadium. One near-black frame appears at about the same
@@ -98,8 +99,15 @@ Reported by the owner from the played match. Not reproduced.
 - Untested guesses: the `walkup_light` patch with Fast Play's shorter gaps (a lighting buffer shown before its bake),
   the PS5 textures, a driver fault.
 
-To settle it: a screenshot and the moment it happens; then the same kind of match with `--no-hd-textures`, and with
-`--no-walkup-light`.
+Read since (static, the 1.0.20 code): the after-play bake (`f_70012d20a0`) writes the new time into the spare buffer
+when it **starts**, but the request (`f_70012d1e04`) switches at once only if the bake flag's bit 0 is clear, and otherwise
+waits for the bake to end. So an ordinary early batter-up does not show a half-baked buffer, and no fault was found on
+that path. Not read: the bake steps themselves and what else clears the flags. The patch does trust a finished buffer
+where the game's own forced request would bake it again, so a bad buffer would stay on screen. Upstream 0.2.1 and its
+`dev` branch have no fix for this (their black-screen fix is FSR 4 only).
+
+To settle it: the same kind of match (Seattle at home, Fast Play) with `--no-walkup-light`, then with
+`--no-hd-textures`, counting black-stadium moments in screenshots.
 
 ## Not covered
 
