@@ -70,7 +70,7 @@ What the strings and vtables prove:
 | Data | player, team and league data in named tables (`D_PLR_PROFILE`, `D_PLYR_CONTRACT`, `LG_STATS_DATA`, `D_SINGLE_G_DATA`), serialized through Flux archives and JSON |
 | Commentary | play-by-play `PXP` events pick phrases per play; audio banks `PXP.SKX` (3.9 GB) on disk; text generators for records and awards; Sony SCREAM mixes in software and sends one 5.1 stream |
 | Online | `ol*`, `CNet*` and `CPlugin*` classes over libcurl, OpenSSL and nifm; offline play follows the "no network" paths; a few online-profile behaviours leak into offline play (tutorials list, hub upgrade autosave, cache storage) |
-| Config | `BOOT/CONFIG_MAIN(_USER).TXT` bare lines turn options on, matched by 32-bit hash (`AIvAI` 0xAA21F9C5 with `GameOnly` 0xC6F7ECA5 starts an AI match with no input; 27 of 109 queried hashes are named); three config-query functions, 319 call sites |
+| Config | `BOOT/CONFIG_MAIN(_USER).TXT` bare lines turn options on, matched by 32-bit hash (`AIvAI` 0xAA21F9C5 with `GameOnly` 0xC6F7ECA5 starts an AI match with no input; 32 of 132 read hashes are named); two tables, number and text; `tools/config_options.py` lists them |
 | Time of day | advances per pitch; stadium lighting is re-baked per new time into one of two buffers; stadium props flip at 19.5 h |
 | Coverage | about 12,800 of 94,991 `main` functions reference a string; the rest are known by neighbours, vtable slots, callers and size |
 

@@ -2,7 +2,7 @@ How a test run is set up, and the rules for comparing two builds. Most of this e
 
 ## The boot options that make a repeatable match
 
-The retail game kept its engine's dev-config system. At boot it reads `BOOT/CONFIG_MAIN_USER.TXT` from the RomFS if that file exists, and otherwise `BOOT/CONFIG_MAIN.TXT`. Lines starting with `#` are comments, a bare line turns a boolean option on, and `KEY=VALUE` sets a value. Options are matched by a 32-bit hash, so the names appear nowhere in the binary. They were recovered by reversing the hash (an ELF-style hash followed by `h*0x9E3779B7 + ~h*0x61C88641`), collecting every hash the retail code passes to the three config-query functions (319 call sites, 109 unique hashes) and brute-forcing candidates until 27 matched.
+The retail game kept its engine's dev-config system. At boot it reads `BOOT/CONFIG_MAIN_USER.TXT` from the RomFS if that file exists, and otherwise `BOOT/CONFIG_MAIN.TXT`. Lines starting with `#` are comments, a bare line turns a boolean option on, and `KEY=VALUE` sets a value. Options are matched by a 32-bit hash (an ELF-style hash followed by `h*0x9E3779B7 + ~h*0x61C88641`), so most names appear nowhere in the game. The code reads 132 distinct hashes and 32 are named; `python -I tools/config_options.py --names` lists them all.
 
 A user file containing these two lines boots straight into an AI-against-AI match with no input:
 

@@ -3,11 +3,28 @@
 The retail game kept its engine's dev-config system. At boot it reads `BOOT/CONFIG_MAIN_USER.TXT`
 from the RomFS if that file exists, and otherwise `BOOT/CONFIG_MAIN.TXT`. `#` lines are comments. A
 bare line turns a boolean option on (case-insensitive). `KEY=VALUE` lines set values. Options are
-matched by a 32-bit hash, so the names appear nowhere in the binary. The names were recovered by
-reversing the hash (a custom ELF-style hash followed by `h*0x9E3779B7 + ~h*0x61C88641`), collecting
-every hash constant the retail code passes to the three config-query functions (319 call sites, 109
-unique hashes), and brute-forcing candidates until 27 matched. The rest are options not named yet,
-or other lookups that share the hash function.
+matched by a 32-bit hash (an ELF-style hash over the upper-cased name, then
+`h*0x9E3779B7 + ~h*0x61C88641`), so most names appear nowhere in the game.
+
+**Not all of them are named: 32 of 132.** `python -I tools/config_options.py --names --check` (1.0.20)
+finds every call to the functions that read the options and prints each hash, its call count and any
+name it can recover. Rechecked 2026-11-27:
+
+| | |
+|---|---|
+| Distinct option hashes the code reads | 132 |
+| Named below by name and hash | 25 |
+| Names found as words in the executable, matching a hash | 7 |
+| Not named | 100 |
+
+Options are stored in two tables, numbers (`0x7002ca5ff8`) and text (`0x7002ca6010`). Only these
+functions touch them: `has` `f_70005398c0` (392 calls), `equals` `f_7000539920` (10), `get`
+`f_7000539980` (6), `text` `f_700053a690` (14), plus `set` `f_70005399f0` and `erase` `f_7000539af0`.
+[C] The same line parser, `f_7000539be0`, also runs on each program argument (`f_700053a5c0`); whether
+the port passes any arguments through is not checked. [C]/[H]
+
+`f_70004a7900` hashes a name handed to it at run time. It has no direct caller and sits in a function
+pointer table [C], so a script or data file may ask for options that no code constant shows. [H]
 
 **The harness:** `game/romfs/BOOT/CONFIG_MAIN_USER.TXT` containing
 
@@ -24,13 +41,13 @@ a game.
 
 | Option | Hash | What it does | Named? | Sites |
 |---|---|---|---|---|
-| `GameOnly` | `0xC6F7ECA5` | Boots straight into a game, skipping menus and the title screen (confirmed). | | 12 |
+| `GameOnly` | `0xC6F7ECA5` | Boots straight into a game, skipping menus and the title screen (confirmed). | | 14 |
 | `AIvAI` | `0xAA21F9C5` | AI controls both teams in a game session (confirmed). | ✅ | 3 |
-| `OpenBetaDemo` | `0x21108949` | Queried across boot and gameplay; the open-beta/demo switch. | | 53 |
+| `OpenBetaDemo` | `0x21108949` | Queried across boot and gameplay; the open-beta/demo switch. | | 85 |
 | `StartupMovies` | `0x267A2101` | Gates the boot intro movies. | | 1 |
 | `FastPlay` | `0x875D5965` | Faster gameplay pacing. | ✅ | 1 |
 | `FastLoad` | `0x3DFD2037` | Sets a flag in a boot-globals struct. An A/B test showed no measurable change to boot-to-gameplay time; behavior otherwise unknown. | | 2 |
-| `hrderbyOnly` | `0x07BDBC05` | Home Run Derby only. | | 7 |
+| `hrderbyOnly` | `0x07BDBC05` | Home Run Derby only. | | 9 |
 | `ForceBootflow` | `0x96C88199` | Forces the boot flow. | | 1 |
 | `ForcePlayGo` | `0x68452829` | Forces play-go (straight to gameplay). | | 4 |
 | `NoCrowd` | `0x5B29C6D7` | No crowd rendering/audio. | | 1 |
@@ -42,19 +59,36 @@ a game.
 | `CatcherView` | `0x4FFFBFD9` | Catcher view camera. | ✅ | 2 |
 | `DisableUIElem` | `0xEAB3C09D` | Disables UI elements. | ✅ | 1 |
 | `DisableJumboBink` | `0x6CFC5DB1` | No Bink movies on the jumbotron. | ✅ | 1 |
-| `AlwaysDelayService` | `0x8D9D830D` | Always delays a service call. | | 2 |
 | `DebugMatchupStats` | `0xE9154801` | Debug matchup-statistics overlay. | | 1 |
 | `TestStorylines` | `0xA53B6861` | Storylines test path. | | 1 |
 | `Savedata_Compression_Test` | `0x3EEB7277` | Save-data compression test. | | 2 |
-| `getstadiumdata` | `0x0E1C0855` | Stadium-data action word. | ✅ | 6 |
+| `getstadiumdata` | `0x0E1C0855` | Stadium-data action word. | ✅ | 7 |
 | `Tutorial` | `0x35C16BC7` | Tutorial path. | | 1 |
-| `Mobile` | `0x1020EF0D` | Mobile-platform paths. | | 14 |
+| `Mobile` | `0x1020EF0D` | Mobile-platform paths. | | 15 |
 | `pregame` | `0xF29AFC8D` | Pregame state. | | 1 |
 
-"Sites" is how many places in the retail code pass the hash to one of the three config-query
-functions. The hashes are the values the game compares config flags against. "Named?" means the
+"Sites" is how many places in the retail code pass the hash to one of the table functions. The hashes are the values the game compares config flags against. "Named?" means the
 option appears (commented out) in CONFIG_MAIN.TXT itself. Except where a row says "(confirmed)",
 the behavior descriptions are readings of the option names, not verified in-game behavior.
+
+## Names found in the executable
+
+Each word hashes to a value the code reads. About 0.03 such matches would be expected by chance over
+the 812,521 words tried, but short words collide more than that. What the options do is read from the
+names, not tested. [I]
+
+| Name | Hash | Kind | Note |
+|---|---|---|---|
+| `HOMETEAM` | `0x95678FBD` | text | read at boot (`f_7000003e48`) |
+| `awayTeam` | `0xCF737ADD` | text | read at boot |
+| `User` | `0xFE8D846B` | text | read at boot |
+| `username` | `0xB205D22D` | text | |
+| `password` | `0xDE0DAC57` | text | |
+| `locale` | `0x505C9F0D` | text | |
+| `DEMO` | `0x8CBC9109` | compared | the values it is compared with hash from `true` and `All` |
+
+`0x8D9D830D` was listed here as `AlwaysDelayService`. That name hashes to `0xD4751CAD`, so the option
+is read (2 calls) but not named.
 
 ## Named in CONFIG_MAIN.TXT but compiled out
 
@@ -66,6 +100,7 @@ Their handlers are gone from the retail binary; uncommenting them in CONFIG_MAIN
 | `DoPlayInit` | yes; in PlayInit | No retail code queries its hash. |
 | `Inning`, `InnHalf`, `Outs`, `Strikes`, `Balls`, `HomeScore`, `AwayScore` | yes; in PlayInit | `KEY=VALUE` lines for DoPlayInit's scenario; the scenario itself is compiled out. |
 | `UseAutoHit`, `HitAzimuth`, `HitIncline`, `HitSpeed` | yes; in Autohit | These feed DoPlayInit's scenario, which is compiled out. |
+| `AIThrowsFBMiddle`, `AlwaysStrikeAndContact`, `AlwaysSwingMiss` | yes; in AIInfo | No retail code reads their hashes. |
 | `NoWad`, `NoHost` | yes; in FileSystems | No retail code queries their hashes. |
 | `FileSys=ROM`, `SoundFileSys=ROM` | yes; in FileSystems | `KEY=VALUE` options; no retail code queries these hashes. |
 | `world=ps3/stadiums/sf`, `rig=day` | yes; in world | `KEY=VALUE` options for the PS3-era sandbox; no retail code queries them. |
