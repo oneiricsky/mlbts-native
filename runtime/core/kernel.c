@@ -13,6 +13,7 @@
 #include <string.h>
 
 #include "cfg.h"
+#include "guest_sleep.h"
 #include "host.h"
 #include "kernel.h"
 #include "platform/platform.h"
@@ -102,6 +103,7 @@ struct RtThread {
     uint64_t dg_pc, dg_lr;     // as an owner: guest pc and lr at the checkpoint that gave the core up
     int dg_host_kick;          // as an owner: in a host call or SVC at the request
     uint32_t dg_svc;           // the thread's latest SVC (TOTK_CORE_DIAG: what an owner in a host call is in)
+    GuestSleep sleep;          // guest_sleep.h: how this thread's SleepThread calls wait
     struct DgRel { uint64_t kick, host_end, pc, lr; int host, pre, prio; uint32_t h; } dg_rel;   // as a waiter: the
                                                                                                  // owner that released
 };
@@ -1555,20 +1557,6 @@ void kern_run_on_guest_main(void (*fn)(Cpu *c)) {
     plat_thread_join(h);
 }
 
-// The OS timer ends a wait late by up to PLAT_WAIT_LATE_NS (Windows' high-resolution waitable timer: 0.3-0.5 ms; the
-// SDK's 20 us polling sleeps, main thread and job workers, about 1.5 per frame each, took 460-515 us). Sleeps up to
-// twice that spin on the clock instead (1 ms on Windows, 120 us on Linux); the virtual core is already given up.
-#define SLEEP_SPIN_NS (2 * PLAT_WAIT_LATE_NS)
-static void sleep_ns(RtThread *t, int64_t ns) {
-    (void)t;
-    if (ns <= SLEEP_SPIN_NS) {
-        uint64_t end = kern_now_ns() + (uint64_t)ns;
-        while (kern_now_ns() < end) plat_pause();
-        return;
-    }
-    plat_wait_ns((uint64_t)ns);
-}
-
 // ---- synchronization objects
 static int sig_obj(uint32_t h, int *bad) {   // 1 = signaled (holding G)
     unsigned i = h - 0x1000;
@@ -1719,7 +1707,7 @@ int kern_svc(Cpu *c, uint32_t imm) {
             t->nblk++;
             unlock();
             uint64_t t0 = kern_now_ns();
-            sleep_ns(t, ns);
+            guest_sleep_ns(&t->sleep, (uint64_t)ns);
             uint64_t took = kern_now_ns() - t0;
             lock();
             t->sl_n++;
@@ -1727,6 +1715,7 @@ int kern_svc(Cpu *c, uint32_t imm) {
             t->sl_act += took;
             core_take(t);
             unlock();
+            guest_sleep_resumed(&t->sleep);
             return 1;
         }
         // Yield: hand the core to a waiting thread of equal or better priority.
