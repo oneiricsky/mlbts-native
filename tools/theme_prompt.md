@@ -24,14 +24,22 @@ Allowed values, exactly as written:
 - `Audio`
 - `Data and serialization`
 - `Stats and records`
+- `Shared engine code`
 - `Unclear`
+
+`Unclear` means you cannot tell even after the rules below. It is not a bin for code that is generic: generic code
+has its own category, `Shared engine code`.
+
+Library code (encryption, image decoding, JSON, ImGui, audio codecs) is filtered out before the dossier is built, so
+it should not appear. If a library routine slips through, answer `Unclear` and say "library".
 
 ## Choosing between the close ones
 
 - **A menu that belongs to one mode is that mode.** A Diamond Dynasty card screen is `Online and Diamond Dynasty`;
   an Options screen is `Menus and UI`. Ask what the *data* is for, not what the screen is made of.
-- **Generic machinery is `Menus and UI`.** A list-scrolling, row-layout, focus, text-measure or input helper is
-  `Menus and UI` wherever it is called from, and so is a generic container hook.
+- **Generic machinery is `Shared engine code`.** Containers, list and tree helpers, string buffers, allocators,
+  memory and file plumbing, maths and hashing are `Shared engine code` wherever they are called from. They are not
+  `Menus and UI`: that category is for code that draws or drives an actual screen, menu, button or layout.
 - **`Data and serialization` is for reading and writing data, not for using it**: JSON, reflection, save and load,
   class registration, file parsing.
 - **`Audio` means audio**: mixing, playback, stream headers, custom-music options. A menu that stores a music choice
@@ -45,11 +53,14 @@ Allowed values, exactly as written:
 
 1. One line per function, no prose outside the JSONL. Every address in the dossier appears exactly once.
 2. **Evidence is required.** `basis` is one of:
-   - `string`: `evidence` quotes, verbatim, a string from that function's own `strings:` line, and the quote has to
-     name the aspect ("DIAMOND DYNASTY", "FRANCHISE", "crowd", "pitch", "SWING"...). The machine checks that the
-     quoted string really is this function's, so copy it exactly.
+   - `string`: `evidence` quotes, verbatim **inside double quotation marks**, a string from that function's own
+     `strings:` line, and the quote has to name the aspect ("DIAMOND DYNASTY", "FRANCHISE", "crowd", "pitch",
+     "SWING"...). The machine matches the quoted text against this function's strings as whole words and ignores any
+     game word elsewhere in the sentence, so a remark like "this looks like a menu helper" proves nothing.
    - `callee`: `evidence` names an address from that function's `calls:` line and says what that callee does, from
-     its role in brackets, that makes the aspect apply. The machine checks that the address is a direct callee.
+     its role in brackets, that makes the aspect apply. The machine checks that the address is a direct callee **and
+     that the callee itself has a label**. Calling a function nobody has labelled is not evidence: those rows were
+     right about half the time and are rejected.
    - `class`: the function is a vtable method and its own body is bare (a getter, an empty stub, a field write).
      `evidence` quotes a string from that function's `class:` line — prefer `method strings` (its siblings' own
      strings) over `near strings` (strings one hop out) — or names a `named methods` slot and what it does. A class

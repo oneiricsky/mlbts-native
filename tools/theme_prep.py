@@ -54,6 +54,22 @@ def main():
 
     roles = [json.loads(l) for l in open(f"{a.index}/roles.jsonl", encoding="utf-8")]
     main = [r for r in roles if r["module"] == "main"]
+
+    # library code never reaches a reader: no aspect of the game, same reading cost. tools/theme_filter.py decides
+    # from the index kind, library names and source paths, and the result is kept for the record.
+    import theme_filter
+    lib_rows, keep = [], []
+    for r in main:
+        lib, why = theme_filter.is_library(r)
+        if lib:
+            lib_rows.append({"addr": r["addr"], "reason": why, "role": (r.get("role") or "")[:120]})
+        else:
+            keep.append(r)
+    main = keep
+    with open(f"{a.theme}/library.jsonl", "w", encoding="utf-8", newline="\n") as f:
+        for r in lib_rows:
+            f.write(json.dumps(r) + "\n")
+    print(f"library code filtered out: {len(lib_rows):,} functions")
     accepted = {r["addr"] for r in load_jsonl(f"{a.theme}/accepted.jsonl")}
     abstained = {r["addr"] for r in load_jsonl(f"{a.theme}/abstained.jsonl")}
     done = accepted | abstained

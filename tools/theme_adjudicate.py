@@ -92,14 +92,35 @@ def _better(a, b):
     return b if NOT_PROOF[b[0]] < NOT_PROOF[a[0]] else a
 
 
-def grounding(row, own_strings, calls, string_count, roles, vt, class_cache):
+def quoted_segments(ev):
+    """The text the reader put inside quotation marks: double, curly or single.
+
+    Only quoted game text counts as string evidence. Without this, a sentence like "this could be a menu row" would
+    match the word menu in a helper that has nothing to do with menus.
+    """
+    segs = re.findall(r'"([^"]{2,200})"', ev)
+    segs += re.findall(r"\u201c([^\u201d]{2,200})\u201d", ev)
+    segs += re.findall(r"'([^']{2,200})'", ev)
+    return segs
+
+
+def quoted_has(needle, segs):
+    """True when `needle` appears as whole words inside one quoted segment."""
+    n = needle.strip().lower()
+    if len(n) < 4:
+        return False
+    pat = re.compile(r"(?<![a-z0-9])" + re.escape(n) + r"(?![a-z0-9])")
+    return any(pat.search(s.strip().lower()) for s in segs)
+
+
+def grounding(row, own_strings, calls, string_count, roles, vt, class_cache, known):
     """How well the row's evidence supports its aspect. Returns (strength, rarity, detail) or (None, ...)."""
     ev = (row.get("evidence") or "").strip()
-    low = ev.lower()
+    segs = quoted_segments(ev)
     best = None
     for s in own_strings:
         s = s.strip()
-        if len(s) < 4 or s.lower() not in low:
+        if len(s) < 4 or not quoted_has(s, segs):
             continue
         n = string_count.get(s, 0)
         best = _better(best, ("rare string" if n <= RARE else "common string", n, s))
@@ -108,7 +129,10 @@ def grounding(row, own_strings, calls, string_count, roles, vt, class_cache):
         if m in calls:
             cr = roles.get(m) or {}
             said = " ".join([str(cr.get("role") or ""), str(cr.get("name") or "")] + list(cr.get("strings") or []))
-            if hits(said, row["aspect"]):
+            other = known.get(m)
+            if other and other == row["aspect"]:
+                best = _better(best, ("callee names the aspect", 0, m))
+            elif hits(said, row["aspect"]):
                 best = _better(best, ("callee names the aspect", 0, m))
             else:
                 best = _better(best, ("callee without a label", 10 ** 6, m))
@@ -120,10 +144,10 @@ def grounding(row, own_strings, calls, string_count, roles, vt, class_cache):
             class_cache[vtable] = (vt.method_strings(vtable), vt.near_strings(vtable), set(vt.members(vtable)))
         method, near, members = class_cache[vtable]
         for s in method:
-            if len(s) >= 4 and s.lower() in low:
+            if len(s) >= 4 and quoted_has(s, segs):
                 best = _better(best, ("class method string", 0, s))
         for s in near:
-            if len(s) >= 4 and s.lower() in low:
+            if len(s) >= 4 and quoted_has(s, segs):
                 best = _better(best, ("class near string", 0, s))
         for m in ADDR.findall(ev):
             m = "0x" + m.lower()
@@ -177,6 +201,8 @@ def main():
     vt = vtable_class.load(a.index)
     class_cache = {}
 
+    known = {r["addr"].lower(): r["aspect"] for r in load_jsonl(f"{a.theme}/accepted.jsonl")}
+    library = {r["addr"].lower() for r in load_jsonl(f"{a.theme}/library.jsonl")}
     A = load_reads(f"{a.theme}/reads/a")
     B = load_reads(f"{a.theme}/reads/b")
     C = load_reads(f"{a.theme}/reads/c")
@@ -189,16 +215,23 @@ def main():
             pending += 1
             continue
         a1, b1 = ra[0], rb[0]
+        if addr in library:
+            abstained.append({"addr": addr, "reason": "library code"})
+            continue
         if a1.get("aspect") not in ASPECTS or b1.get("aspect") not in ASPECTS:
             abstained.append({"addr": addr, "reason": "aspect outside the list"})
             continue
         own = roles.get(addr, {}).get("strings") or []
         ca = calls.get(addr, set())
-        ga, na, da = grounding(a1, own, ca, string_count, roles, vt, class_cache)
-        gb, nb, db = grounding(b1, own, ca, string_count, roles, vt, class_cache)
+        ga, na, da = grounding(a1, own, ca, string_count, roles, vt, class_cache, known)
+        gb, nb, db = grounding(b1, own, ca, string_count, roles, vt, class_cache, known)
         if a1["aspect"] == b1["aspect"]:
             if a1["aspect"] == "Unclear":
                 abstained.append({"addr": addr, "reason": "both reads found no decisive evidence"})
+            elif ga and gb and "callee without a label" in (ga, gb):
+                abstained.append({"addr": addr, "aspect": a1["aspect"],
+                                  "reason": "rests only on calling an unlabelled function",
+                                  "strength": [ga, gb]})
             elif ga and gb:
                 ok_rows.append({"addr": addr, "aspect": a1["aspect"], "reads": 2, "batch": batch_of[addr],
                                 "tier": tier_of(ga, gb), "strength": [ga, gb], "detail": [da, db],
@@ -212,11 +245,15 @@ def main():
             queue.append({"addr": addr, "batch": batch_of[addr], "a": a1.get("aspect"), "b": b1.get("aspect")})
             continue
         c1 = rc[0]
-        gc, nc, dc = grounding(c1, own, ca, string_count, roles, vt, class_cache)
+        gc, nc, dc = grounding(c1, own, ca, string_count, roles, vt, class_cache, known)
         votes = [a1["aspect"], b1["aspect"], c1.get("aspect")]
         winner = next((v for v in votes if v != "Unclear" and votes.count(v) >= 2), None)
         grounded = [g for i, g in enumerate([ga, gb, gc]) if g and votes[i] == winner]
-        if winner and len(grounded) >= 2:
+        text_only = {"rare string", "common string", "class method string"}
+        had_unclear = "Unclear" in votes[:2]
+        settles = len(grounded) >= 2 and any(g in text_only for g in grounded) \
+            and not (had_unclear and not any(g in text_only for g in grounded))
+        if winner and settles:
             ok_rows.append({"addr": addr, "aspect": winner, "reads": 3, "batch": batch_of[addr],
                             "tier": tier_of(*grounded), "strength": [ga, gb, gc], "detail": [da, db, dc],
                             "evidence": [x.get("evidence", "") for x in (a1, b1, c1)]})
