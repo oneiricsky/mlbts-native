@@ -343,3 +343,17 @@ The real pitcher energy (2026-11-24, C, refill seen live): a float 0..255 at `ro
 | `f_7000889978(Q)` | opens the next entry of the message box queue Q=`*(0x7003ab49d8)`: 16 entries of 0x7e8 bytes, title `+0x20`, bytes at `+0x7e90` last queued, last shown, active, blocked | C code and live | queue dump of a hung game |
 
 An open question: one run on 2026-11-26 ended with a token count of 47133 after the count had been written in memory while the allocation screen was open; the arithmetic that produced it was not found.
+
+## Season and Franchise calendar simulation (2026-11-27, 1.0.20, measured on a live game)
+
+Tools: `tools/season_sim_watch.py <pid>` (timing, memory read only), `tools/live_sample.py <pid> <out>` (samples a
+running game without a restart).
+
+| Address | What | Tag | Evidence |
+|---|---|---|---|
+| `f_700075d8d0` | per-frame step of the calendar sim: games list of 20-byte entries from object `+0`, index `+0x398`, count u8 `+0x3c5` (up to 46), state `+0x3b8`; sims at most 3 games per call, 1 when `+0x3b8` is 0 or `f_70007aa4e4` is true | C | disassembly; live: 45 games a day, every third index step 10.6 ms against 7.3 and 7.1 ms |
+| `f_700075dfc4` | its caller (tail call); 5 direct callers | C | disassembly |
+| `f_700075c910(obj, game, flag)` | simulates one listed game and its after-game work; 62.7 % of main-thread samples while simming | C code and live | profile |
+| `f_70007c1188` -> `f_70017bc698` -> `f_70017b8f40` | the play-by-play engine for a simulated game, 45.9 % of main-thread samples | C live, I name | profile |
+| `f_7001875aa0` (FindBestPitcher), also through `f_7001877910` | the bullpen search, called from `f_70017b8f40` at `0x17b9464` and `0x17b9448`: 37.1 % of main-thread samples while simming. Whether consecutive calls repeat the same inputs is not checked | C live | profile |
+| `f_7001b42280` | sound file-stream thread: checks its queue, then `SleepThread(100 us)`; the port spins sleeps up to 1 ms (`kernel.c` `sleep_ns`), so this thread takes 93 % of a host core, menus included | C | disassembly; profile |
