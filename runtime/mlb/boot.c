@@ -145,6 +145,8 @@ void rt_boot(void) {
     rt_patches_init();
     void trainer_hooks_apply(void);
     trainer_hooks_apply();   // trainer_hooks.c: host functions for the trainer's patch sites, before hostfn_seal
+    void net_box_apply(void);
+    net_box_apply();   // net_box.c: the host function of patch set no_net_box, before hostfn_seal
     void trainer_hooks_switch(int on);
     trainer_hooks_switch(cfg_bool("MLB_TRAINER"));   // off, or on a build without the hooks, the sites stay original
     res_apply();   // fastball, resolution.c: MLB_RENDER_SCALE rewrites the scene size table before the game reads it

@@ -155,6 +155,17 @@ string pool BEFORE it, which named every screen after its neighbour. `tools/nsw_
 
 ## The box removed at its source: code patch set `no_net_box` (2026-11-26)
 
+**Corrected the same day: the first version hung the game.** Cause: `f_7000889978` is not an error path. It opens the
+next entry of the message box queue (16 entries of 0x7e8 bytes, title at `+0x20`, indices at `+0x7e90`), whatever the
+box says, so replacing its call with a nop kept every queued box from opening and the game waited for the answers. Seen
+on Road to the Show's "Tools and Attributes" confirm: "Network Error", "Auto-Saving" and "You still have tokens
+remaining." queued, none shown, screen frozen; switching the set off in the running game opened the box and play went
+on [C]. The likely cause of a freeze on the settings screen opened from the main menu too, not reproduced [H].
+The fix: that site calls `runtime/mlb/net_box.c`, which drops only entries titled "Network Error" (the English title;
+another language is untested) and then makes the game's call. What else changes: a dropped box's Ok callback never
+runs, as under the first version. How it was checked: `tools/net_box_test.c` (8 checks of the queue filter). The
+text below describes the first version.
+
 Dismissing the box with a synthetic A press works, but the box is still built and flashes for a few frames. The patch set
 `no_net_box` (same setting, `MLB_NO_NETWORK_ERROR`, on by default) stops the game building it. Three places do: two in
 the online-status handler `f_7000ad07e0` (sites at main+0xad0c2c and +0xad0c64) and `f_7000aa6ea8`, which runs every

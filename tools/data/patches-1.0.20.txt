@@ -87,8 +87,11 @@ site no_net_box  main  ad0c64  36000188  1400000c
 # A third caller shows the same box: f_7000aa6ea8, run every frame, asks f_70008898c4 whether an error is pending and, if so,
 # calls f_7000889978 (a sibling of f_7000889c18) with it. Found with the dev control channel (tools/ctl.py): a first-call
 # trace from the title screen to the menu lists f_7000889978 from main+0xaa6f10, and the box stays with the two sites above.
-#   bl f_7000889978   ->   nop
-site no_net_box  main  aa6f0c  97f78a9b  d503201f
+# f_7000889978 opens the next queued box whatever it says, so the call cannot simply go: with it removed the game's own
+# boxes never opened and it waited for their answer forever. It goes to a host function (runtime/mlb/net_box.c) that
+# takes "Network Error" entries off the queue and then makes the call.
+#   bl f_7000889978   ->   bl patch page + 0x8a0
+site no_net_box  main  aa6f0c  97f78a9b  95023665
 
 # Sets trainer_contact and trainer_pitch (runtime/mlb/trainer_hooks.c, setting MLB_TRAINER, off by default): the in-game
 # trainer sees two calculations as they happen. Each site's call is replaced by a call to an unused word of the patch
