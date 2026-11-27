@@ -90,7 +90,8 @@ CODE_TOKEN = re.compile(
     r"|\[[wx]\d{1,2}(?:\s*[+\-]\s*0x[0-9a-f]+)?\]"                    # [x0], [x8 + 0x20]
     r"|\b[xw](?:[0-9]|[12][0-9]|30)\b|\b(?:sp|pc|nzcv|fpcr)\b"
     r"|\b[A-Z][a-z0-9]+(?:[A-Z][A-Za-z0-9]*)+\b"                      # GraphicsContext, PlayerObject
-    r"|\b[A-Z][A-Z0-9]{3,}(?:_[A-Z0-9]+)+\b"                          # TEAM_INDEX, CONFIG_MAIN_USER
+    r"|\b[A-Z][A-Z0-9]*(?:_[A-Z0-9]+)+\b"                             # TEAM_INDEX, PRE_PLAY, IN_PLAY
+    r"|\b(?:NONE|NULL|EXIT|WAIT|DONE)\b"                              # one-word state names listed beside those
     r"|\b[A-Z]{5,}\b"                                                 # ENTERING, EXITING: data, not an acronym
     r"|(?<![\w./-])[\w./%_-]+\.(?:c|h|cpp|py|md|txt|json|cfg|log|rdc|nsp|bin|big|skx|BNK|dat|xml|csv|ini|sav)\b"
     r"|(?<![\w.])%(?:[-#0-9.]*)(?:l{1,2})?[diouxXscp](?![\w])")       # %s, %08x, %lx
