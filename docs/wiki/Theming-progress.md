@@ -78,6 +78,67 @@ Tested on the 40 functions from the sample that both readers had called Unclear:
 
 The controls matter: they show the gain comes from the class line, not from readers getting bolder. Of the 40, 19 still have no evidence — their classes quote nothing at all. Over the whole map, 25,243 of 55,394 vtable slots sit in a class that quotes something specific (17,509 of them in their own methods); 4,151 classes quote nothing.
 
+## Labels from tracing
+
+These functions were identified while the in-game trainer was built: by reading their recompiled code, and for many by
+watching or changing them in a running match. They did not go through the double read, so they are not in the
+agreement or audit numbers on this page. One session assigned the aspects and no second reader checked them. The
+aspect chart includes them. They are kept in `tools/data/theme-findings.jsonl`, and `tools/theme_prep.py` does not
+select them for reading again.
+
+`live` means seen or changed in a running game; `code` means read from the recompiled code only.
+
+| Function | Aspect | Basis | What it does |
+|---|---|---|---|
+| `0x7000247214` | Gameplay: pitching | live | places the pitch: aim, miss and break offset; changing its miss moved pitches |
+| `0x7000249cc8` | Gameplay: pitching | live | adds the miss and break offset to the aim point of a pitch |
+| `0x7000249e38` | Gameplay: pitching | code | sets the pitch's miss from the aim, for computer and analog pitching |
+| `0x700024b6a8` | Gameplay: pitching | code | sets the break offset used when the pitch is placed |
+| `0x70002e9dc4` | Gameplay: pitching | live | pitcher fatigue update: reads stamina, energy and confidence each pitch |
+| `0x70002ed9a4` | Gameplay: pitching | live | stores the pitcher's energy into the player record |
+| `0x7001687dd8` | Gameplay: pitching | live | answers whether a pitch was a strike by location; answering yes called balls strikes |
+| `0x700167823c` | Gameplay: batting | live | builds the batted ball from an override block of azimuth, launch and speed |
+| `0x7001679cdc` | Gameplay: batting | live | runs the bat-on-ball result: bunt model or contact model into one result struct |
+| `0x7001679d18` | Gameplay: batting | code | bunt model, chosen by the swing's bunt flags |
+| `0x700167bb7c` | Gameplay: batting | live | contact model: launch angle, direction and exit speed of a batted ball |
+| `0x700167fe28` | Gameplay: batting | live | the swing's hit type from its timing; forcing a miss type made batters miss |
+| `0x7001680870` | Gameplay: batting | code | handles the miss hit types of the contact model |
+| `0x70000b5cf8` | Gameplay: fielding | code | per-fielder forced-error flag read by the throwing-error decision |
+| `0x700017df20` | Gameplay: fielding | code | error roll: fielding or throwing error chance scaled by the error sliders |
+| `0x700018949c` | Gameplay: fielding | code | decides a throwing error, by the forced flag or the error roll |
+| `0x70001a5cb0` | Gameplay: fielding | live | picks a fielder's throwing or catching motion for a request |
+| `0x7000378c64` | Gameplay: fielding | live | takes on a fielder's throw plan; its clean-throw byte undoes a wild throw |
+| `0x7000389c00` | Gameplay: fielding | live | decides during throw setup whether a clean throw replaces the planned one |
+| `0x7000389da4` | Gameplay: fielding | live | sets up a fielder's throw |
+| `0x700038a4c0` | Gameplay: fielding | live | answers whether a throw is to be wild; answering yes produced wild throws |
+| `0x70013fad18` | Gameplay: fielding | live | receiver's catch motion re-aims a ball in flight at the glove |
+| `0x7001665d60` | Gameplay: fielding | code | re-times or drops a fielder's scheduled catch of the ball |
+| `0x700166b0b8` | Gameplay: fielding | live | schedules a fielder getting the ball, with the time until it arrives |
+| `0x7000d1cd98` | Gameplay: in-play | code | gives the team that is fielding |
+| `0x7000d413bc` | Gameplay: in-play | live | rules handler that counts a ball |
+| `0x7000d467c8` | Gameplay: in-play | code | rules handler beside the ball and strike counters, apparently a foul strike |
+| `0x7000d493a0` | Gameplay: in-play | code | appends to the scored list, adds a run and logs the score |
+| `0x7000d4c210` | Gameplay: in-play | live | rules handler that counts a strike or resets the count |
+| `0x7001657330` | Gameplay: in-play | code | gives the ball's flight path object |
+| `0x700165ca58` | Gameplay: in-play | code | builds the ball's flight path from a launch record |
+| `0x7001665090` | Gameplay: in-play | live | switches the ball to the live state and clears its receiver |
+| `0x70016671a0` | Gameplay: in-play | live | releases the ball for pitches and throws and sets the ball's state |
+| `0x7001668ba0` | Gameplay: in-play | live | rebuilds the ball's path from a launch record and makes it live |
+| `0x700166b264` | Gameplay: in-play | code | deflection: sends the ball on from a new launch record |
+| `0x700166b51c` | Gameplay: in-play | live | re-aims a ball in flight at a new point |
+| `0x700166f6d0` | Gameplay: in-play | live | raises the pitch-result event with ball or strike |
+| `0x7001673894` | Gameplay: in-play | live | ends a pitch: takes the strike-zone answer and decides ball or strike |
+| `0x70001dd438` | Stats and records | code | official scorer's play-event handler: error and play-record bits |
+| `0x70001e4500` | Stats and records | live | scores the finished play, for example as reached on error |
+| `0x7000d41660` | Stats and records | live | appends to the play's list of fielder actions used to judge errors |
+| `0x7000d4256c` | Stats and records | live | charges an error to a fielder |
+| `0x7000d42f20` | Stats and records | code | asks whether a runner gained from a listed fielder action |
+| `0x7000d43ce0` | Stats and records | code | end-of-play error judge over the fielder actions |
+| `0x7000d45cb0` | Stats and records | code | appends to the put-out list where an out is counted |
+| `0x700181a6bc` | Franchise, league and roster | live | looks a player object up by id in the match's player table |
+| `0x700183bb94` | Franchise, league and roster | code | reads one of a player's rating bytes |
+| `0x7001868fd4` | Franchise, league and roster | live | reads a player rating as a fraction for play code |
+
 ## What is left
 
 - **Classes that quote nothing.** A stub whose class is all field writes and `+0x` getters has no vocabulary to read. The way past it is the registration data: the game builds each class's field table from immediates, and resolving those gives field names (`m_nRightWristBandStyle`, `m_nQualityStarts`). One reader did that by hand for 22 getters; automating it is the next real piece of work.

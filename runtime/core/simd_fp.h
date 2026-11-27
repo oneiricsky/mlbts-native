@@ -249,10 +249,60 @@ SI VT FN(nanv)(int op, VT a, VT b, VT d, VT r) {
 }
 // fastball: the cold side of a scalar FP op, one call per op (r: the host result): a directed rounding mode
 // (FPCR.RMode) reruns the op in that mode, NaN results of the common ops are fixed in place, the rest is redone exactly.
-SN T FN(sfix)(Fpcr c, int op, T a, T b, T d, T r) {
+SN T FN(sfix_full)(Fpcr c, int op, T a, T b, T d, T r) {
     if (simd_directed(c)) return FN(slow)(c, op, a, b, d);
     if (FNANQ(op) && !(c & (FPCR_FZ | FPCR_DN))) return FN(nanv)(op, (VT){a}, (VT){b}, (VT){d}, (VT){r})[0];
     return FN(redo)(c, op, a, b, d, r);
+}
+
+// fastball: the NaN a scalar ADD, SUB, MUL, DIV or MADD gives when FPCR.FZ, FPCR.DN and FPCR.RMode are clear, as FN(nanv)
+// computes it for one lane (same selection, same order), on the bit patterns in integer registers. x: the addend of a
+// MADD (else the first operand), y, z: the others (z only for MADD).
+SI U FN(nanbits)(int madd, U x, U y, U z) {
+    int na = (x & ~SGN) > EXPM, nb = (y & ~SGN) > EXPM, nd = madd && (z & ~SGN) > EXPM;
+    int sa = na && !(x & QB), sb = nb && !(y & QB), sd = nd && !(z & QB);
+    U res = DNAN;
+    res = nd ? z : res;
+    res = nb ? y : res;
+    res = na ? x : res;
+    res = sd ? (z | QB) : res;
+    res = sb ? (y | QB) : res;
+    res = sa ? (x | QB) : res;
+    if (madd && na && !sa && ((((y & ~SGN) == EXPM) && !(z & ~SGN)) || (!(y & ~SGN) && ((z & ~SGN) == EXPM)))) res = DNAN;
+    return res;
+}
+
+// fastball: the lean cold function, called only with FPCR.RMode, FZ and DN clear (FN(cold) checks). A NaN result of ADD,
+// SUB, MUL, DIV or MADD is chosen here in integer registers, and the other result that gets here, +-the smallest normal,
+// stays as the host made it (nanv leaves every lane that is not NaN alone). Everything else takes the full path. This
+// function touches no vector register except the argument and the result, so the preserve_all convention saves a few
+// integer registers instead of all sixteen vector ones.
+SN T FN(sfix)(Fpcr c, int op, T a, T b, T d, T r) {
+    if (op == FOP_ADD || op == FOP_SUB || op == FOP_MUL || op == FOP_DIV || op == FOP_MADD) {
+        if (r == r) return r;
+        return FN(fv)(FN(nanbits)(op == FOP_MADD, FN(fb)(a), FN(fb)(b), FN(fb)(d)));
+    }
+    return FN(sfix_full)(c, op, a, b, d, r);
+}
+
+// fastball: the cold side of a scalar FP op. With FPCR.RMode, FZ and DN clear and MLB_FP_FIXUP on (FPCR_FIXCLEAN) a NaN
+// result of ADD, SUB, MUL or DIV is dealt with inline: the smallest normal stays as the host made it; a NaN from operands
+// that are not NaN is the ARM default NaN (the host's is the same with the sign bit set); a NaN from exactly one NaN
+// operand is that operand quietened, which is what the host returns too. Two NaN operands (FPProcessNaNs picks one) and
+// MADD go to the lean FN(sfix). Only compares and jumps inline, no integer register, so the generated code around it
+// keeps its registers. The game's msdfgen code at match start gets here about 67 million times in one frame, 64 million
+// of them ADD, SUB, MUL or DIV with a NaN result. Anything else takes the original path, FN(sfix_full).
+#define FNAN4(op) ((op) == FOP_ADD || (op) == FOP_SUB || (op) == FOP_MUL || (op) == FOP_DIV)
+SI T FN(cold)(Fpcr c, int op, T a, T b, T d, T r) {
+    if (__builtin_expect(FPCR_FIXCLEAN(c), 1)) {
+        if (FNAN4(op)) {
+            if (r == r) return r;
+            if (a == a) return b == b ? FN(fv)(DNAN) : r;
+            if (b == b) return r;
+        }
+        return FN(sfix)(c, op, a, b, d, r);
+    }
+    return FN(sfix_full)(c, op, a, b, d, r);
 }
 
 // Scalar FP op (constant op folds the selection). RMode = nearest runs on the host, with or without FZ; min/max does
@@ -264,7 +314,7 @@ SI T FN(op)(Fpcr c, int op, T a, T b, T d) {
     }
     T r = FCALC(op, a, b, d, K, FMA_S);
     if (__builtin_expect(simd_directed(c) | (op == FOP_RSQRTS ? FREDO(op, r) : !FOK(r)), 0))
-        r = FN(sfix)(c, op, a, b, d, r);
+        r = FN(cold)(c, op, a, b, d, r);
     return r;
 }
 

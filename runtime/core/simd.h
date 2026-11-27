@@ -21,6 +21,10 @@ typedef __uint128_t u128;
 // rounding-mode check of every FP op is a register test instead of a load from the Cpu (5 % of the samples in
 // game code during a match).
 typedef uint64_t Fpcr;
+// fastball: 1 when the cold side of a scalar FP op may pick a NaN result without the vector NaN pass (simd_fp.h FN(cold),
+// FN(sfix)); that is only valid with FPCR.RMode, FZ and DN clear, which they are in practice. MLB_FP_FIXUP=0 sets it to
+// 0 and every cold case takes the original path. Defined in runtime/mlb/main.c.
+extern uint64_t rt_fp_fix_lim;
 #define SI static inline __attribute__((always_inline))
 // fastball: the slow paths keep every register (preserve_all): each FP op of the lifted code has a rarely taken
 // call to one, and under the Win64 convention those calls clobber XMM0-5, so clang spilled the guest's V registers
@@ -69,6 +73,7 @@ typedef uint64_t vreg __attribute__((vector_size(16), may_alias));   // fastball
 #define FPCR_DN (1u << 25)
 #define FPCR_FZ (1u << 24)
 #define FPCR_RM (3u << 22)
+#define FPCR_FIXCLEAN(c) ((((c) & (FPCR_RM | FPCR_FZ | FPCR_DN))) < rt_fp_fix_lim)   // see rt_fp_fix_lim
 
 enum { FOP_ADD, FOP_SUB, FOP_MUL, FOP_MULX, FOP_NMUL, FOP_DIV, FOP_ABD, FOP_SQRT, FOP_MADD, FOP_RECPS, FOP_RSQRTS,
        FOP_MAX, FOP_MIN, FOP_MAXNM, FOP_MINNM };

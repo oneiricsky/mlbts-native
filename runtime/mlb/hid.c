@@ -48,6 +48,8 @@
 #include "swkbd.h"
 int menu_is_open(void);   // ui/menu.cpp (ui/menu.h pulls in Vulkan)
 void menu_toggle(void);
+void trainer_toggle(void);   // trainer.c
+int trainer_visible(void);
 
 // ---- libnx layouts
 typedef struct { uint64_t sampling, buttons; int32_t lx, ly, rx, ry; uint32_t attributes, reserved; } NpadState;
@@ -287,6 +289,8 @@ static void nne_finish(void) {
 
 void hid_game_log(const char *text, int n) {
     nne_log(text, n);
+    void trainer_game_log(const char *text, int n);
+    trainer_game_log(text, n);   // trainer.c: Quick Manage freezes the match data
     static const char pre[] = "uiEngine: Entering screen: [";
     enum { PRE = sizeof pre - 1 };
     if (n <= PRE || memcmp(text, pre, PRE)) return;
@@ -719,8 +723,12 @@ static void poll(NpadState *st) {
     const uint64_t combo = BIT(B_MINUS) | BIT(B_PLUS);
     int typing = __atomic_load_n(&text_entry_open, __ATOMIC_ACQUIRE);
     if (!typing && (((b & combo) == combo && (prev & combo) != combo) || (guide && !prev_guide))) menu_toggle();
+    // fastball: both stick clicks going down together open or close the trainer panel (nothing while it is off:
+    // trainer_toggle ignores it, and the clicks reach the game as always). The panel takes the controller as the menu does.
+    const uint64_t sticks = BIT(B_LSTICK) | BIT(B_RSTICK);
+    if (!typing && !menu_is_open() && (b & sticks) == sticks && (prev & sticks) != sticks) trainer_toggle();
     prev = b, prev_guide = guide;
-    int open = menu_is_open() || typing;
+    int open = menu_is_open() || trainer_visible() || typing;
     if (open) hidden = ~0ull;
     else if (was_open) hidden = b;
     was_open = open;

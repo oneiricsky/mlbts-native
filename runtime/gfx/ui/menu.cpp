@@ -27,6 +27,11 @@
 #include "imgui_internal.h"   // ClosePopupToLevel
 #include "backends/imgui_impl_vulkan.h"
 #include "ui/option_rows.h"
+#include "ui/pad_keys.h"
+#include "ui/trainer_ui.h"   // fastball: the in-game trainer
+#ifdef MLB_DEV_HARNESS
+#include "ui/devpanel.h"
+#endif
 
 extern "C" {
 #include "cfg.h"
@@ -43,6 +48,8 @@ int mlb_capture_tick(uint64_t frame, const char **shot);         // gfx_stubs.c:
 int hid_stick_percent(double now[2]);                            // mlb/hid.c
 int playtime_get(uint64_t *total_s, uint64_t *session_s);        // core/playtime.c
 int fs_save_busy(void);                                          // core/fs_host.c
+void trainer_menu_opened(void);                                  // mlb/trainer.c
+int trainer_visible(void);
 #include "perfmon.h"
 #include "sysinfo.h"
 }
@@ -59,6 +66,12 @@ static const unsigned char roboto_ttf[] = {
 static std::atomic<int> g_open;     // the menu is open
 static std::atomic<int> g_reset;    // opened or closed since the last laid-out frame: drop stale input
 static std::atomic<int> g_failed;   // set-up failed for good (the menu stays closed)
+#ifdef MLB_DEV_HARNESS
+static std::atomic<int> g_dev_open;   // the dev panel (ui/devpanel.cpp) is open; like the menu it takes the game's input
+#define DEV_OPEN() (g_dev_open.load(std::memory_order_relaxed))
+#else
+#define DEV_OPEN() 0
+#endif
 
 // g_open and the log line change together under open_lock, so they cannot disagree when the window thread (F1), the
 // pad's polling thread (Minus+Plus) and the present path (Continue, B) race.
@@ -72,25 +85,47 @@ static int change_open(int want) {
         g_open.store(open);
         g_reset.store(1);
         rt_log("menu: %s", open ? "open" : "closed");
+        if (open) trainer_menu_opened();   // fastball: one panel at a time
     }
     plat_mutex_unlock(&open_lock);
     return open;
 }
 
-extern "C" int menu_is_open(void) { return g_open.load(std::memory_order_relaxed); }
+extern "C" int menu_is_open(void) { return g_open.load(std::memory_order_relaxed) || DEV_OPEN(); }
 extern "C" void menu_toggle(void) {
     if (!g_failed.load(std::memory_order_relaxed)) change_open(-1);
 }
 
+#ifdef MLB_DEV_HARNESS
+// The dev panel opens only while the "Dev mode" setting (Settings > Dev) is on.
+static int change_dev(int want) {
+    plat_mutex_lock(&open_lock);
+    int open = want < 0 ? !g_dev_open.load() : want;
+    if (open && !cfg_bool("DEV_MODE")) open = 0;
+    if (g_dev_open.load() != open) {
+        g_dev_open.store(open);
+        g_reset.store(1);
+        rt_log("menu: dev panel %s", open ? "open" : "closed");
+    }
+    plat_mutex_unlock(&open_lock);
+    return open;
+}
+extern "C" void menu_dev_toggle(void) {
+    if (g_failed.load(std::memory_order_relaxed)) return;
+    if (!cfg_bool("DEV_MODE")) rt_log("menu: dev panel needs Dev mode on (Settings > Dev)");
+    change_dev(-1);
+}
+#endif
+
 // ---- events from the window adapter, queued while the menu is open; the present path hands them to ImGui
-enum { EV_KEY, EV_POS, EV_BUTTON, EV_WHEEL, EV_FOCUS, EV_MAX = 256 };
+enum { EV_KEY, EV_POS, EV_BUTTON, EV_WHEEL, EV_FOCUS, EV_CHAR, EV_MAX = 256 };
 struct Ev { int type, a, b; float x, y; };
 static PlatMutex ev_lock = PLAT_MUTEX_INIT;
 static Ev ev_q[EV_MAX];
 static int ev_n;
 
 static void push(Ev e) {
-    if (!menu_is_open()) return;
+    if (!menu_is_open() && !trainer_visible()) return;   // fastball: the trainer panel takes input as the menu does
     plat_mutex_lock(&ev_lock);
     if (e.type == EV_POS && ev_n && ev_q[ev_n - 1].type == EV_POS) ev_q[ev_n - 1] = e;   // only the newest position
     else if (ev_n < EV_MAX) ev_q[ev_n++] = e;
@@ -102,6 +137,9 @@ extern "C" void menu_event_mouse_pos(float x, float y) { push({EV_POS, 0, 0, x, 
 extern "C" void menu_event_mouse_button(int button, int down) { push({EV_BUTTON, button, down, 0, 0}); }
 extern "C" void menu_event_wheel(float dx, float dy) { push({EV_WHEEL, 0, 0, dx, dy}); }
 extern "C" void menu_event_focus(int focused) { push({EV_FOCUS, focused, 0, 0, 0}); }
+#ifdef MLB_DEV_HARNESS
+extern "C" void menu_event_char(unsigned ch) { push({EV_CHAR, (int)ch, 0, 0, 0}); }   // the dev panel's text fields
+#endif
 
 static void drain_events(ImGuiIO &io) {
     Ev q[EV_MAX];
@@ -118,20 +156,13 @@ static void drain_events(ImGuiIO &io) {
         case EV_BUTTON: io.AddMouseButtonEvent(e.a, e.b != 0); break;
         case EV_WHEEL: io.AddMouseWheelEvent(e.x, e.y); break;
         case EV_FOCUS: io.AddFocusEvent(e.a != 0); break;
+        case EV_CHAR: io.AddInputCharacter((unsigned)e.a); break;
         }
     }
 }
 
 // ---- gamepad navigation: the Switch buttons of the controllers (hid.c, after MLB_PAD_MAP) to ImGui's gamepad keys.
 // A confirms, B goes back, L / R switch tabs.
-enum { P_A = 0, P_B = 1, P_X = 2, P_Y = 3, P_L = 6, P_R = 7, P_ZL = 8, P_ZR = 9, P_LEFT = 12, P_UP = 13, P_RIGHT = 14,
-       P_DOWN = 15 };
-static const struct { int bit; ImGuiKey key; } pad_keys[] = {
-    {P_A, ImGuiKey_GamepadFaceDown}, {P_B, ImGuiKey_GamepadFaceRight}, {P_X, ImGuiKey_GamepadFaceUp},
-    {P_Y, ImGuiKey_GamepadFaceLeft}, {P_L, ImGuiKey_GamepadL1}, {P_R, ImGuiKey_GamepadR1},
-    {P_ZL, ImGuiKey_GamepadL2}, {P_ZR, ImGuiKey_GamepadR2}, {P_LEFT, ImGuiKey_GamepadDpadLeft},
-    {P_UP, ImGuiKey_GamepadDpadUp}, {P_RIGHT, ImGuiKey_GamepadDpadRight}, {P_DOWN, ImGuiKey_GamepadDpadDown},
-};
 static uint64_t pad_prev;   // buttons at the last frame; a button held when the menu opened counts once released
 static int stick_dir = -1;  // the D-pad button the left stick holds, -1 none
 
@@ -157,7 +188,7 @@ static void pad_events(ImGuiIO &io, int reset) {
         pad_prev = b;
         return;
     }
-    for (const auto &k : pad_keys) {
+    for (const auto &k : kPadKeys) {
         uint64_t m = 1ull << k.bit;
         if ((b ^ pad_prev) & m) io.AddKeyEvent(k.key, (b & m) != 0);
     }
@@ -275,8 +306,16 @@ extern "C" void menu_vk_release(void) {
 extern "C" int menu_font_check(void) { return 1; }
 
 // ---- the pages
-enum { TAB_GRAPHICS, TAB_DISPLAY, TAB_GAME, TAB_SOUND, TAB_CONTROLS, TAB_ADVANCED, TAB_COUNT };
-static const char *const kTabNames[TAB_COUNT] = {"Graphics", "Display", "Game", "Sound", "Controls", "Advanced"};
+enum { TAB_GRAPHICS, TAB_DISPLAY, TAB_GAME, TAB_SOUND, TAB_CONTROLS, TAB_ADVANCED, TAB_TRAINER,
+#ifdef MLB_DEV_HARNESS
+       TAB_DEV,
+#endif
+       TAB_COUNT };
+static const char *const kTabNames[TAB_COUNT] = {"Graphics", "Display", "Game", "Sound", "Controls", "Advanced", "Trainer",
+#ifdef MLB_DEV_HARNESS
+                                                 "Dev",
+#endif
+};
 static int g_tab;               // the tab shown
 static int g_tab_request = -1;  // select this tab at the next layout; -1 none
 static int g_focus_page = -1;   // this tab's first row takes the cursor once it is shown; -1 none
@@ -286,12 +325,20 @@ static bool g_modal;            // a confirmation is open: B and Esc close it, n
 static const char *const kMenuKeys[] = {
     "RENDER_SCALE", "UPSCALER", "SHARPNESS", "DLSS", "DLSS_PRESET", "FSR", "FSR_VERSION", "FSR_SHARPNESS", "AA", "AA_STRENGTH", "ANISO", "COLOR_PRESET", "COLOR_BRIGHTNESS", "COLOR_CONTRAST", "COLOR_SATURATION",
     "COLOR_GAMMA", "FULLSCREEN", "WINDOW_SIZE", "VK_PRESENT", "FPS_LIMIT", "ASPECT", "GPU_INDEX", "PERF_OVERLAY", "FRAME_QUEUE",
-    "ASSUME_FOCUS", "KEEP_TUTORIALS", "RTTS_AUTOSAVE", "HIDE_OFFLINE_BANNER", "NO_NETWORK_ERROR", "WALKUP_LIGHT", "WALKUP_LEADERS", "VOLUME", "PAD_MAP", "PROMPTS", "RUMBLE", "RUMBLE_STRENGTH", "STICK_DEADZONE", "LSTICK_DEADZONE",
+    "ASSUME_FOCUS", "KEEP_TUTORIALS", "RTTS_AUTOSAVE", "HIDE_OFFLINE_BANNER", "NO_NETWORK_ERROR", "WALKUP_LIGHT", "WALKUP_LEADERS", "MSDF_SKIP", "VOLUME", "PAD_MAP", "PROMPTS", "RUMBLE", "RUMBLE_STRENGTH", "STICK_DEADZONE", "LSTICK_DEADZONE",
     "RSTICK_DEADZONE", "ASYNC_PREEMPT", "REPLAY_ASYNC", "PIPE_WAIT", "PIPE_SKIP", "LIB_PREBUILD",
     "LIB_PREBUILD_THREADS", "PIPE_PREBUILD", "PREWARM_XLATE", "GPL", "ASTC", "MEMORY", "TEX_ALIAS",
     "TEX_VRAM_PRESSURE", "ASTC_BC", "LOD_GUARD", "FIX_C0", "FIX_ZERO", "BIND_SKIP", "SHADER_MEMO", "PIPE_MEMO",
     "TEX_MEMO", "DESC_TEMPLATE", "PUSH_SKIP", "SPLIT_DRAWS", "VK_VALIDATION", "VK_DYN_VERTEX", "VK_DYN_A2C",
-    "VK_SUBGROUP_PIN",
+    "VK_SUBGROUP_PIN", "TRAINER", "TRAINER_CORNER", "TRAINER_OPACITY", "TRAINER_KEY_SHOW", "TRAINER_KEY_SAVE",
+    "TRAINER_KEY_LOAD", "TRAINER_KEY_SLOW",
+    "TRAINER_KEY_AWAY_BAT", "TRAINER_KEY_AWAY_PITCH", "TRAINER_KEY_HOME_BAT", "TRAINER_KEY_HOME_PITCH",
+    "TRAINER_KEY_REFILL",
+    "TRAINER_KEY_CONTACT", "TRAINER_KEY_HOMER", "TRAINER_KEY_MISS", "TRAINER_KEY_AIM", "TRAINER_KEY_STRIKE",
+    "TRAINER_KEY_WILD",
+#ifdef MLB_DEV_HARNESS
+    "DEV_MODE",
+#endif
 };
 enum { N_MENU_KEYS = sizeof kMenuKeys / sizeof *kMenuKeys };
 
@@ -677,7 +724,81 @@ static void tab_game(float scale) {
     opt_toggle("WALKUP_LEADERS", "Shorter pause at inning changes",
                "At each inning change the game builds its league-leader lists for the broadcast twice in a row. On "
                "(the default), it builds them once. Applies after a restart.");
+    opt_unavailable(rt_patch_set("msdf_skip") < 0 ? no_patches : nullptr);
+    opt_toggle("MSDF_SKIP", "Shorter freeze at match start",
+               "At the start of a match the game builds a distance picture of the field's edges, about 0.7 second. "
+               "Most of that picture is empty space, which the game's clean-up pass still checks pixel by pixel. On "
+               "(the default), the pass skips the empty pixels: about 0.2 second, the same picture. Applies after a "
+               "restart.");
     row_play_time();
+    opt_end();
+}
+
+// fastball: the in-game trainer's settings (mlb/trainer.c); the trainer itself is a panel of its own (trainer_ui.cpp)
+static void tab_trainer(float scale) {
+    static const char *const corners[] = {"Top left", "Top right", "Bottom left", "Bottom right"};
+    static const char *const keys[] = {"F2", "F3", "F4", "F5", "F6", "F7"};
+    const char *na = strcmp(rt_game_build, "1.0.20") ? "The trainer knows game version 1.0.20 only" : nullptr;
+    opt_begin("##trainer", scale);
+    opt_unavailable(na);
+    opt_toggle("TRAINER", "Trainer",
+               "A panel over the running match for the count, outs, score, inning and saved situations. The show key "
+               "or both stick clicks open it. Offline only; changes made in a Season, Franchise or Road to the Show "
+               "match can be saved with it.");
+    opt_unavailable(na);
+    opt_choice("TRAINER_CORNER", "Panel corner", corners, 4, "Where the trainer's panel sits on the screen.", nullptr);
+    opt_unavailable(na);
+    opt_slider("TRAINER_OPACITY", "Panel opacity", 85, 100, "How solid the panel's background is.", 1, "%.0f%%",
+               nullptr, nullptr);
+    opt_group("Keys");
+    opt_unavailable(na);
+    opt_choice("TRAINER_KEY_SHOW", "Show or hide", keys, 6,
+               "Opens and closes the panel. If two of the four keys are the same, F2, F3, F4 and F6 are used.", nullptr);
+    opt_unavailable(na);
+    opt_choice("TRAINER_KEY_SAVE", "Save situation", keys, 6,
+               "Saves the count, outs, score and inning to the slot chosen in the panel.", nullptr);
+    opt_unavailable(na);
+    opt_choice("TRAINER_KEY_LOAD", "Replay situation", keys, 6,
+               "Puts the saved slot back. The inning can only go forwards.", nullptr);
+    opt_unavailable(na);
+    opt_choice("TRAINER_KEY_SLOW", "Slow motion", keys, 6,
+               "Switches the match between full speed and the slow speed chosen in the panel (half at first).", nullptr);
+    opt_group("Cheat keys");
+    static const char *const cheat_names[] = {"None", "5", "6", "7", "8", "9", "0", "Insert", "Delete", "Home", "End",
+                                              "Page Up", "Page Down"};
+    static const struct { const char *key, *label; } cheats[] = {
+        {"TRAINER_KEY_AWAY_BAT", "Away batting"}, {"TRAINER_KEY_AWAY_PITCH", "Away pitching"},
+        {"TRAINER_KEY_HOME_BAT", "Home batting"}, {"TRAINER_KEY_HOME_PITCH", "Home pitching"},
+    };
+    for (const auto &c : cheats) {
+        opt_unavailable(na);
+        opt_choice(c.key, c.label, cheat_names, 13,
+                   "Steps that side's ratings through Normal, Best and Worst. With no side of your own, mine is the "
+                   "away team and theirs the home team.", nullptr);
+    }
+    opt_unavailable(na);
+    opt_choice("TRAINER_KEY_REFILL", "Refill my pitcher", cheat_names, 13,
+               "Gives my pitcher full energy at once; he tires again from there.", nullptr);
+    opt_group("Guaranteed cheat keys");
+    static const struct { const char *key, *label, *help; } sure[] = {
+        {"TRAINER_KEY_CONTACT", "Always contact",
+         "A swing that would miss puts the ball in play instead. The key steps it through off, my side, their side and both."},
+        {"TRAINER_KEY_HOMER", "Always home run",
+         "A swing that hits the ball sends it out. A miss stays a miss. The key steps it through off, my side, their side and both."},
+        {"TRAINER_KEY_MISS", "Batters miss",
+         "Every swing misses. Bunts are left alone. The key steps it through off, my side, their side and both."},
+        {"TRAINER_KEY_AIM", "Perfect control",
+         "Every pitch goes where it was aimed. The key steps it through off, my side, their side and both."},
+        {"TRAINER_KEY_STRIKE", "Called strike",
+         "A pitch the batter takes is called a strike. The key steps it through off, my side, their side and both."},
+        {"TRAINER_KEY_WILD", "Wild throws",
+         "That side's throws sail wide while a batted ball is in play. The key steps it through off, my side, their "
+         "side and both."},
+    };
+    for (const auto &c : sure) {
+        opt_unavailable(na);
+        opt_choice(c.key, c.label, cheat_names, 13, c.help, nullptr);
+    }
     opt_end();
 }
 
@@ -919,6 +1040,31 @@ static void tab_advanced(float scale) {
         reset_all();
 }
 
+#ifdef MLB_DEV_HARNESS
+// Dev tab: the switch for the dev harness panel (ui/devpanel.cpp). Turning it on closes this menu and opens the panel.
+static void tab_dev(float scale) {
+    opt_begin("##dev", scale);
+    if (opt_toggle("DEV_MODE", "Dev mode",
+                   "Turns on the dev harness panel: match setup (teams, seed, fixed clock), scenario drop-in, recorder "
+                   "controls (markers, texture dump, reference screenshot, frame log) and live readouts. It opens as "
+                   "soon as you turn this on; F7 opens and closes it afterwards. Keyboard and mouse only. This is a "
+                   "development build feature and is not in release builds.") &&
+        cfg_bool("DEV_MODE")) {
+        change_open(0);
+        change_dev(1);
+    }
+    if (opt_button("##dev_open", "Open the dev panel", "The same as F7 while Dev mode is on.",
+                   cfg_bool("DEV_MODE") ? (DEV_OPEN() ? "open" : "") : "turn Dev mode on first") &&
+        cfg_bool("DEV_MODE")) {
+        change_open(0);
+        change_dev(1);
+    }
+    opt_text("Harness backend:");
+    opt_text(devpanel_backend());
+    opt_end();
+}
+#endif
+
 // ---- the window: title, tabs (L / R or Q / E switch), the page, and the bottom row with "Restart now" (once a
 // setting read at start changed), "Continue" and "Quit game". B on the gamepad and Esc close it.
 static void layout_menu(uint32_t w, uint32_t h, float scale) {
@@ -966,6 +1112,10 @@ static void layout_menu(uint32_t w, uint32_t h, float scale) {
             case TAB_SOUND: tab_sound(scale); break;
             case TAB_CONTROLS: tab_controls(scale); break;
             case TAB_ADVANCED: tab_advanced(scale); break;
+            case TAB_TRAINER: tab_trainer(scale); break;
+#ifdef MLB_DEV_HARNESS
+            case TAB_DEV: tab_dev(scale); break;
+#endif
             }
             ImGui::EndTabItem();
         }
@@ -1269,7 +1419,15 @@ extern "C" int menu_overlay_frame(uint64_t frame, const MenuTarget *t, const cha
     if (g_n_restart_keys < 0) note_start_values();
     if (g_perf_save.exchange(0)) cfg_save();
     perf_tick(plat_now_ns(), t);
+    trainer_ui_frame_begin(frame);   // fastball: the trainer's settings and tick, menu open or not
     bool open = g_open.load(std::memory_order_relaxed);
+#ifdef MLB_DEV_HARNESS
+    if (DEV_OPEN() && !cfg_bool("DEV_MODE")) change_dev(0);   // Dev mode switched off (or by mlb.cfg): the panel goes
+    if (cfg_bool("DEV_MODE") && !DEV_OPEN() && devpanel_test_open(frame)) change_dev(1);
+    static bool dev_perf;   // the panel's frame graph needs perfmon's frame times: fps mode while it is open
+    if (DEV_OPEN() && !g_perf_mode && !dev_perf) perfmon_mode(1), dev_perf = true;
+    else if (!DEV_OPEN() && dev_perf) perfmon_mode(g_perf_mode), dev_perf = false;
+#endif
     if (!open) {
         if (g_save_pending) g_save_pending = opt_save_tick(1);   // closed: the last change goes to mlb.cfg now
         // Test hook: MLB_MENU_TEST=<frame>[:<tab>] opens the menu at that presented frame (with MLB_SHOT, a picture of it)
@@ -1283,12 +1441,13 @@ extern "C" int menu_overlay_frame(uint64_t frame, const MenuTarget *t, const cha
         if (test_at >= 0 && frame == (uint64_t)test_at) {
             change_open(1);
             open = true;
-        } else if (!g_perf_mode) {
+        } else if (!g_perf_mode && !trainer_ui_wants_draw() && !DEV_OPEN()) {
             return 0;
         }
     }
     if (g_failed.load(std::memory_order_relaxed)) {
         change_open(0);
+        trainer_menu_opened();   // fastball: nothing can be drawn, so the trainer panel must not hold the input
         return 0;
     }
     uint64_t t0 = plat_now_ns();
@@ -1298,6 +1457,7 @@ extern "C" int menu_overlay_frame(uint64_t frame, const MenuTarget *t, const cha
         rt_log("menu: Dear ImGui Vulkan back end set-up failed; the menu stays closed");
         g_failed.store(1);
         change_open(0);
+        trainer_menu_opened();
         return 0;
     }
     if (g_style_scale != scale) {
@@ -1308,6 +1468,10 @@ extern "C" int menu_overlay_frame(uint64_t frame, const MenuTarget *t, const cha
     list_gpus(t->instance);
     ImGuiIO &io = ImGui::GetIO();
     int reset = g_reset.exchange(0);
+    // fastball: the trainer panel appearing or going is a new input session too
+    static bool panel_was;
+    bool panel = !open && trainer_visible();
+    if (panel != panel_was) reset = 1, panel_was = panel;
     if (reset) {
         io.ClearInputKeys();
         io.ClearInputMouse();
@@ -1320,13 +1484,15 @@ extern "C" int menu_overlay_frame(uint64_t frame, const MenuTarget *t, const cha
     double dt = g_last_ns ? (t0 - g_last_ns) / 1e9 : 1 / 60.0;
     io.DeltaTime = (float)(dt < 1e-4 ? 1e-4 : dt > 0.1 ? 0.1 : dt);
     g_last_ns = t0;
-    if (open) {   // closed with the overlay on: no input reaches ImGui
-        drain_events(io);
-        pad_events(io, reset);
-    }
+    if (open || panel || DEV_OPEN()) drain_events(io);   // closed with the overlay on: no input reaches ImGui
+    if (open || panel) pad_events(io, reset);
     ImGui_ImplVulkan_NewFrame();
     ImGui::NewFrame();
     if (open) layout_menu(t->width, t->height, scale);
+    else trainer_ui_draw(scale, t->width, t->height);   // fastball: draws nothing unless wanted
+#ifdef MLB_DEV_HARNESS
+    if (DEV_OPEN() && devpanel_layout(t->width, t->height, scale, frame, !open)) change_dev(0);
+#endif
     perf_draw(t, scale);
     ImGui::Render();
     if (srgb_format(t->format)) linear_colours(ImGui::GetDrawData());

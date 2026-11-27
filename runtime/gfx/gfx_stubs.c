@@ -11,6 +11,7 @@
 #include "cfg.h"
 #include "flight.h"
 #include "gfx.h"
+#include "harness_det.h"
 #include "host.h"
 #include "input.h"
 #include "ui/menu.h"
@@ -216,6 +217,7 @@ int mlb_capture_tick(uint64_t frame, const char **shot) {
     f12_was = f12 != 0;
     void mlb_state_dump_tick(uint64_t frame);   // fastball: F8, statedump.c (diagnostic)
     mlb_state_dump_tick(frame);
+    hd_frame(frame);
     if ((long)frame == __atomic_load_n(&capture_at, __ATOMIC_RELAXED)) {
         snprintf(path, sizeof path, "%s/shot-%llu.png", rt_config()->profile, (unsigned long long)frame);
         *shot = path;

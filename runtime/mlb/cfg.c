@@ -36,7 +36,9 @@ static const CfgMeta metas[] = {
     {"RTTS_AUTOSAVE", "1", "0|1", RESTART},   // rtts_autosave.c: hub upgrades saved when their screen is left
     {"CACHE_STORAGE", "1", "0|1", RESTART},   // cache_storage.c: the game's FS_GameData exists (custom cameras)
     {"WALKUP_LIGHT", "1", "0|1", RESTART},   // tools/data/patches-*.txt: no lighting freeze before each pitch
+    {"MSDF_SKIP", "1", "0|1", RESTART},   // tools/data/patches-*.txt: the match-start distance-field clean-up skips infinite pixels
     {"WALKUP_LEADERS", "1", "0|1", RESTART},   // tools/data/patches-*.txt: league leaders built once per inning change
+    {"FP_FIXUP", "1", "0|1", RESTART},   // simd_fp.h: a NaN result of a scalar FP op is chosen in integer registers, not by the vector NaN pass
     {"PAD_MAP", "auto", "auto|label|position", LIVE},   // hid.c: face buttons by label in menus, by place in play
     {"RUMBLE", "1", "0|1", LIVE},   // hid.c: vibration on the controllers
     {"PAD_DRIVER", "sdl", "sdl|xinput", RESTART},   // hid.c: SDL3 (Xbox and PlayStation pads) or XInput (Xbox only)
@@ -50,6 +52,23 @@ static const CfgMeta metas[] = {
     {"HARNESS_OUT", "", NULL, RESTART},   // harness.c: folder for dumps (default harness-out)
     {"HARNESS_HOME", "", "0..29", RESTART}, {"HARNESS_AWAY", "", "0..29", RESTART},   // harness.c: team override
 #endif
+    // fastball: the in-game trainer (trainer.c), off by default: its panel, where it sits and its keys
+    {"TRAINER", "0", "0|1", LIVE},
+    {"TRAINER_CORNER", "top_right", "top_left|top_right|bottom_left|bottom_right", LIVE},
+    {"TRAINER_OPACITY", "90", "85..100", LIVE},
+    {"TRAINER_KEY_SHOW", "F2", "F2|F3|F4|F5|F6|F7", LIVE}, {"TRAINER_KEY_SAVE", "F3", "F2|F3|F4|F5|F6|F7", LIVE},
+    {"TRAINER_KEY_LOAD", "F4", "F2|F3|F4|F5|F6|F7", LIVE}, {"TRAINER_KEY_SLOW", "F6", "F2|F3|F4|F5|F6|F7", LIVE},
+    {"TRAINER_KEY_AWAY_BAT", "none", "none|5|6|7|8|9|0|Insert|Delete|Home|End|PageUp|PageDown", LIVE},
+    {"TRAINER_KEY_AWAY_PITCH", "none", "none|5|6|7|8|9|0|Insert|Delete|Home|End|PageUp|PageDown", LIVE},
+    {"TRAINER_KEY_HOME_BAT", "none", "none|5|6|7|8|9|0|Insert|Delete|Home|End|PageUp|PageDown", LIVE},
+    {"TRAINER_KEY_HOME_PITCH", "none", "none|5|6|7|8|9|0|Insert|Delete|Home|End|PageUp|PageDown", LIVE},
+    {"TRAINER_KEY_REFILL", "none", "none|5|6|7|8|9|0|Insert|Delete|Home|End|PageUp|PageDown", LIVE},
+    {"TRAINER_KEY_CONTACT", "none", "none|5|6|7|8|9|0|Insert|Delete|Home|End|PageUp|PageDown", LIVE},
+    {"TRAINER_KEY_HOMER", "none", "none|5|6|7|8|9|0|Insert|Delete|Home|End|PageUp|PageDown", LIVE},
+    {"TRAINER_KEY_MISS", "none", "none|5|6|7|8|9|0|Insert|Delete|Home|End|PageUp|PageDown", LIVE},
+    {"TRAINER_KEY_AIM", "none", "none|5|6|7|8|9|0|Insert|Delete|Home|End|PageUp|PageDown", LIVE},
+    {"TRAINER_KEY_STRIKE", "none", "none|5|6|7|8|9|0|Insert|Delete|Home|End|PageUp|PageDown", LIVE},
+    {"TRAINER_KEY_WILD", "none", "none|5|6|7|8|9|0|Insert|Delete|Home|End|PageUp|PageDown", LIVE},
     // TotK Recomp's rows (cfg.c @ ae30a61); the TotK-only ones are read by nothing here
     // Screen
     {"FULLSCREEN", "0", "0|1", LIVE}, {"WINDOW_SIZE", "1920x1080", NULL, LIVE},
@@ -140,6 +159,9 @@ static const CfgMeta metas[] = {
     {"CAPTURE_KEY", "0", "0|1", RESTART},  // gfx_stubs.c: F12 captures a frame (always F9 under RenderDoc)
     {"HEAP_CENSUS", "0", "0|1", RESTART},  // heap.c: with TRACE=perf, the malloc heap's live blocks by kind (#17)
     {"INPUT_RECORD", "", NULL, RESTART},
+#ifdef MLB_DEV_HARNESS
+    {"DEV_MODE", "0", "0|1", LIVE},   // ui/devpanel.cpp: the dev harness panel (Settings > Dev, F7); dev builds only
+#endif
 };
 
 // Values set at run time (cfg_set): a small table under a lock; strings are never freed, as readers may hold them.

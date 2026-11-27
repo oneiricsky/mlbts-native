@@ -17,6 +17,7 @@
 #include <wctype.h>
 
 #include "platform.h"
+#include "harness_det.h"
 
 _Static_assert(sizeof(PlatMutex) == sizeof(SRWLOCK), "PlatMutex holds an SRWLOCK");
 _Static_assert(sizeof(PlatCond) == sizeof(CONDITION_VARIABLE), "PlatCond holds a CONDITION_VARIABLE");
@@ -1025,6 +1026,7 @@ int plat_run_self(const char *env_name, const char *env_value, char *out, size_t
 }
 
 int plat_random(void *out, size_t n) {
+    if (hd_random(out, n)) return 1;
     return BCryptGenRandom(NULL, out, (ULONG)n, BCRYPT_USE_SYSTEM_PREFERRED_RNG) == 0;
 }
 

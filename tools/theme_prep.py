@@ -72,7 +72,8 @@ def main():
     print(f"library code filtered out: {len(lib_rows):,} functions")
     accepted = {r["addr"] for r in load_jsonl(f"{a.theme}/accepted.jsonl")}
     abstained = {r["addr"] for r in load_jsonl(f"{a.theme}/abstained.jsonl")}
-    done = accepted | abstained
+    # functions already identified by tracing (tools/data/theme-findings.jsonl) need no read
+    done = accepted | abstained | {r["addr"] for r in load_jsonl(ROOT + "/tools/data/theme-findings.jsonl")}
 
     if a.window:
         lo = int(a.window, 16)

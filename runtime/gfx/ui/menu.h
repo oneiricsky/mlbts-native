@@ -26,6 +26,10 @@ extern "C" {
 int menu_is_open(void);
 void menu_toggle(void);                   // F1 / Esc on the keyboard, Minus+Plus on the pad
 void menu_perf_cycle(void);               // F10: the performance overlay off, fps, full
+#ifdef MLB_DEV_HARNESS
+void menu_dev_toggle(void);               // F7: the dev harness panel (needs the Dev mode setting)
+void menu_event_char(unsigned ch);        // typed text, for the panel's fields
+#endif
 
 // ---- events from the window adapter, used only while the menu is open. key: an ImGuiKey; coordinates in pixels of the
 // window's client area, which is the swapchain image.

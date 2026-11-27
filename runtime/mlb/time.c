@@ -26,6 +26,7 @@
 #include "host.h"
 #include "ipc.h"
 #include "platform/platform.h"
+#include "harness_det.h"
 
 #define TICK_HZ 19200000ull
 #define SHM_SIZE 0x1000ull
@@ -50,7 +51,7 @@ static void time_init(void) {   // holding time_lock
     shm = mem_shmem_new("time", SHM_SIZE);
     if (!plat_random(&source, sizeof source)) rt_fatal("time: no random bytes for the clock source id");
     int64_t now_s = steady_s();
-    clock_ctx = (SystemClockContext){(int64_t)time(NULL) - now_s, now_s, source};
+    clock_ctx = (SystemClockContext){(int64_t)hd_time() - now_s, now_s, source};
     // Every block at counter 0, element 0.
     struct { uint64_t offset; Uuid source; } steady = {0, source};
     shm_put(0x008, &steady, sizeof steady);
@@ -62,7 +63,7 @@ static void time_init(void) {   // holding time_lock
     _Static_assert(sizeof adjust == 0x38, "steady clock adjustment layout");
     shm_put(0x0D8, &adjust, sizeof adjust);
     rt_log("time: clocks from the host (UTC %lld), steady clock from the guest tick, time zone %s",
-           (long long)time(NULL), cfg_value("MLB_TIMEZONE"));
+           (long long)hd_time(), cfg_value("MLB_TIMEZONE"));
 }
 
 static SteadyClockTimePoint steady_now(void) { return (SteadyClockTimePoint){steady_s(), source}; }
@@ -99,7 +100,7 @@ static void steady_clock(IpcSession *s, const IpcRequest *rq, IpcResponse *rs) {
         return;
     }
     case 100: {   // GetRtcValue -> s64 seconds
-        int64_t v = (int64_t)time(NULL);
+        int64_t v = (int64_t)hd_time();
         IPC_OUT(rs, v);
         return;
     }
