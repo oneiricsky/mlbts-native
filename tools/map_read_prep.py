@@ -222,7 +222,9 @@ def role_of(rows_by, addr, depth=0):
     if r.get("name"):
         return r["name"]
     if r["kind"] == "game":
-        return r["role"][:48]
+        # fastball: a callee role is quoted in a dossier, and a reader may complete a string the truncation cut
+        # ("...GetSectorInf" read as "...GetSectorInfo"); keep the whole role, not the first 48 characters.
+        return r["role"][:110]
     return ""
 
 
@@ -234,10 +236,15 @@ def main():
     ap.add_argument("--batch-size", type=int, default=150)
     ap.add_argument("--max-ir", type=int, default=12)
     ap.add_argument("--only", default="main")
-    ap.add_argument("--limit", type=int, default=0)
+    ap.add_argument("--limit", type=int, default=0, help="how many functions from --start (0: all)")
     ap.add_argument("--addrs", default="", help="file of addresses to batch (a rerun of missing.txt)")
-    ap.add_argument("--start", type=int, default=0, help="skip this many batches (resume)")
+    ap.add_argument("--start", type=int, default=0,
+                    help="function index to start at; must be a multiple of --batch-size, so batch numbers "
+                         "continue where an earlier run stopped")
     ap.add_argument("--all", action="store_true", help="every function of the module, not only tag H")
+    ap.add_argument("--unread", action="store_true",
+                    help="every function without a body-read overlay entry (slow, resumable; writes targets.txt "
+                         "as the whole remaining set and numbers batches from it)")
     a = ap.parse_args()
 
     rows = [json.loads(l) for l in open(f"{a.index}/roles.jsonl", encoding="utf-8")]
@@ -257,12 +264,34 @@ def main():
     # the vtable class of a method: its siblings' strings and named methods are evidence a bare stub lacks
     vt_index = vtable_class.load(a.index)
 
-    todo = [r for r in rows if (a.all or r["tag"] == "H")
-            and (a.only == "all" or r["module"] == a.only)]
+    if a.unread:
+        # fastball: the completeness pass reads every body, not only the 47k that had no string or shape. The
+        # overlay, not roles.jsonl, says what is still unread: it is written by map_read_merge.py while map_roles.py
+        # (which copies `read` into roles.jsonl) may not have run since the last wave.
+        overlay = set()
+        opath = f"{a.index}/roles_read.jsonl"
+        if os.path.exists(opath):
+            for line in open(opath, encoding="utf-8"):
+                if line.strip():
+                    overlay.add(json.loads(line)["addr"])
+        todo = [r for r in rows if r["addr"] not in overlay
+                and (a.only == "all" or r["module"] == a.only)]
+        print(f"{len(overlay):,} functions already read")
+    else:
+        todo = [r for r in rows if (a.all or r["tag"] == "H")
+                and (a.only == "all" or r["module"] == a.only)]
     os.makedirs(a.out, exist_ok=True)
-    # the stable target list for the whole pass: merge validates answers against it across reruns
+    # the stable target list for the whole pass: merge validates answers against it across reruns. In --unread mode
+    # it only ever grows: a later run's todo is smaller (earlier waves have been merged into the overlay), so
+    # overwriting it would un-target the functions those waves already answered and the merge would reject them.
     tpath = a.out + "/targets.txt"
-    if not os.path.exists(tpath) and todo:
+    if a.unread and todo:
+        old = set()
+        if os.path.exists(tpath):
+            old = {x.strip() for x in open(tpath, encoding="utf-8") if x.strip()}
+        all_t = old | {r["addr"] for r in todo}
+        open(tpath, "w", newline="\n").write("\n".join(sorted(all_t, key=lambda x: int(x, 16))) + "\n")
+    elif not os.path.exists(tpath) and todo:
         open(tpath, "w", newline="\n").write("\n".join(sorted((r["addr"] for r in todo), key=lambda x: int(x, 16))) + "\n")
     # a window label for every window: the region notes' subsystem, else the window's own most common strings
     win = {}
@@ -285,16 +314,20 @@ def main():
     if a.addrs:
         want = {x.strip().lower() for x in open(a.addrs, encoding="utf-8") if x.strip()}
         todo = [r for r in todo if r["addr"] in want]
-    if a.limit:
-        todo = todo[: a.limit]
-    print(f"{len(todo)} functions to read; {sum(r['lines'] for r in todo):,} generated lines")
+    if a.start and a.start % a.batch_size:
+        raise SystemExit(f"--start {a.start} is not a multiple of --batch-size {a.batch_size}")
+    total = len(todo)
+    if a.start or a.limit:
+        end = a.start + a.limit if a.limit else total
+        todo = todo[a.start:end]
+    print(f"{len(todo)} of {total} unread functions to read; {sum(r['lines'] for r in todo):,} generated lines")
     ir = read_ir(a.gen, [gen_funcs[r["addr"]] for r in todo], starts_by_file, a.max_ir)
 
     os.makedirs(a.out, exist_ok=True)
-    batches = []
+    batches, skipped = [], 0
     for i in range(0, len(todo), a.batch_size):
         chunk = todo[i:i + a.batch_size]
-        num = i // a.batch_size
+        num = (a.start + i) // a.batch_size
         # fastball: `--all` builds dossiers for theming (not only for the 47k unread pass), so the title says what it is
         title = "Functions" if a.all else "Unread functions"
         lines = [f"# {title}, batch {num} ({len(chunk)} functions, game 1.0.20)",
@@ -302,10 +335,14 @@ def main():
                  "Each entry: address, generated-C lines, direct callers, span in bytes, vtable slot, the 256 KB",
                  "window's subsystem, the function's own strings, the known role of each callee in brackets, then the",
                  "function's operations: `call f_X` (a direct call), `LD32[x0+0x8]` / `ST8[x8+0xa]` (memory),",
-                 "`if ... goto L_x` (branch). A vtable method also gets a `class:` line: the strings its sibling",
+                 "`if ... goto L_x` (branch). A heading also carries `trap=N` when the body holds N unreachable trap",
+                 "sites (rt_udf; the recompiler drops them from the ops) and `indirect=N` when it calls through a",
+                 "function pointer N times. A vtable method also gets a `class:` line: the strings its sibling",
                  "methods quote (`method strings`), the strings their callees and callers quote (`near strings`), and",
                  "their named roles. Register names match the game's own; x0 is the first argument and the return value.",
                  "The strings line is the only place this function's literals appear: quote from there.",
+                 "A `known:` line carries what the map already established without reading the body (a symbol or",
+                 "import name, a string-derived role, or the shape guess); use it as a hint, not as the answer.",
                  ""]
         for r in chunk:
             g = gen_funcs[r["addr"]]
@@ -316,11 +353,29 @@ def main():
                 nm = role_of(rows_by, c)
                 calls.append(f"f_{c[2:]}" + (f"({nm})" if nm else ""))
             vt = f" vtable {r['vtable']} slot {r['slot']}" if r["vtable"] else ""
+            trap = f" trap={r['udf']}" if r["udf"] else ""
+            ind = f" indirect={r['dispatch']}" if r["dispatch"] else ""
             label = win.get((r["module"], int(r["addr"], 16) >> 18), "") or "(no theme for this window)"
-            lines.append(f"## {r['addr']}  l={r['lines']} span={r['span']}B callers={r['callers']}{vt} "
+            lines.append(f"## {r['addr']}  l={r['lines']} span={r['span']}B callers={r['callers']}{vt}{trap}{ind} "
                          f"window=\"{label[:110]}\"")
             if cdesc:
                 lines.append(f"callers: {cdesc}")
+            # fastball: the completeness pass also reads functions the map already named from a symbol, import or
+            # string. That evidence is in the index, not in the body, so without this line the reader would miss the
+            # strongest fact about the function (a `_fini` stub read as an anonymous destructor loop).
+            if r["kind"] != "boilerplate":
+                known = [f"kind={r['kind']}", f"basis={r['basis']}"]
+                if r.get("name"):
+                    known.insert(0, f"name={r['name']}")
+                if r.get("role"):
+                    known.append(f'map role="{r["role"][:90]}"')
+                lines.append("known: " + ", ".join(known))
+            elif r.get("read"):
+                # a body-read role outranks the shape guess: theming dossiers (theme_prep --all) are prepared after
+                # the read pass and use it as the prior for which aspect a function serves
+                lines.append(f'known: read role="{r["role"][:110]}", shape={r["shape"]}, basis={r["basis"]}')
+            elif r["shape"] != "unknown":
+                lines.append(f"known: shape={r['shape']}, basis={r['basis']}")
             if calls:
                 lines.append("calls: " + ", ".join(calls))
             cls = vtable_class.describe(vt_index, r["addr"])
@@ -334,12 +389,22 @@ def main():
                 lines.append("  " + op)
             lines.append("")
         path = f"{a.out}/batch-{num:03d}.md"
+        if os.path.exists(path):
+            # a resumable pass reuses the dossiers it already wrote: a later --start slice must never renumber or
+            # replace them, because the answers' batch numbers and the target list refer to them
+            skipped += 1
+            continue
         open(path, "w", encoding="utf-8", newline="\n").write("\n".join(lines))
         batches.append(dict(id=num, file=path, count=len(chunk), addrs=[r["addr"] for r in chunk]))
-    json.dump(dict(only=a.only, batch_size=a.batch_size, total=len(todo), batches=batches),
+    json.dump(dict(only=a.only, unread=a.unread, batch_size=a.batch_size, total=total, written=len(todo),
+                   batches=batches),
               open(f"{a.out}/manifest.json", "w"), indent=1)
+    if not batches:
+        print("nothing to write (all requested batches already exist)")
+        return
     sizes = [os.path.getsize(b["file"]) for b in batches]
-    print(f"{len(batches)} batches written, {min(sizes)}..{max(sizes)} bytes each, mean {sum(sizes)//len(sizes)}")
+    print(f"{len(batches)} batches written ({skipped} already existed), {min(sizes)}..{max(sizes)} bytes each, "
+          f"mean {sum(sizes)//len(sizes)}")
 
 
 if __name__ == "__main__":

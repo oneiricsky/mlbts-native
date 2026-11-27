@@ -74,6 +74,10 @@ it should not appear. If a library routine slips through, answer `Unclear` and s
 3. **The window theme is not evidence.** It is one label for 256 KB and is measured at 37.5% right per function. If
    the only thing pointing at an aspect is the window label, answer `Unclear` with the evidence "window only".
    The `class:` line is not the window: it is the function's own class and is allowed as evidence.
+   A `known:` line that carries a `read role` (the function's body was read earlier and this is what that read
+   concluded) is a **lead, not evidence**: it may steer which aspect you look for, and it saves you working out what
+   the body does, but the evidence you cite must still be this function's own quoted string, a `class:` string, or a
+   labelled callee. The same holds for a `map role` or a `name` in that line.
 4. Confidence 0.0 to 1.0. Use 0.9+ only when a string names it outright.
 5. Write **only** the output file named in the task. Do not modify the dossier, the map index or anything else.
 

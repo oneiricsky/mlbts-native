@@ -66,6 +66,111 @@ def write(out, name, body, source):
     open(f"{out}/{name}.md", "w", encoding="utf-8", newline="\n").write((BANNER % source if source else "") + body.strip() + "\n")
 
 
+# Code-shaped text that the sources quote bare. Whole expressions come first, so `LD64[x0 + 0x8]` and `x0 + 0xa40`
+# stay one span instead of three; then single tokens: any hex number, a recompiled function, a setting, a repo path, an
+# SDK or std namespace, a runtime helper, an underscore symbol, a register, a type, a service call, a file name and a
+# printf specifier.
+CODE_TOKEN = re.compile(
+    r"\bmain\+0x[0-9a-f]{1,6}\b"
+    r"|\b(?:LD|ST)(?:8|16|32|64|128)\[[^\]\n]{1,48}\]"
+    r"|\b[wx]\d{1,2} [+-] 0x[0-9a-f]{1,6}\b"
+    r"|\b0x[0-9a-fA-F]{2,}\b"
+    r"|\bf_[0-9a-f]{6,}\b"
+    r"|(?:MLB|TOTK)_[A-Z0-9_]{2,}"
+    r"|(?:docs|tools|work|runtime|recomp|installer)/[\w./-]+"
+    r"|(?:nn|nvn|std|sf|svc|os|fs|gfx|musl|nnmusl)::[A-Za-z_][\w:<>]*"
+    r"|\bnvn[A-Z]\w+|\bNVN_[A-Z_]+"
+    r"|\brt_[a-z_]+"
+    r"|(?<![\w])_{1,2}[A-Za-z][A-Za-z0-9_]{1,}"                       # _init, __cxa_guard_acquire, not a_b
+    r"|\b(?:FN_ENTER|VSET|VS32|VS64|ROR64|ldx64|stx64|fadd32|fsub32|fadd64|fsub64|fc_[a-z0-9_]+)\b"
+    r"|\b(?:u?int(?:8|16|32|64)_t|vreg)\b"
+    r"|\bsvc #[0-9]+\b"
+    r"|\b[xw](?:[0-9]|[12][0-9]|30)\b|\b(?:sp|pc|nzcv|fpcr)\b"
+    r"|\b[A-Z][A-Z0-9]{3,}(?:_[A-Z0-9]+)+\b"                        # TEAM_INDEX, CONFIG_MAIN_USER
+    r"|\b[A-Z]{5,}\b"                                               # ENTERING, EXITING: data, not an acronym
+    r"|(?<![\w./-])[\w./%_-]+\.(?:c|h|cpp|py|md|txt|json|cfg|log|rdc|nsp|bin|big|skx|BNK|dat|xml|csv|ini|sav)\b")
+# a complete inline link or image: [text](dest). Its label is formatted like any text; its destination is left alone,
+# because a wrapped destination breaks the link.
+LABELSPLIT = re.compile(r"(!?\[)([^\]]*)(\]\([^)\s]*\))")
+
+
+QUOTED = re.compile(r'"([^"\n]{0,120})"')
+CODEISH = re.compile(r"[_%./:\\\[\]{}<>=|]")
+
+
+def code_span(text):
+    """Wrap code-shaped tokens in one run of text that holds no quotes and no link."""
+    if text.count("`") % 2:  # an unbalanced span: leave this piece as it is rather than swallow a backtick
+        return text
+    parts = text.split("`")
+    for j in range(0, len(parts), 2):
+        parts[j] = CODE_TOKEN.sub(lambda m: "`" + m.group(0) + "`", parts[j])
+    return "`".join(parts)
+
+
+def code_text(seg, html, quotes_even=True):
+    """Wrap code-shaped text; a quoted string is wrapped whole when it is code-shaped, never broken up inside.
+
+    Quoted strings are masked before the tokens are wrapped: a quote that sits inside a code span (a game string
+    printed as `"Get ball in ring"`) would otherwise split the line and the span's backticks would be re-paired,
+    wrapping text that was already inside a span.
+    """
+    quotes = []
+
+    def mask(m):
+        quotes.append(m.group(0))
+        return "\x01" + str(len(quotes) - 1) + "\x02"
+
+    out = code_span(QUOTED.sub(mask, seg))
+
+    def unmask(m):
+        q = quotes[int(m.group(1))]
+        inner = q[1:-1]
+        before = out[m.start() - 1] if m.start() else ""
+        after = out[m.end()] if m.end() < len(out) else ""
+        if before == "`" or after == "`":  # already inside a code span: wrapping again would nest backticks
+            return q
+        if "`" in inner:  # the quoted text already carries a span of its own ("`IsMounted`"): leave it
+            return q
+        if quotes_even and not any(c.isspace() for c in inner) and CODEISH.search(inner):
+            return "`" + q + "`"  # "PLR_FE", "gamedata_%s_at_%s.bin", "%s"
+        # a sentence in quotes ("The game state was invalid when ..."); a literal backtick inside it would open a
+        # code span that never closes, so it is escaped here
+        return q.replace("`", "\\`")
+
+    res = re.sub("\x01([0-9]+)\x02", unmask, out)
+    if html:  # a raw HTML block (<summary>) is not Markdown: a backtick span there shows its backticks literally
+        res = re.sub(r"`([^`]+)`", r"<code>\1</code>", res)
+    return res
+
+
+def codeify(text):
+    """Wrap code-shaped text in inline code spans, in the text and in link labels.
+
+    The region notes and the function-register tables quote hundreds of addresses, function names and paths bare; a
+    reader scanning for one should see it as code, not as prose. Applied at build time so the Markdown sources stay
+    easy to write. Fenced blocks, existing spans and link destinations are left alone.
+    """
+    out, fence = [], False
+    for line in text.split("\n"):
+        if line.startswith("```"):
+            fence = not fence
+            out.append(line)
+            continue
+        if fence:
+            out.append(line)
+            continue
+        html = "<summary" in line or "<details" in line or "</details>" in line
+        quotes_even = line.count('"') % 2 == 0  # an embedded quote inside a game string: do not pair those
+        pieces = LABELSPLIT.split(line)  # [text, mark, label, tail] per link
+        for i in range(0, len(pieces), 4):
+            pieces[i] = code_text(pieces[i], html, quotes_even)
+            if i + 2 < len(pieces):
+                pieces[i + 2] = code_text(pieces[i + 2], html, quotes_even)
+        out.append("".join(pieces))
+    return "\n".join(out)
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--out", default=ROOT + "/work/wiki")
@@ -98,10 +203,15 @@ def main():
     readme = relink(strip_front_and_title(read(ROOT + "/docs/map/README.md")))
     readme = re.sub(r"\[(source/[^\]]+)\]\([^)]*\)", r"`docs/map/\1`", readme)
     readme = readme.replace("[coverage.md](coverage.md)", "`docs/map/coverage.md`").replace("[binary.md](binary.md)", "[The game binary](The-game-binary)")
+    readme = readme.replace("[read-pass.md](read-pass.md)", "[Reading every function body](Reading-every-function-body)")
     readme = re.sub(r"\[regions/\]\(regions/\)", "the region pages", readme)
     readme = re.sub(r"\[bodies/\]\(bodies/\)", "the game flow pages", readme)
     write(a.out, "Tools-and-the-code-map", readme, "docs/map/README.md")
     pages.append("Tools-and-the-code-map")
+    # the body-reading pass: method, targets, how a wave runs, how it is checked
+    write(a.out, "Reading-every-function-body", relink(strip_front_and_title(read(f"{ROOT}/docs/map/read-pass.md"))),
+          "docs/map/read-pass.md")
+    pages.append("Reading-every-function-body")
     # the complete function map: built from work/map/index/roles.jsonl (tools/map_roles.py), not from a committed source
     sys.path.insert(0, ROOT + "/tools")
     import map_functions_doc
@@ -125,8 +235,9 @@ def main():
         ("Function map", tuple(fm)),
         ("Game binary regions", tuple(f"Region-{l}" for l in REGIONS)),
         ("Findings", ("Walk-up-freeze", "Match-start-freeze", "Load-stalls", "Frame-rate-and-GPU-waits",
-                      "PS5-textures", "Upstream-bug-research")),
-        ("Reference", ("History-and-open-questions", "Tools-and-the-code-map", "Start-here")),
+                      "PS5-textures", "Main-menu-offline-panel", "Upstream-bug-research")),
+        ("Reference", ("History-and-open-questions", "Tools-and-the-code-map", "Reading-every-function-body",
+                       "Start-here")),
     ]
 
     # the function-register pages are named by the address range they cover, not by a letter: a reader looking for
@@ -139,15 +250,36 @@ def main():
     def label(p):
         if p in ranges:
             lo, hi = ranges[p]
-            return f"0x{lo:x}-0x{hi - 1:x}"
+            return f"`0x{lo:x}-0x{hi - 1:x}`"
         return p.replace("-", " ")
 
-    def numbered(p):
-        return p.startswith("Functions-") or p.startswith("Region-")
+    def address_line(p):
+        """An address-range page as a lettered entry, the owner's sidebar layout: `Functions: A. [0x…](Functions-A)`,
+        `Functions SDK: …`. The kind prefix keeps the two range sections (Functions pages, Region pages) from reading
+        as the same list twice."""
+        kind = "Functions" if p.startswith("Functions-") else "Regions"
+        letter = p.rsplit("-", 1)[1]
+        if letter == "SDK":
+            return f"{kind} SDK: [{label(p)}]({p})"
+        return f"{kind}: {letter}. [{label(p)}]({p})"
 
+    # Sidebar layout (owner's): a section of address ranges opens with its title, then one lettered range per line
+    # (a trailing backslash is a hard line break, so the ranges stay tight under the title); the plain links of that
+    # section follow after a blank line. Other sections are title then bullets.
     side = ["[Home](Home)"]
     for title, ps in sections:
-        side += ["", title] + [f"{'1.' if numbered(p) else '-'} [{label(p)}]({p})" for p in ps]
+        addr = [p for p in ps if p.startswith("Functions-") or p.startswith("Region-")]
+        rest = [p for p in ps if p not in addr]
+        side.append("")
+        if not addr:
+            side.append(title)
+            side += [f"- [{label(p)}]({p})" for p in rest]
+            continue
+        side.append(title + "\\")
+        side += [address_line(p) + "\\" for p in addr[:-1]] + [address_line(addr[-1])]
+        if rest:
+            side.append("")
+            side += [f"- [{label(p)}]({p})" for p in rest]
     open(f"{a.out}/_Sidebar.md", "w", encoding="utf-8", newline="\n").write("\n".join(side) + "\n")
     # the home page's table of contents: every page, grouped the way the sidebar groups it, from the same lists. The
     # read-role detail pages are generated in bulk and kept off the sidebar; the table lists them too, so no page is
@@ -206,6 +338,14 @@ def main():
         open(path, "w", encoding="utf-8", newline="\n").write(t)
     missing = [p for p in pages if not os.path.exists(f"{a.out}/{p}.md")]
     print(f"{len(pages)} pages written to {a.out}; missing: {missing}")
+    # Inline code: the region notes and the register tables quote addresses, game function names, settings and repo
+    # paths bare, which reads as prose. Wrap them in code spans here, so the sources stay plain and every page gets it.
+    for page in sorted(os.listdir(a.out)):
+        if not page.endswith(".md"):
+            continue
+        path = f"{a.out}/{page}"
+        t = codeify(read(path))
+        open(path, "w", encoding="utf-8", newline="\n").write(t)
     # every [text](Page) link must point at a page we wrote
     names = set(pages) | {"Home"}
     bad = []

@@ -31,12 +31,14 @@ repo, the binary and `docs/`; each claim is tagged [C] confirmed (read from bina
 This is an index-level map, not a read-through of the code. Built from: the repo docs, the port's source (parsed), strings and vtables recovered from the original
 machine code for all 135,060 recompiled functions, and six region notes written by Haiku agents from that index. Every one of the 135,060 functions is classified:
 import name, SDK symbol, library, string evidence, or code shape (getter, forwarder, empty stub, ...). The 47,308 `main` functions that had no string, symbol or
-shape were then read from their own code, normalised to the operations that matter, in batches: 18,195 `main` rows now carry C evidence and 333 remain guesses.
+shape were then read from their own code, normalised to the operations that matter, in batches. A completeness pass now reads every remaining body, the unnamed
+`sdk` functions included, so that the coverage chart's body-read bar reaches 100% everywhere; [Reading every function body](Reading-every-function-body) has the
+method, and the chart and the Read roles page show how far it has got.
 Those read roles are leads, not verified facts: a 10-function audit found 6 right, 1 incomplete and 3 with a wrong specific detail, so open the body before relying
-on a detail (the wiki's Read roles page carries the same warning). Function bodies read: the handlers of all 12 game-state classes (about 60 functions, read by agents
-and spot-checked, 20 claims per report, with the wrong ones corrected; see `docs/map/bodies/`) and about 300 more from the subsystem passes. Nothing else.
+on a detail (the wiki's Read roles page carries the same warning). Function bodies read in full: the handlers of all 12 game-state classes (about 60 functions, read by agents
+and spot-checked, 20 claims per report, with the wrong ones corrected; see `docs/map/bodies/`) and about 300 more from the subsystem passes.
 Treat region-note roles tagged [I] or [H] as leads, not facts, and read the body (see the playbook) before building on one. Next step if more fluency is wanted: verify
-the read roles in a second pass, or read the 13,800 unnamed `sdk` functions, and add what you verify to known-functions.md.
+the read roles in a second pass, and add what you verify to known-functions.md.
 
 ## First 60 seconds on any task
 
