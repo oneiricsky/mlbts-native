@@ -70,6 +70,14 @@ Use [Conventional Commits](https://www.conventionalcommits.org/) for commit titl
 
 Example: `docs: add CONTRIBUTING.md` or `fix(gfx): resolve texture alias overwrite`.
 
+In this fork (oneiricsky/mlbts-native), since 2026-11-27:
+
+- The subject is one line, imperative and scoped: `fix(gfx): bind compute dispatches to the Switch-size level`.
+- The body is three sentences at most, or nothing. Trailer lines do not count.
+- The long explanation goes in `docs/reports/YYYY-MM-DD-slug.md`, committed in the same change.
+- Issues and docs cite the date and subject, or the report's path, not this fork's commit hashes. Upstream hashes may
+  stay, with the date and subject.
+
 ## Pull Requests and Branches
 
 - Create a focused branch for your changes (e.g., `docs/contributing`, `fix/...`, `feat/...`).

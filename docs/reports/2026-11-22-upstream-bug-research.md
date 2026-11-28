@@ -1,7 +1,7 @@
 # Report: four open bugs in upstream (sam110411/fastball)
 
 Status: research only. Nothing was run. The game was not started and nothing was built. The code read is the merged
-tree at `7e82c07` (upstream 0.2.0 plus our changes). The issue threads were read with `gh` on 2026-11-22, and the two
+tree of 2026-11-22 (upstream 0.2.0 plus our changes). The issue threads were read with `gh` on 2026-11-22, and the two
 `mlb.log` files attached to issues 10 and 14 were downloaded as text and read; both come from a 0.1.4 build.
 
 ## Summary
@@ -69,7 +69,7 @@ title says "above 60hz refresh rate". No comments, no log, no settings were give
 default limit of 60 nothing in it runs (`frame_step_present`, framerate.c:151). At any other limit it writes 0 into the
 game's vsync count at every present while the game is in its averaging mode, so the game's time step is the average of
 the last 15 measured frame times, and it fills the timer's carry with 1/60 s as a guard (framerate.c:171-175). In the
-game's whole-vsync mode it hands the game's own count back and the game runs at 60. Upstream commit `0c6fe91` added the
+game's whole-vsync mode it hands the game's own count back and the game runs at 60. Upstream commit `0c6fe91` (2026-11-18, "Frame rate: never a zero game step when the game switches to whole vsyncs (#18)") added the
 carry guard while tracing this issue; its comment says it was not reproduced and not confirmed as the cause.
 
 **Most likely cause.** Not known. Three candidates, none confirmed:

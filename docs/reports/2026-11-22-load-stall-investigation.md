@@ -1,6 +1,6 @@
 # Load stalls in the merged build
 
-Where the time goes when the game loads something, measured on the 0.2.0 merge (`7e82c07`) with the harness match
+Where the time goes when the game loads something, measured on the 0.2.0 merge ("chore: use the fastball marker in the comments our edits added", 2026-11-22) with the harness match
 (AI vs AI, TOR at LAD), on one PC (RX 6700 XT, PS5 dump on an 8 TB hard disk, repo and game files on an SSD).
 
 ## Summary

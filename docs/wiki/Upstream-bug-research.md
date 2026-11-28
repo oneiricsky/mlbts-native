@@ -27,7 +27,7 @@ Fix: add `PresSkip` and the challenge screen's name to the menu list. The challe
 
 A reporter said one of two Road to the Show batting-cage modes does not show the ball coming in from the sides.
 
-At the default limit of 60 nothing in `framerate.c` runs. At another limit it writes 0 into the game's vsync count at every present, so the game's step is the average of the last 15 frame times. It also fills the timer's carry with 1/60 s as a guard (upstream commit `0c6fe91`, not confirmed as the cause).
+At the default limit of 60 nothing in `framerate.c` runs. At another limit it writes 0 into the game's vsync count at every present, so the game's step is the average of the last 15 frame times. It also fills the timer's carry with 1/60 s as a guard (upstream commit `0c6fe91`, 2026-11-18, "Frame rate: never a zero game step when the game switches to whole vsyncs (#18)", not confirmed as the cause).
 
 Three candidates, none confirmed:
 

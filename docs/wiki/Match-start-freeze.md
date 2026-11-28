@@ -1,4 +1,4 @@
-At match start the game freezes for about 0.7 s while it draws a map of the field's edges. A code patch cuts that step to about 0.19 s. It has been in `main` since 2026-11-26 (commit `ec0370d`), for game 1.0.20.
+At match start the game freezes for about 0.7 s while it draws a map of the field's edges. A code patch cuts that step to about 0.19 s. It has been in `main` since 2026-11-26, for game 1.0.20.
 
 ## Overview
 
@@ -53,4 +53,4 @@ The first run in a newly copied game folder took 37 s to reach the field picture
 
 ## Related work
 
-The float fix-up (`MLB_FP_FIXUP`, default on) made each NaN cheaper (702 to 525 ms, measured without this patch). It reached `main` in the same commit, `ec0370d`, and was not measured again there. With the NaNs gone it should matter much less; that still needs measuring.
+The float fix-up (`MLB_FP_FIXUP`, default on) made each NaN cheaper (702 to 525 ms, measured without this patch). It reached `main` in the same change, on 2026-11-26, and was not measured again there. With the NaNs gone it should matter much less; that still needs measuring.

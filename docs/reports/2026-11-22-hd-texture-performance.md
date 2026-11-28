@@ -2,14 +2,14 @@
 
 Status: measured on one machine; no slowdown found in steady play. Recommendation at the end.
 
-These numbers are from the build before the 0.2.0 merge (`12ebc18`). Upstream's 0.2.0 removed the per-pitch freeze, so
+These numbers are from the build before the 0.2.0 merge (2026-11-22). Upstream's 0.2.0 removed the per-pitch freeze, so
 the per-pitch figures below describe the old build; the merged build's numbers are in
 [2026-11-22-gpu-wait-hitches.md](2026-11-22-gpu-wait-hitches.md) ("Update after merging 0.2.0").
 
 ## What was compared
 
 Three configurations on the dev harness (AIvAI, GameOnly, TOR at LAD), each run twice, 400 seconds a run (6 one-minute windows,
-about 21,000 frames), one game at a time, same build (`12ebc18`, no diagnostics):
+about 21,000 frames), one game at a time, same build (the one with the compute fix of 2026-11-22, no diagnostics):
 
 | | Setting | Index entries |
 | --- | --- | --- |
@@ -72,7 +72,7 @@ near frame 1,000. The cause was not found, and with this few runs it cannot be c
 
 ## Yellow-face check on C
 
-With the all-heads colour index and the compute fix (`b4a839e`), 0 of 101 shots were flagged; Ohtani and the catcher looked natural in the
+With the all-heads colour index and the compute fix (`docs/reports/2026-11-22-yellow-face-ps5-colour-maps.md`), 0 of 101 shots were flagged; Ohtani and the catcher looked natural in the
 contact sheet. Only a handful of faces were looked at; the 2,300 other heads were not.
 
 ## Not measured

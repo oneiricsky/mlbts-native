@@ -16,9 +16,16 @@ head-file prefetch (a pack file, remembered players, mode detection) is deferred
 
 ## Commits and remotes
 
-- Subjects use Conventional Commit types like upstream (`feat`, `fix`, `perf`, `docs`, `refactor`, `chore`, with an
-  optional scope such as `fix(gfx):`), and never a project prefix. Older commits here use area words
-  (`readme:`, `tools:`); new ones follow the types.
+- Since 2026-11-27: the subject is one line, imperative and scoped, with a Conventional Commit type (`feat`, `fix`,
+  `perf`, `docs`, `refactor`, `chore`), as in `fix(gfx): bind compute dispatches to the Switch-size level`. Never a
+  project prefix.
+- The body is three sentences at most, or nothing. The trailer line does not count.
+- The essay (cause, change, numbers, how sure) goes in `docs/reports/YYYY-MM-DD-slug.md`, committed in the same
+  change.
+- In issues and docs, do not cite the owner's commit hashes. Cite the date and subject, or the report's path, which
+  survives a history rewrite. Upstream's hashes do not change: keep them, with the date and subject.
+- The pre-commit hook does not run on a history rewrite. Before a push of rewritten history, run
+  `python -I tools/check_history.py <range>`.
 - Author and committer are Sky Miles <14169181+oneiricsky@users.noreply.github.com>. Every commit is SSH-signed
   through 1Password, which must be unlocked; check with `git cat-file commit HEAD | grep gpgsig`.
 - Since 2026-11-22 the owner allows a Co-Authored-By trailer for the model, as upstream does: end the message with
@@ -146,8 +153,9 @@ Present in this tree once 0.2.0 is merged.
 
 - Profile before fixing. Sample the thread with tracing off and give each cost as a share of the thread's busy
   time ("13% of the replay's busy time"). Fix the biggest, then measure again.
-- A commit message gives the cause, the change and the numbers: before and after, with the run count ("replay 3.22
-  to 2.92 ms per frame, 149.6 to 155.8 fps, two runs each, same code").
+- A change reports its cause, what changed and the numbers: before and after, with the run count ("replay 3.22 to
+  2.92 ms per frame, 149.6 to 155.8 fps, two runs each, same code"). Here that goes in the report, not the commit
+  message (see "Commits and remotes").
 - Say how sure you are. One upstream fix reads "found while tracing #18; not reproduced, so not confirmed as its
   cause".
 - Find root causes by checking what the original platform really does. The 5 to 6 hour crash was a memory leak

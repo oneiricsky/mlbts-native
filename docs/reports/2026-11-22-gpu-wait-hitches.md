@@ -55,7 +55,7 @@ during asset loading. They are on the game side.
 
 ## Update after merging 0.2.0
 
-Upstream's 0.2.0 (commit 59e77de, "no freeze before each pitch (walk-up lighting) or at inning changes") fixed the
+Upstream's 0.2.0 (commit 59e77de, 2026-11-21, "fix: no freeze before each pitch (walk-up lighting) or at inning changes") fixed the
 per-pitch freeze. Before every pitch the game baked its time-of-day lighting again in one frame, about 50 scene passes
 with a GPU kick and a wait each, although it had just baked the same time in the background after the last play.
 Upstream patched the game's code so it asks for the lighting unforced (`tools/data/patches-1.0.20.txt`, settings

@@ -1,6 +1,6 @@
 # Report: yellow faces with PS5 colour maps
 
-Status: FIXED for the heads checked (commit b4a839e). PS5 colour maps stay opt-in in the index tool until more heads are looked at.
+Status: FIXED for the heads checked (2026-11-22, the compute-pass fix to the PS5 textures). PS5 colour maps stay opt-in in the index tool until more heads are looked at.
 
 ## Resolution (2026-11-22)
 
